@@ -40,7 +40,7 @@ importers:
         version: 11.2.1(@fastify/static@8.3.0)(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)
       '@nestjs/typeorm':
         specifier: latest
-        version: 11.0.0(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.8.3)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0)))
+        version: 11.0.0(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.9.0)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0)))
       '@nestjs/websockets':
         specifier: latest
         version: 11.1.7(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -191,9 +191,6 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      oracledb:
-        specifier: latest
-        version: 6.10.0
       pg:
         specifier: latest
         version: 8.16.3(pg-native@3.5.2)
@@ -223,7 +220,7 @@ importers:
         version: 2.15.4(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       redis:
         specifier: latest
-        version: 5.8.3
+        version: 5.9.0
       reflect-metadata:
         specifier: latest
         version: 0.2.2
@@ -253,7 +250,7 @@ importers:
         version: 10.9.2(@types/node@22.18.12)(typescript@5.9.3)
       typeorm:
         specifier: latest
-        version: 0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.8.3)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0))
+        version: 0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.9.0)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0))
       typeorm-aurora-data-api-driver:
         specifier: latest
         version: 3.0.2(@aws-sdk/client-rds-data@3.914.0)
@@ -263,6 +260,10 @@ importers:
       zod:
         specifier: 3.25.76
         version: 3.25.76
+    optionalDependencies:
+      oracledb:
+        specifier: latest
+        version: 6.10.0
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.1.9
@@ -1949,33 +1950,33 @@ packages:
   '@radix-ui/rect@1.1.1':
     resolution: {integrity: sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw==}
 
-  '@redis/bloom@5.8.3':
-    resolution: {integrity: sha512-1eldTzHvdW3Oi0TReb8m1yiFt8ZwyF6rv1NpZyG5R4TpCwuAdKQetBKoCw7D96tNFgsVVd6eL+NaGZZCqhRg4g==}
+  '@redis/bloom@5.9.0':
+    resolution: {integrity: sha512-W9D8yfKTWl4tP8lkC3MRYkMz4OfbuzE/W8iObe0jFgoRmgMfkBV+Vj38gvIqZPImtY0WB34YZkX3amYuQebvRQ==}
     engines: {node: '>= 18'}
     peerDependencies:
-      '@redis/client': ^5.8.3
+      '@redis/client': ^5.9.0
 
-  '@redis/client@5.8.3':
-    resolution: {integrity: sha512-MZVUE+l7LmMIYlIjubPosruJ9ltSLGFmJqsXApTqPLyHLjsJUSAbAJb/A3N34fEqean4ddiDkdWzNu4ZKPvRUg==}
+  '@redis/client@5.9.0':
+    resolution: {integrity: sha512-EI0Ti5pojD2p7TmcS7RRa+AJVahdQvP/urpcSbK/K9Rlk6+dwMJTQ354pCNGCwfke8x4yKr5+iH85wcERSkwLQ==}
     engines: {node: '>= 18'}
 
-  '@redis/json@5.8.3':
-    resolution: {integrity: sha512-DRR09fy/u8gynHGJ4gzXYeM7D8nlS6EMv5o+h20ndTJiAc7RGR01fdk2FNjnn1Nz5PjgGGownF+s72bYG4nZKQ==}
-    engines: {node: '>= 18'}
-    peerDependencies:
-      '@redis/client': ^5.8.3
-
-  '@redis/search@5.8.3':
-    resolution: {integrity: sha512-EMIvEeGRR2I0BJEz4PV88DyCuPmMT1rDtznlsHY3cKSDcc9vj0Q411jUnX0iU2vVowUgWn/cpySKjpXdZ8m+5g==}
+  '@redis/json@5.9.0':
+    resolution: {integrity: sha512-Bm2jjLYaXdUWPb9RaEywxnjmzw7dWKDZI4MS79mTWPV16R982jVWBj6lY2ZGelJbwxHtEVg4/FSVgYDkuO/MxA==}
     engines: {node: '>= 18'}
     peerDependencies:
-      '@redis/client': ^5.8.3
+      '@redis/client': ^5.9.0
 
-  '@redis/time-series@5.8.3':
-    resolution: {integrity: sha512-5Jwy3ilsUYQjzpE7WZ1lEeG1RkqQ5kHtwV1p8yxXHSEmyUbC/T/AVgyjMcm52Olj/Ov/mhDKjx6ndYUi14bXsw==}
+  '@redis/search@5.9.0':
+    resolution: {integrity: sha512-jdk2csmJ29DlpvCIb2ySjix2co14/0iwIT3C0I+7ZaToXgPbgBMB+zfEilSuncI2F9JcVxHki0YtLA0xX3VdpA==}
     engines: {node: '>= 18'}
     peerDependencies:
-      '@redis/client': ^5.8.3
+      '@redis/client': ^5.9.0
+
+  '@redis/time-series@5.9.0':
+    resolution: {integrity: sha512-W6ILxcyOqhnI7ELKjJXOktIg3w4+aBHugDbVpgVLPZ+YDjObis1M0v7ZzwlpXhlpwsfePfipeSK+KWNuymk52w==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      '@redis/client': ^5.9.0
 
   '@sap/hana-client@2.26.18':
     resolution: {integrity: sha512-m49RydFcEB0PKJ4yquPVM1GXjEFiSBCpd2WwXcxR/TFQPn7pjiDN+QCUYRdA6gtkPOBtlPd7UK2UdqTHsxaypQ==}
@@ -4094,8 +4095,8 @@ packages:
     resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
     engines: {node: '>=4'}
 
-  redis@5.8.3:
-    resolution: {integrity: sha512-MfSrfV6+tEfTw8c4W0yFp6XWX8Il4laGU7Bx4kvW4uiYM1AuZ3KGqEGt1LdQHeD1nEyLpIWetZ/SpY3kkbgrYw==}
+  redis@5.9.0:
+    resolution: {integrity: sha512-E8dQVLSyH6UE/C9darFuwq4usOPrqfZ1864kI4RFbr5Oj9ioB9qPF0oJMwX7s8mf6sPYrz84x/Dx1PGF3/0EaQ==}
     engines: {node: '>= 18'}
 
   reflect-metadata@0.2.2:
@@ -5714,13 +5715,13 @@ snapshots:
       class-transformer: 0.5.1
       class-validator: 0.14.2
 
-  '@nestjs/typeorm@11.0.0(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.8.3)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0)))':
+  '@nestjs/typeorm@11.0.0(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.9.0)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0)))':
     dependencies:
       '@nestjs/common': 11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 11.1.7(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@11.1.7)(@nestjs/platform-express@11.1.7)(@nestjs/websockets@11.1.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
       rxjs: 7.8.2
-      typeorm: 0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.8.3)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0))
+      typeorm: 0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.9.0)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0))
 
   '@nestjs/websockets@11.1.7(@nestjs/common@11.1.7(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
@@ -6678,25 +6679,25 @@ snapshots:
 
   '@radix-ui/rect@1.1.1': {}
 
-  '@redis/bloom@5.8.3(@redis/client@5.8.3)':
+  '@redis/bloom@5.9.0(@redis/client@5.9.0)':
     dependencies:
-      '@redis/client': 5.8.3
+      '@redis/client': 5.9.0
 
-  '@redis/client@5.8.3':
+  '@redis/client@5.9.0':
     dependencies:
       cluster-key-slot: 1.1.2
 
-  '@redis/json@5.8.3(@redis/client@5.8.3)':
+  '@redis/json@5.9.0(@redis/client@5.9.0)':
     dependencies:
-      '@redis/client': 5.8.3
+      '@redis/client': 5.9.0
 
-  '@redis/search@5.8.3(@redis/client@5.8.3)':
+  '@redis/search@5.9.0(@redis/client@5.9.0)':
     dependencies:
-      '@redis/client': 5.8.3
+      '@redis/client': 5.9.0
 
-  '@redis/time-series@5.8.3(@redis/client@5.8.3)':
+  '@redis/time-series@5.9.0(@redis/client@5.9.0)':
     dependencies:
-      '@redis/client': 5.8.3
+      '@redis/client': 5.9.0
 
   '@sap/hana-client@2.26.18':
     dependencies:
@@ -8654,7 +8655,8 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  oracledb@6.10.0: {}
+  oracledb@6.10.0:
+    optional: true
 
   p-finally@1.0.0: {}
 
@@ -8985,13 +8987,13 @@ snapshots:
     dependencies:
       redis-errors: 1.2.0
 
-  redis@5.8.3:
+  redis@5.9.0:
     dependencies:
-      '@redis/bloom': 5.8.3(@redis/client@5.8.3)
-      '@redis/client': 5.8.3
-      '@redis/json': 5.8.3(@redis/client@5.8.3)
-      '@redis/search': 5.8.3(@redis/client@5.8.3)
-      '@redis/time-series': 5.8.3(@redis/client@5.8.3)
+      '@redis/bloom': 5.9.0(@redis/client@5.9.0)
+      '@redis/client': 5.9.0
+      '@redis/json': 5.9.0(@redis/client@5.9.0)
+      '@redis/search': 5.9.0(@redis/client@5.9.0)
+      '@redis/time-series': 5.9.0(@redis/client@5.9.0)
 
   reflect-metadata@0.2.2: {}
 
@@ -9445,7 +9447,7 @@ snapshots:
       '@aws-sdk/client-rds-data': 3.914.0
       sqlstring: 2.3.3
 
-  typeorm@0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.8.3)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0)):
+  typeorm@0.3.27(@google-cloud/spanner@8.2.2(encoding@0.1.13))(@sap/hana-client@2.26.18)(better-sqlite3@12.4.1)(ioredis@5.8.2)(mongodb@6.20.0(socks@2.8.7))(mssql@12.0.0)(mysql2@3.15.3)(oracledb@6.10.0)(pg-native@3.5.2)(pg-query-stream@4.10.3(pg@8.16.3(pg-native@3.5.2)))(pg@8.16.3(pg-native@3.5.2))(redis@5.9.0)(reflect-metadata@0.2.2)(sql.js@1.13.0)(sqlite3@5.1.7)(ts-node@10.9.2(@types/node@22.18.12)(typescript@5.9.3))(typeorm-aurora-data-api-driver@3.0.2(@aws-sdk/client-rds-data@3.914.0)):
     dependencies:
       '@sqltools/formatter': 1.2.5
       ansis: 3.17.0
@@ -9474,7 +9476,7 @@ snapshots:
       pg: 8.16.3(pg-native@3.5.2)
       pg-native: 3.5.2
       pg-query-stream: 4.10.3(pg@8.16.3(pg-native@3.5.2))
-      redis: 5.8.3
+      redis: 5.9.0
       sql.js: 1.13.0
       sqlite3: 5.1.7
       ts-node: 10.9.2(@types/node@22.18.12)(typescript@5.9.3)
