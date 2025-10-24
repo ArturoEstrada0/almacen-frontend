@@ -1,0 +1,9 @@
+# Don't deploy backend to Vercel
+backend/**
+
+# Node modules and local artifacts
+**/node_modules/**
+**/.turbo/**
+**/.next/**
+**/dist/**
+**/coverage/**

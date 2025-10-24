@@ -1,0 +1,151 @@
+
+> my-v0-project@0.1.0 dev /Users/arturoestrada/Downloads/almacen-system
+> next dev
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/arturoestrada/Downloads/pnpm-lock.yaml as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * /Users/arturoestrada/Downloads/almacen-system/pnpm-lock.yaml
+
+   ▲ Next.js 15.5.6
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.100.43:3000
+
+ ✓ Starting...
+ ✓ Ready in 2.8s
+ ○ Compiling / ...
+ ✓ Compiled / in 4.4s (718 modules)
+ GET / 307 in 4777ms
+ ✓ Compiled /dashboard in 345ms (736 modules)
+ GET /dashboard 200 in 752ms
+ ○ Compiling /products ...
+ ✓ Compiled /products in 2.4s (1378 modules)
+ GET /products 200 in 2507ms
+ ⨯ ./lib/db/supabase.ts
+Error:   [31mx[0m 'import', and 'export' cannot be used outside of module code
+    ,-[[36;1;4m/Users/arturoestrada/Downloads/almacen-system/lib/db/supabase.ts[0m:8:1]
+ [2m 5[0m | 
+ [2m 6[0m | // If a real Supabase URL is provided, use the official client.
+ [2m 7[0m | if (supabaseUrl && supabaseKey) {
+ [2m 8[0m |   export const supabase = createClient(supabaseUrl, supabaseKey)
+    : [35;1m  ^^^^^^[0m
+ [2m 9[0m | 
+ [2m10[0m |   // Helper function to handle Supabase errors
+ [2m11[0m |   export function handleSupabaseError(error: any) {
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./lib/db/supabase.ts
+./lib/hooks/use-categories.ts
+./app/products/page.tsx
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled in 563ms (1382 modules)
+ GET /products 200 in 697ms
+ GET /products 200 in 67ms
+ GET /dashboard 200 in 77ms
+ GET /products 200 in 18ms
+ ○ Compiling /inventory ...
+ ✓ Compiled /inventory in 2.8s (2208 modules)
+ GET /inventory 200 in 2863ms
+ GET /inventory 200 in 18ms
+ ○ Compiling /producers ...
+ ✓ Compiled /producers in 863ms (2262 modules)
+ GET /producers 200 in 938ms
+ GET /products 200 in 21ms
+ ○ Compiling /products/new ...
+ ✓ Compiled /products/new in 1039ms (2279 modules)
+ GET /products/new 200 in 1121ms
+ GET /products 200 in 47ms
+ GET /products 200 in 216ms
+ ✓ Compiled in 718ms (933 modules)
+ GET /products 200 in 194ms
+ ✓ Compiled in 206ms (933 modules)
+ GET /products 200 in 21ms
+ ✓ Compiled in 399ms (933 modules)
+ GET /products 200 in 37ms
+ ✓ Compiled in 221ms (933 modules)
+ GET /products 200 in 20ms
+ ✓ Compiled in 876ms (1767 modules)
+ GET /products 200 in 82ms
+ ✓ Compiled in 198ms (933 modules)
+ GET /products 200 in 31ms
+ ✓ Compiled in 247ms (933 modules)
+ GET /products 200 in 64ms
+ ✓ Compiled in 328ms (1607 modules)
+ GET /products 200 in 73ms
+ ✓ Compiled in 221ms (858 modules)
+ GET /products 200 in 27ms
+ ✓ Compiled in 5.1s (858 modules)
+ GET /products 200 in 1099ms
+ ✓ Compiled in 1200ms (858 modules)
+ GET /products 200 in 58ms
+ ✓ Compiled in 177ms (858 modules)
+ GET /products 200 in 20ms
+ ✓ Compiled in 1832ms (858 modules)
+ GET /products 200 in 1405ms
+ ✓ Compiled in 1477ms (858 modules)
+ GET /products 200 in 654ms
+ ✓ Compiled in 855ms (858 modules)
+ GET /products 200 in 162ms
+ ✓ Compiled in 362ms (858 modules)
+ GET /products 200 in 29ms
+ ✓ Compiled in 819ms (858 modules)
+ GET /products 200 in 265ms
+ ✓ Compiled in 1205ms (858 modules)
+ GET /products 200 in 890ms
+ ✓ Compiled in 1060ms (858 modules)
+ GET /products 200 in 229ms
+ GET /products 200 in 180ms
+ ○ Compiling /inventory ...
+ ✓ Compiled /inventory in 519ms (1166 modules)
+ GET /inventory 200 in 607ms
+ ✓ Compiled in 325ms (1166 modules)
+ ○ Compiling /producers ...
+ ✓ Compiled /producers in 756ms (1195 modules)
+ GET /producers 200 in 835ms
+ ✓ Compiled in 406ms (1195 modules)
+ ○ Compiling /suppliers ...
+ ✓ Compiled /suppliers in 1183ms (2065 modules)
+ GET /suppliers 200 in 1237ms
+ GET /products 200 in 31ms
+ GET /products/new 200 in 21ms
+ GET /products 200 in 32ms
+ ✓ Compiled in 943ms (869 modules)
+ GET /products 200 in 82ms
+ ✓ Compiled in 212ms (869 modules)
+ GET /products 200 in 162ms
+ ✓ Compiled in 278ms (869 modules)
+ GET /products 200 in 446ms
+ ✓ Compiled in 465ms (869 modules)
+ GET /products 200 in 43ms
+ GET /products 200 in 201ms
+ ✓ Compiled in 770ms (869 modules)
+ GET /products 200 in 232ms
+ ✓ Compiled in 265ms (869 modules)
+ GET /products 200 in 40ms
+ ✓ Compiled in 212ms (869 modules)
+ GET /products 200 in 324ms
+ ✓ Compiled in 346ms (869 modules)
+ GET /products 200 in 205ms
+ ✓ Compiled in 220ms (869 modules)
+ GET /products 200 in 35ms
+ GET /products 200 in 77ms
+ GET /inventory 200 in 35ms
+ GET /producers 200 in 28ms
+ GET /suppliers 200 in 19ms
+ ○ Compiling /purchase-orders ...
+ ✓ Compiled /purchase-orders in 1905ms (2091 modules)
+ GET /purchase-orders 200 in 2006ms
+ GET /products 200 in 25ms
+ ✓ Compiled in 236ms (880 modules)
+ GET /products 200 in 43ms
+ ✓ Compiled in 197ms (880 modules)
+ GET /products 200 in 251ms
+ ✓ Compiled in 284ms (880 modules)
+ GET /products 200 in 191ms
+ ✓ Compiled in 272ms (880 modules)
