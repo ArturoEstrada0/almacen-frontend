@@ -1,4 +1,11 @@
-const API_URL = process.env.NEXT_PUBLIC_LOCAL_BACKEND_URL || "http://localhost:3001"
+// Prefer an explicit local backend override, otherwise use the main API URL.
+const API_URL = process.env.NEXT_PUBLIC_LOCAL_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL
+
+if (!API_URL) {
+  throw new Error(
+    "Environment variable NEXT_PUBLIC_LOCAL_BACKEND_URL or NEXT_PUBLIC_API_URL must be defined. Set one of them in your environment (e.g. .env.local)."
+  )
+}
 
 async function request(path: string, opts: RequestInit = {}) {
   // Ensure API routes include the `/api` prefix used by the backend

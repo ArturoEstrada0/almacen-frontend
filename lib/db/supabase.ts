@@ -18,7 +18,14 @@ if (supabaseUrl && supabaseKey) {
 } else {
   // Fallback: lightweight local shim that proxies basic operations to the local backend API
   // Useful for local development when you don't have a Supabase project configured.
-  const backendUrl = process.env.NEXT_PUBLIC_LOCAL_BACKEND_URL || "http://localhost:3001"
+  // Prefer explicit local backend override, otherwise use the main API URL.
+  const backendUrl = process.env.NEXT_PUBLIC_LOCAL_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL
+
+  if (!backendUrl) {
+    throw new Error(
+      "Environment variable NEXT_PUBLIC_LOCAL_BACKEND_URL or NEXT_PUBLIC_API_URL must be defined for the local Supabase shim to work."
+    )
+  }
 
   function buildQueryString(filters: any = {}) {
     const params = new URLSearchParams()
