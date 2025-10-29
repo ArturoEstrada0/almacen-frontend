@@ -35,8 +35,6 @@ export default function NewProductPage() {
   categoryId: "",
   barcode: "",
     unitOfMeasure: "Pieza",
-    costPrice: "",
-    salePrice: "",
     isActive: true,
   })
 
@@ -71,8 +69,7 @@ export default function NewProductPage() {
       barcode: formData.barcode || undefined,
   // backend expects `unitId` (UUID) if provided. We don't have unitId from free-text input,
   // so omit the free-text `unit` field to avoid validation errors.
-      cost: formData.costPrice ? Number(formData.costPrice) : undefined,
-      price: formData.salePrice ? Number(formData.salePrice) : undefined,
+      // Prices are managed in almacén and not set here. Do not include cost/price in product payload.
       active: formData.isActive,
     }
 
@@ -267,40 +264,7 @@ export default function NewProductPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Precios</CardTitle>
-                <CardDescription>Configuración de precios del producto</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="costPrice">Precio de Costo *</Label>
-                    <Input
-                      id="costPrice"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.costPrice}
-                      onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="salePrice">Precio de Venta *</Label>
-                    <Input
-                      id="salePrice"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.salePrice}
-                      onChange={(e) => setFormData({ ...formData, salePrice: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Precios: removido — los precios se gestionan en almacén */}
 
             <Card>
               <CardHeader>

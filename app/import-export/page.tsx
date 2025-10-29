@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -25,6 +25,7 @@ import {
   TableIcon,
 } from "lucide-react"
 import { motion } from "framer-motion"
+import * as XLSX from "xlsx"
 
 export default function ImportExportPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -32,8 +33,41 @@ export default function ImportExportPage() {
   const [mappingStep, setMappingStep] = useState<number>(1)
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
 
-  // Sample columns from uploaded file
-  const sampleColumns = ["Columna A", "Columna B", "Columna C", "Columna D", "Columna E"]
+  // Parsed columns / preview rows
+  const [sampleColumns, setSampleColumns] = useState<string[]>([])
+  const [sampleRows, setSampleRows] = useState<string[][]>([])
+  // Sheets handling for multi-sheet workbooks
+  const [sheetNames, setSheetNames] = useState<string[]>([])
+  const [selectedSheet, setSelectedSheet] = useState<string | null>(null)
+  const workbookRef = useRef<any>(null)
+  const [importResult, setImportResult] = useState<any | null>(null)
+
+  const parseSheet = (sheetName: string | null) => {
+    if (!sheetName || !workbookRef.current) return
+    try {
+      const ws = workbookRef.current.Sheets[sheetName]
+      const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[]
+      if (rows && rows.length > 0) {
+        const headers = rows[0].map((h: any) => (h ?? "").toString().trim())
+        const previews = rows.slice(1, 6).map((r) => r.map((c: any) => (c ?? "").toString()))
+        setSampleColumns(headers)
+        setSampleRows(previews)
+
+        // Auto-map (only for fields not already mapped)
+        const newMapping = { ...columnMapping }
+        requiredFields[importType]?.forEach((f) => {
+          if (newMapping[f.field]) return
+          const match = headers.find(
+            (h: string) => h && (h.toLowerCase() === f.field.toLowerCase() || h.toLowerCase() === f.label.toLowerCase())
+          )
+          if (match) newMapping[f.field] = match
+        })
+        setColumnMapping(newMapping)
+      }
+    } catch (err) {
+      console.error("Error parsing selected sheet:", err)
+    }
+  }
 
   // Required fields for each import type
   const requiredFields: Record<string, Array<{ field: string; label: string; required: boolean }>> = {
@@ -41,12 +75,11 @@ export default function ImportExportPage() {
       { field: "sku", label: "SKU", required: true },
       { field: "name", label: "Nombre", required: true },
       { field: "description", label: "Descripción", required: false },
-      { field: "category", label: "Categoría", required: true },
-      { field: "costPrice", label: "Precio de Costo", required: true },
-      { field: "salePrice", label: "Precio de Venta", required: true },
-      { field: "minStock", label: "Stock Mínimo", required: true },
-      { field: "maxStock", label: "Stock Máximo", required: true },
-      { field: "unitOfMeasure", label: "Unidad de Medida", required: true },
+      { field: "category", label: "Categoría", required: false },
+      // Prices are managed in almacén; do not include cost or sale price in product import mapping
+      { field: "minStock", label: "Stock Mínimo", required: false },
+      { field: "maxStock", label: "Stock Máximo", required: false },
+      { field: "unitOfMeasure", label: "Unidad de Medida", required: false },
     ],
     inventory: [
       { field: "sku", label: "SKU del Producto", required: true },
@@ -65,14 +98,68 @@ export default function ImportExportPage() {
       { field: "address", label: "Dirección", required: true },
       { field: "creditDays", label: "Días de Crédito", required: true },
     ],
+    warehouses: [
+      { field: "code", label: "Código", required: true },
+      { field: "name", label: "Nombre", required: true },
+      { field: "address", label: "Dirección", required: false },
+      { field: "phone", label: "Teléfono", required: false },
+      { field: "email", label: "Email", required: false },
+    ],
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      setImportFile(file)
-      setMappingStep(2)
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result
+        if (!data) return
+
+        // Read as array for xlsx which supports csv/xlsx
+        const arrayBuffer = data as ArrayBuffer
+        const workbook = XLSX.read(arrayBuffer, { type: "array" })
+
+        // keep workbook to allow switching sheets
+        workbookRef.current = workbook
+        const names = workbook.SheetNames || []
+        setSheetNames(names)
+        const initialSheet = names[0] ?? null
+        setSelectedSheet(initialSheet)
+
+        if (initialSheet) {
+          const ws = workbook.Sheets[initialSheet]
+          // sheet_to_json with header:1 returns array of rows
+          const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[]
+          if (rows && rows.length > 0) {
+            const headers = rows[0].map((h: any) => (h ?? "").toString().trim())
+            const previews = rows.slice(1, 6).map((r) => r.map((c: any) => (c ?? "").toString()))
+            setSampleColumns(headers)
+            setSampleRows(previews)
+
+            // Auto-map by exact match on field or label (case-insensitive)
+            const newMapping: Record<string, string> = {}
+            requiredFields[importType]?.forEach((f) => {
+              const match = headers.find(
+                (h: string) => h && (h.toLowerCase() === f.field.toLowerCase() || h.toLowerCase() === f.label.toLowerCase())
+              )
+              if (match) newMapping[f.field] = match
+            })
+            setColumnMapping(newMapping)
+          }
+        }
+
+        setImportFile(file)
+        setMappingStep(2)
+      } catch (err) {
+        console.error("Error parsing file:", err)
+        alert("No se pudo leer el archivo. Asegúrate de que sea un Excel o CSV válido.")
+      }
     }
+
+    // Read as array buffer for xlsx
+    reader.readAsArrayBuffer(file)
   }
 
   const handleExport = (type: string) => {
@@ -86,12 +173,55 @@ export default function ImportExportPage() {
   }
 
   const handleImport = () => {
-    console.log("[v0] Importing with mapping:", columnMapping)
+    // Validate required mappings
+    const missingRequired = (requiredFields[importType] || [])
+      .filter((f) => f.required)
+      .filter((f) => !columnMapping[f.field] || columnMapping[f.field] === "__none__")
+
+    if (missingRequired.length > 0) {
+      alert(
+        `Faltan columnas requeridas: ${missingRequired.map((m) => m.label).join(", ")}. Por favor relacionalas antes de importar.`
+      )
+      return
+    }
+
+    if (!importFile) {
+      alert('No se ha seleccionado un archivo')
+      return
+    }
+
+    // Build form data and send to backend
+    const fd = new FormData()
+    fd.append('file', importFile)
+    fd.append('mapping', JSON.stringify(columnMapping))
+    fd.append('type', importType)
+    if (selectedSheet) fd.append('sheetName', selectedSheet)
+
     setMappingStep(3)
-    // Simulate import process
-    setTimeout(() => {
-      setMappingStep(4)
-    }, 2000)
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    fetch(`${apiUrl}/api/imports`, {
+      method: 'POST',
+      body: fd,
+      // NOTE: include credentials or Authorization header if your API requires auth
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(text || 'Error en la importación')
+        }
+        return res.json()
+      })
+      .then((json) => {
+        // Show result in the UI (mappingStep 4)
+        setImportResult(json)
+        setMappingStep(4)
+      })
+      .catch((err) => {
+        console.error('Import error', err)
+        alert('Error durante la importación: ' + (err.message || err))
+        setMappingStep(1)
+      })
   }
 
   return (
@@ -336,6 +466,62 @@ export default function ImportExportPage() {
                   </div>
 
                   <div className="rounded-md border">
+                    {/* Preview de columnas y primeras filas */}
+                    {sampleColumns.length > 0 && (
+                      <div className="p-4 border-b">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-medium">Vista previa del archivo</h4>
+                              {sheetNames.length > 1 && (
+                                <div className="flex items-center space-x-2">
+                                  <Label>Hoja:</Label>
+                                  <Select
+                                    value={selectedSheet ?? undefined}
+                                    onValueChange={(v) => {
+                                      setSelectedSheet(v)
+                                      parseSheet(v)
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {sheetNames.map((s) => (
+                                        <SelectItem key={s} value={s}>
+                                          {s}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                            </div>
+                        <div className="overflow-auto">
+                          <table className="w-full text-sm table-auto border-collapse">
+                            <thead>
+                              <tr>
+                                {sampleColumns.map((c) => (
+                                  <th key={c} className="border px-2 py-1 text-left">
+                                    {c}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sampleRows.map((row, idx) => (
+                                <tr key={idx}>
+                                  {sampleColumns.map((_, ci) => (
+                                    <td key={ci} className="border px-2 py-1">
+                                      {row[ci] ?? ""}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -371,6 +557,7 @@ export default function ImportExportPage() {
                                   <SelectValue placeholder="Seleccionar columna" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  <SelectItem value="__none__">-- No asignar --</SelectItem>
                                   {sampleColumns.map((col) => (
                                     <SelectItem key={col} value={col}>
                                       {col}
@@ -423,20 +610,20 @@ export default function ImportExportPage() {
                       <CheckCircle2 className="h-8 w-8 text-green-600" />
                     </div>
                     <h3 className="font-semibold text-lg mb-2">Importación Completada</h3>
-                    <p className="text-sm text-muted-foreground mb-6">Los datos se han importado correctamente</p>
+                      <p className="text-sm text-muted-foreground mb-6">Los datos se han importado correctamente</p>
                     <div className="grid gap-4 max-w-md mx-auto text-left">
-                      <div className="flex justify-between p-3 bg-muted rounded-lg">
-                        <span className="text-sm">Registros procesados:</span>
-                        <span className="font-semibold">150</span>
-                      </div>
-                      <div className="flex justify-between p-3 bg-green-500/10 rounded-lg">
-                        <span className="text-sm">Importados exitosamente:</span>
-                        <span className="font-semibold text-green-600">148</span>
-                      </div>
-                      <div className="flex justify-between p-3 bg-red-500/10 rounded-lg">
-                        <span className="text-sm">Errores:</span>
-                        <span className="font-semibold text-red-600">2</span>
-                      </div>
+                        <div className="flex justify-between p-3 bg-muted rounded-lg">
+                          <span className="text-sm">Registros procesados:</span>
+                          <span className="font-semibold">{importResult?.processed ?? '-'}</span>
+                        </div>
+                        <div className="flex justify-between p-3 bg-green-500/10 rounded-lg">
+                          <span className="text-sm">Importados exitosamente:</span>
+                          <span className="font-semibold text-green-600">{importResult?.success ?? '-'}</span>
+                        </div>
+                        <div className="flex justify-between p-3 bg-red-500/10 rounded-lg">
+                          <span className="text-sm">Errores:</span>
+                          <span className="font-semibold text-red-600">{importResult?.errors?.length ?? 0}</span>
+                        </div>
                     </div>
                     <Button className="mt-6" onClick={() => setMappingStep(1)}>
                       Importar Otro Archivo
