@@ -1,14 +1,13 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -18,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Eye, Trash2, Printer } from "lucide-react"
-import { mockInputAssignments, mockProducers, mockWarehouses, mockProducts } from "@/lib/mock-data"
+import { apiGet, apiPost } from "@/lib/db/localApi"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 
 interface AssignmentItem {
@@ -33,79 +32,86 @@ export function InputAssignmentsTab() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedProducer, setSelectedProducer] = useState("")
   const [selectedWarehouse, setSelectedWarehouse] = useState("")
-  const [assignmentDate, setAssignmentDate] = useState(new Date().toISOString().split("T")[0])
   const [notes, setNotes] = useState("")
   const [selectedItems, setSelectedItems] = useState<AssignmentItem[]>([])
 
-  const insumoProducts = mockProducts.filter((p) => p.type === "insumo")
+  const [producers, setProducers] = useState<any[]>([])
+  const [warehouses, setWarehouses] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [assignments, setAssignments] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  const filteredAssignments = mockInputAssignments.filter(
-    (assignment) =>
-      assignment.assignmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mockProducers
-        .find((p) => p.id === assignment.producerId)
-        ?.name.toLowerCase()
-        .includes(searchTerm.toLowerCase()),
-  )
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        setLoading(true)
+        const [pRes, wRes, prodRes, assignmentsRes] = await Promise.all([
+          apiGet("/producers"),
+          apiGet("/warehouses"),
+          apiGet("/products"),
+          apiGet("/producers/input-assignments/all"),
+        ])
+        if (!mounted) return
+        setProducers(Array.isArray(pRes) ? pRes : [])
+        setWarehouses(Array.isArray(wRes) ? wRes : [])
+        setProducts(Array.isArray(prodRes) ? prodRes : [])
+        setAssignments(Array.isArray(assignmentsRes) ? assignmentsRes : [])
+      } catch (err) {
+        console.error("Error loading input assignments data:", err)
+      } finally {
+        setLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
-  const addItem = () => {
-    setSelectedItems([...selectedItems, { id: Date.now(), productId: "", quantity: 0, unitPrice: 0 }])
+  const addItem = () =>
+    setSelectedItems((s) => [...s, { id: Date.now(), productId: "", quantity: 0, unitPrice: 0 }])
+  const removeItem = (id: number) => setSelectedItems((s) => s.filter((it) => it.id !== id))
+  const updateItem = (id: number, patch: Partial<AssignmentItem>) =>
+    setSelectedItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+
+  const calculateSubtotal = () => selectedItems.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
+  const calculateTax = () => calculateSubtotal() * 0.16
+  const calculateTotal = () => calculateSubtotal() + calculateTax()
+
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+      const payload = {
+        producerId: Number(selectedProducer) || selectedProducer,
+        warehouseId: Number(selectedWarehouse) || selectedWarehouse,
+        notes,
+        items: selectedItems.map((it) => ({ productId: it.productId, quantity: it.quantity, unitPrice: it.unitPrice })),
+      }
+      const created = await apiPost("/producers/input-assignments", payload)
+      setAssignments((prev) => [created, ...(prev || [])])
+      // reset
+      setSelectedProducer("")
+      setSelectedWarehouse("")
+      setNotes("")
+      setSelectedItems([])
+      setIsDialogOpen(false)
+    } catch (err) {
+      console.error("Error saving assignment:", err)
+      alert("Error saving assignment: " + ((err as any)?.message || String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const removeItem = (id: number) => {
-    setSelectedItems(selectedItems.filter((item) => item.id !== id))
-  }
+  const filteredAssignments = assignments.filter((a) => {
+    const q = searchTerm.toLowerCase()
+    const producer = producers.find((p) => String(p.id) === String(a.producerId))
+    const code = (a.code || a.assignmentNumber || "").toString().toLowerCase()
+    return code.includes(q) || (producer?.name || "").toLowerCase().includes(q)
+  })
 
-  const updateItem = (id: number, field: keyof AssignmentItem, value: any) => {
-    setSelectedItems(
-      selectedItems.map((item) => {
-        if (item.id === id) {
-          const updated = { ...item, [field]: value }
-          // Auto-fill price when product is selected
-          if (field === "productId") {
-            const product = insumoProducts.find((p) => p.id === value)
-            if (product) {
-              updated.unitPrice = product.salePrice
-            }
-          }
-          return updated
-        }
-        return item
-      }),
-    )
-  }
-
-  const calculateSubtotal = () => {
-    return selectedItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-  }
-
-  const calculateTax = () => {
-    return calculateSubtotal() * 0.16
-  }
-
-  const calculateTotal = () => {
-    return calculateSubtotal() + calculateTax()
-  }
-
-  const handleSave = () => {
-    console.log("[v0] Saving assignment:", {
-      producerId: selectedProducer,
-      warehouseId: selectedWarehouse,
-      assignmentDate,
-      items: selectedItems,
-      subtotal: calculateSubtotal(),
-      tax: calculateTax(),
-      total: calculateTotal(),
-      notes,
-    })
-    // Reset form
-    setSelectedProducer("")
-    setSelectedWarehouse("")
-    setAssignmentDate(new Date().toISOString().split("T")[0])
-    setNotes("")
-    setSelectedItems([])
-    setIsDialogOpen(false)
-  }
+  const insumoProducts = products.filter((p) => p.type !== "fruta")
 
   return (
     <Card>
@@ -113,10 +119,9 @@ export function InputAssignmentsTab() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Asignación de Insumos</CardTitle>
-            <CardDescription>
-              Registra la entrega de insumos a productores (genera movimiento en contra)
-            </CardDescription>
+            <CardDescription>Registra la entrega de insumos a productores (genera movimiento en contra)</CardDescription>
           </div>
+
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -126,36 +131,36 @@ export function InputAssignmentsTab() {
             </DialogTrigger>
             <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Nueva Asignación de Insumos</DialogTitle>
-                <DialogDescription>Registra la salida de insumos del almacén hacia un productor</DialogDescription>
+                <DialogTitle>Nueva Asignación</DialogTitle>
               </DialogHeader>
+
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="producer">Productor *</Label>
+                    <Label>Productor *</Label>
                     <Select value={selectedProducer} onValueChange={setSelectedProducer}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar productor" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockProducers.map((producer) => (
-                          <SelectItem key={producer.id} value={producer.id}>
-                            {producer.code} - {producer.name}
+                        {producers.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.code} - {p.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="warehouse">Almacén *</Label>
+                    <Label>Almacén *</Label>
                     <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar almacén" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockWarehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>
-                            {warehouse.name}
+                        {warehouses.map((w) => (
+                          <SelectItem key={w.id} value={String(w.id)}>
+                            {w.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -163,95 +168,52 @@ export function InputAssignmentsTab() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="date">Fecha de Asignación *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={assignmentDate}
-                    onChange={(e) => setAssignmentDate(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Productos (Insumos)</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Agregar Producto
+                <div>
+                  <Label>Items</Label>
+                  <div className="space-y-2">
+                    {selectedItems.map((it) => (
+                      <div key={it.id} className="grid grid-cols-4 gap-2">
+                        <Select value={it.productId} onValueChange={(v) => updateItem(it.id, { productId: v })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Producto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {insumoProducts.map((p) => (
+                              <SelectItem key={p.id} value={String(p.id)}>
+                                {p.sku} - {p.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          value={it.quantity === 0 ? "" : String(it.quantity)}
+                          onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })}
+                          placeholder="Cantidad"
+                        />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={it.unitPrice === 0 ? "" : String(it.unitPrice)}
+                          onChange={(e) => updateItem(it.id, { unitPrice: Number(e.target.value) })}
+                          placeholder="Precio unitario"
+                        />
+                        <div className="flex items-center">
+                          <Button variant="ghost" onClick={() => removeItem(it.id)}>
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <Button variant="ghost" onClick={addItem}>
+                      Añadir item
                     </Button>
                   </div>
+                </div>
 
-                  {selectedItems.length > 0 && (
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[40%]">Producto</TableHead>
-                            <TableHead className="w-[15%]">Cantidad</TableHead>
-                            <TableHead className="w-[15%]">Precio Unit.</TableHead>
-                            <TableHead className="w-[20%]">Subtotal</TableHead>
-                            <TableHead className="w-[10%]"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedItems.map((item) => {
-                            const product = insumoProducts.find((p) => p.id === item.productId)
-                            const subtotal = item.quantity * item.unitPrice
-                            return (
-                              <TableRow key={item.id}>
-                                <TableCell>
-                                  <Select
-                                    value={item.productId}
-                                    onValueChange={(value) => updateItem(item.id, "productId", value)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Seleccionar" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {insumoProducts.map((product) => (
-                                        <SelectItem key={product.id} value={product.id}>
-                                          {product.sku} - {product.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
-                                <TableCell>
-                                  <Input
-                                    type="number"
-                                    placeholder="0"
-                                    value={item.quantity || ""}
-                                    onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value))}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="0.00"
-                                    value={item.unitPrice || ""}
-                                    onChange={(e) => updateItem(item.id, "unitPrice", Number(e.target.value))}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <div className="font-medium">{formatCurrency(subtotal)}</div>
-                                  {product && (
-                                    <div className="text-xs text-muted-foreground">{product.unitOfMeasure}</div>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(item.id)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                <div className="space-y-2">
+                  <Label>Notas</Label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
                 </div>
 
                 <div className="border-t pt-4 space-y-2">
@@ -267,45 +229,27 @@ export function InputAssignmentsTab() {
                     <span>Total:</span>
                     <span className="text-destructive">{formatCurrency(calculateTotal())}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Este monto se cargará en contra del productor</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Notas</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Observaciones adicionales..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                  />
                 </div>
               </div>
+
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={!selectedProducer || !selectedWarehouse || selectedItems.length === 0}
-                >
-                  Guardar Asignación
+                <Button onClick={handleSave} disabled={!selectedProducer || !selectedWarehouse || selectedItems.length === 0 || saving}>
+                  {saving ? "Guardando..." : "Guardar Asignación"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </CardHeader>
+
       <CardContent>
         <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por número o productor..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+            <Input placeholder="Buscar por número o productor..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
         </div>
 
@@ -323,15 +267,15 @@ export function InputAssignmentsTab() {
             </TableHeader>
             <TableBody>
               {filteredAssignments.map((assignment) => {
-                const producer = mockProducers.find((p) => p.id === assignment.producerId)
-                const warehouse = mockWarehouses.find((w) => w.id === assignment.warehouseId)
+                const producer = producers.find((p) => String(p.id) === String(assignment.producerId))
+                const warehouse = warehouses.find((w) => String(w.id) === String(assignment.warehouseId))
                 return (
                   <TableRow key={assignment.id}>
-                    <TableCell className="font-medium">{assignment.assignmentNumber}</TableCell>
+                    <TableCell className="font-medium">{assignment.code || assignment.assignmentNumber}</TableCell>
                     <TableCell>{producer?.name}</TableCell>
                     <TableCell>{warehouse?.name}</TableCell>
-                    <TableCell>{formatDate(assignment.assignmentDate)}</TableCell>
-                    <TableCell className="font-semibold text-destructive">{formatCurrency(assignment.total)}</TableCell>
+                    <TableCell>{formatDate(assignment.date || assignment.assignmentDate)}</TableCell>
+                    <TableCell className="font-semibold text-destructive">{formatCurrency(Number(assignment.total) || 0)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" title="Imprimir nota">
@@ -352,3 +296,4 @@ export function InputAssignmentsTab() {
     </Card>
   )
 }
+ 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -10,7 +10,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -18,8 +17,8 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Printer, Package } from "lucide-react"
-import { mockFruitReceptions, mockProducers, mockWarehouses, mockProducts } from "@/lib/mock-data"
+import { Plus, Search, Eye, Printer } from "lucide-react"
+import { apiGet, apiPost } from "@/lib/db/localApi"
 import { formatDate } from "@/lib/utils/format"
 
 export function FruitReceptionsTab() {
@@ -33,40 +32,70 @@ export function FruitReceptionsTab() {
   const [weightPerBox, setWeightPerBox] = useState("")
   const [notes, setNotes] = useState("")
 
-  const fruitProducts = mockProducts.filter((p) => p.type === "fruta")
+  const [producers, setProducers] = useState<any[]>([])
+  const [warehouses, setWarehouses] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [receptions, setReceptions] = useState<any[]>([])
 
-  const filteredReceptions = mockFruitReceptions.filter(
-    (reception) =>
-      reception.receptionNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mockProducers
-        .find((p) => p.id === reception.producerId)
-        ?.name.toLowerCase()
-        .includes(searchTerm.toLowerCase()),
-  )
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const [pRes, wRes, prodRes, recRes] = await Promise.all([
+          apiGet("/producers"),
+          apiGet("/warehouses"),
+          apiGet("/products"),
+          apiGet("/producers/fruit-receptions/all"),
+        ])
+        if (!mounted) return
+        setProducers(Array.isArray(pRes) ? pRes : [])
+        setWarehouses(Array.isArray(wRes) ? wRes : [])
+        setProducts(Array.isArray(prodRes) ? prodRes : [])
+        setReceptions(Array.isArray(recRes) ? recRes : [])
+      } catch (err) {
+        console.error("Error loading receptions:", err)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const fruitProducts = products.filter((p) => p.type === "fruta")
+
+  const filteredReceptions = receptions.filter((reception) => {
+    const q = searchTerm.toLowerCase()
+    const producer = producers.find((p) => p.id === reception.producerId)
+    return (reception.code || reception.receptionNumber || "").toLowerCase().includes(q) || (producer?.name || "").toLowerCase().includes(q)
+  })
 
   const totalWeight = boxes && weightPerBox ? Number(boxes) * Number(weightPerBox) : 0
 
-  const handleSave = () => {
-    console.log("[v0] Saving fruit reception:", {
-      producerId: selectedProducer,
-      warehouseId: selectedWarehouse,
-      productId: selectedProduct,
-      receptionDate,
-      boxes: Number(boxes),
-      weightPerBox: Number(weightPerBox),
-      totalWeight,
-      shipmentStatus: "pendiente", // Initial status is pending
-      notes,
-    })
-    // Reset form
-    setSelectedProducer("")
-    setSelectedWarehouse("")
-    setSelectedProduct("")
-    setReceptionDate(new Date().toISOString().split("T")[0])
-    setBoxes("")
-    setWeightPerBox("")
-    setNotes("")
-    setIsDialogOpen(false)
+  const handleSave = async () => {
+    try {
+      const payload = {
+        producerId: selectedProducer,
+        warehouseId: selectedWarehouse,
+        productId: selectedProduct,
+        receptionDate,
+        boxes: Number(boxes),
+        weightPerBox: Number(weightPerBox),
+        notes,
+      }
+      const created = await apiPost("/producers/fruit-receptions", payload)
+      setReceptions((prev) => [created, ...(prev || [])])
+      setSelectedProducer("")
+      setSelectedWarehouse("")
+      setSelectedProduct("")
+      setReceptionDate(new Date().toISOString().split("T")[0])
+      setBoxes("")
+      setWeightPerBox("")
+      setNotes("")
+      setIsDialogOpen(false)
+    } catch (err) {
+      console.error("Error saving reception:", err)
+      alert("Error: " + (err as any)?.message || String(err))
+    }
   }
 
   const getShipmentStatusBadge = (status: string) => {
@@ -100,9 +129,7 @@ export function FruitReceptionsTab() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Recepción de Fruta</CardTitle>
-            <CardDescription>
-              Registra la entrega de fruta por parte de productores (sin ajuste de cuenta hasta venta)
-            </CardDescription>
+            <CardDescription>Registra la entrega de fruta por parte de productores (sin ajuste de cuenta hasta venta)</CardDescription>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -114,18 +141,17 @@ export function FruitReceptionsTab() {
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Nueva Recepción de Fruta</DialogTitle>
-                <DialogDescription>Registra la entrada de fruta entregada por un productor</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="producer">Productor *</Label>
+                    <Label>Productor *</Label>
                     <Select value={selectedProducer} onValueChange={setSelectedProducer}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar productor" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockProducers.map((producer) => (
+                        {producers.map((producer) => (
                           <SelectItem key={producer.id} value={producer.id}>
                             {producer.code} - {producer.name}
                           </SelectItem>
@@ -134,13 +160,13 @@ export function FruitReceptionsTab() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="warehouse">Almacén *</Label>
+                    <Label>Almacén *</Label>
                     <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar almacén" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockWarehouses.map((warehouse) => (
+                        {warehouses.map((warehouse) => (
                           <SelectItem key={warehouse.id} value={warehouse.id}>
                             {warehouse.name}
                           </SelectItem>
@@ -151,17 +177,12 @@ export function FruitReceptionsTab() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="date">Fecha de Recepción *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={receptionDate}
-                    onChange={(e) => setReceptionDate(e.target.value)}
-                  />
+                  <Label>Fecha de Recepción *</Label>
+                  <Input id="date" type="date" value={receptionDate} onChange={(e) => setReceptionDate(e.target.value)} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="product">Producto (Fruta) *</Label>
+                  <Label>Producto (Fruta) *</Label>
                   <Select value={selectedProduct} onValueChange={setSelectedProduct}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar producto" />
@@ -178,65 +199,30 @@ export function FruitReceptionsTab() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="boxes">Número de Cajas *</Label>
-                    <Input
-                      id="boxes"
-                      type="number"
-                      placeholder="0"
-                      value={boxes}
-                      onChange={(e) => setBoxes(e.target.value)}
-                    />
+                    <Label>Número de Cajas *</Label>
+                    <Input type="number" placeholder="0" value={boxes} onChange={(e) => setBoxes(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="weight">Peso por Caja (kg)</Label>
-                    <Input
-                      id="weight"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={weightPerBox}
-                      onChange={(e) => setWeightPerBox(e.target.value)}
-                    />
+                    <Label>Peso por Caja (kg)</Label>
+                    <Input type="number" step="0.01" placeholder="0.00" value={weightPerBox} onChange={(e) => setWeightPerBox(e.target.value)} />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="totalWeight">Peso Total (kg)</Label>
-                  <Input id="totalWeight" value={totalWeight.toFixed(2)} disabled className="bg-muted" />
-                </div>
-
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                  <div className="flex items-start gap-2">
-                    <Package className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-blue-900">Flujo de Recepción</p>
-                      <p className="text-sm text-blue-700">
-                        La recepción se registra con estado "Pendiente Embarque". No se ajusta el estado de cuenta hasta
-                        que se venda el embarque con precio final.
-                      </p>
-                    </div>
-                  </div>
+                  <Label>Peso Total (kg)</Label>
+                  <Input value={totalWeight.toFixed(2)} disabled className="bg-muted" />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Notas</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Calidad, observaciones, etc."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                  />
+                  <Label>Notas</Label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={!selectedProducer || !selectedWarehouse || !selectedProduct || !boxes}
-                >
+                <Button onClick={handleSave} disabled={!selectedProducer || !selectedWarehouse || !selectedProduct || !boxes}>
                   Guardar Recepción
                 </Button>
               </DialogFooter>
@@ -248,12 +234,7 @@ export function FruitReceptionsTab() {
         <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por número o productor..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+            <Input placeholder="Buscar por número o productor..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
         </div>
 
@@ -273,11 +254,11 @@ export function FruitReceptionsTab() {
             </TableHeader>
             <TableBody>
               {filteredReceptions.map((reception) => {
-                const producer = mockProducers.find((p) => p.id === reception.producerId)
-                const product = mockProducts.find((p) => p.id === reception.productId)
+                const producer = producers.find((p) => p.id === reception.producerId)
+                const product = products.find((p) => p.id === reception.productId)
                 return (
                   <TableRow key={reception.id}>
-                    <TableCell className="font-medium">{reception.receptionNumber}</TableCell>
+                    <TableCell className="font-medium">{reception.code || reception.receptionNumber}</TableCell>
                     <TableCell>{producer?.name}</TableCell>
                     <TableCell>{product?.name}</TableCell>
                     <TableCell>{reception.boxes}</TableCell>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,18 +17,83 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Edit, Eye, DollarSign } from "lucide-react"
-import { mockProducers } from "@/lib/mock-data"
+import { apiGet, apiPost } from "@/lib/db/localApi"
 import { formatCurrency } from "@/lib/utils/format"
 
 export function ProducersDirectoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [producers, setProducers] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  const filteredProducers = mockProducers.filter(
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        setLoading(true)
+        const data = await apiGet("/producers")
+        if (mounted) setProducers(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error("Error loading producers:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Form state for creating producer
+  const [formCode, setFormCode] = useState("")
+  const [formName, setFormName] = useState("")
+  const [formRfc, setFormRfc] = useState("")
+  const [formPhone, setFormPhone] = useState("")
+  const [formEmail, setFormEmail] = useState("")
+  const [formAddress, setFormAddress] = useState("")
+  const [formCity, setFormCity] = useState("")
+  const [formState, setFormState] = useState("")
+
+  const handleCreateProducer = async () => {
+    try {
+      setSaving(true)
+      const payload = {
+        code: formCode || `PROD-${Date.now()}`,
+        name: formName,
+        taxId: formRfc,
+        phone: formPhone,
+        email: formEmail,
+        address: formAddress,
+        city: formCity,
+        state: formState,
+      }
+      const created = await apiPost("/producers", payload)
+      setProducers((prev) => [created, ...prev])
+      setIsDialogOpen(false)
+      // reset form
+      setFormCode("")
+      setFormName("")
+      setFormRfc("")
+      setFormPhone("")
+      setFormEmail("")
+      setFormAddress("")
+      setFormCity("")
+      setFormState("")
+    } catch (err) {
+      console.error("Error creating producer:", err)
+      alert("Error creando productor: " + (err as any)?.message || String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const filteredProducers = producers.filter(
     (producer) =>
-      producer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      producer.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      producer.city.toLowerCase().includes(searchTerm.toLowerCase()),
+      (producer.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (producer.code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (producer.city || "").toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   return (
@@ -46,7 +111,7 @@ export function ProducersDirectoryTab() {
                 Nuevo Productor
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Nuevo Productor</DialogTitle>
                 <DialogDescription>Registra un nuevo productor en el sistema</DialogDescription>
@@ -55,39 +120,39 @@ export function ProducersDirectoryTab() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="code">Código</Label>
-                    <Input id="code" placeholder="PROD-004" />
+                    <Input id="code" placeholder="PROD-004" value={formCode} onChange={(e) => setFormCode(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="name">Nombre Completo</Label>
-                    <Input id="name" placeholder="Nombre del productor" />
+                    <Input id="name" placeholder="Nombre del productor" value={formName} onChange={(e) => setFormName(e.target.value)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="rfc">RFC</Label>
-                    <Input id="rfc" placeholder="ABCD123456XYZ" />
+                    <Input id="rfc" placeholder="ABCD123456XYZ" value={formRfc} onChange={(e) => setFormRfc(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Teléfono</Label>
-                    <Input id="phone" placeholder="+52 123 456 7890" />
+                    <Input id="phone" placeholder="+52 123 456 7890" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="productor@email.com" />
+                  <Input id="email" type="email" placeholder="productor@email.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="address">Dirección</Label>
-                  <Input id="address" placeholder="Rancho, Parcela, etc." />
+                  <Input id="address" placeholder="Rancho, Parcela, etc." value={formAddress} onChange={(e) => setFormAddress(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="city">Ciudad</Label>
-                    <Input id="city" placeholder="Ciudad" />
+                    <Input id="city" placeholder="Ciudad" value={formCity} onChange={(e) => setFormCity(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="state">Estado</Label>
-                    <Input id="state" placeholder="Estado" />
+                    <Input id="state" placeholder="Estado" value={formState} onChange={(e) => setFormState(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -99,7 +164,9 @@ export function ProducersDirectoryTab() {
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button onClick={() => setIsDialogOpen(false)}>Guardar Productor</Button>
+                <Button onClick={handleCreateProducer} disabled={saving || !formName}>
+                  {saving ? "Guardando..." : "Guardar Productor"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -167,12 +234,12 @@ export function ProducersDirectoryTab() {
                       >
                         {formatCurrency(Math.abs(producer.accountBalance))}
                       </span>
-                      {producer.accountBalance > 0 && (
+                      {Number(producer.accountBalance) > 0 && (
                         <Badge variant="outline" className="text-green-600 border-green-600">
                           A favor
                         </Badge>
                       )}
-                      {producer.accountBalance < 0 && (
+                      {Number(producer.accountBalance) < 0 && (
                         <Badge variant="outline" className="text-red-600 border-red-600">
                           En contra
                         </Badge>
