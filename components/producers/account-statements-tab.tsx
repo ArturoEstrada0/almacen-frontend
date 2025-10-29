@@ -19,9 +19,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText } from "lucide-react"
-import { mockProducers, mockProducerPayments } from "@/lib/mock-data"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentMethod } from "@/lib/types"
+import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment } from "@/lib/hooks/use-producers"
 
 export function AccountStatementsTab() {
   const [selectedProducer, setSelectedProducer] = useState<string>("")
@@ -35,78 +35,58 @@ export function AccountStatementsTab() {
   const [paymentNotes, setPaymentNotes] = useState("")
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
 
-  const producer = mockProducers.find((p) => p.id === selectedProducer)
-  const payments = mockProducerPayments.filter((p) => p.producerId === selectedProducer)
+  const { producers } = useProducers()
+  const { accountStatement, mutate: mutateAccount } = useProducerAccountStatement(selectedProducer)
+  const producer = (producers || []).find((p) => p.id === selectedProducer)
 
-  // Mock account movements - in real app, fetch from API
-  const mockMovements =
-    selectedProducer === "prod-1"
-      ? [
-          {
-            id: "1",
-            date: new Date("2024-11-15"),
-            type: "asignacion",
-            description: "Asignación de insumos ASG-2024-001",
-            referenceNumber: "ASG-2024-001",
-            amount: -17400,
-            balance: -17400,
-          },
-          {
-            id: "2",
-            date: new Date("2024-12-15"),
-            type: "venta",
-            description: "Venta embarque EMB-2024-001 - 500 cajas a $65/caja",
-            referenceNumber: "EMB-2024-001",
-            amount: 32500,
-            balance: 15100,
-          },
-          {
-            id: "3",
-            date: new Date("2024-12-16"),
-            type: "pago",
-            description: "Pago parcial PAG-2024-001 - Transferencia",
-            referenceNumber: "PAG-2024-001",
-            amount: -15000,
-            balance: 100,
-          },
-          {
-            id: "4",
-            date: new Date("2024-12-20"),
-            type: "venta",
-            description: "Venta embarque EMB-2024-002 - 800 cajas a $50/caja",
-            referenceNumber: "EMB-2024-002",
-            amount: 40000,
-            balance: 40100,
-          },
-        ]
-      : []
+  const movementsRaw: any[] = (accountStatement && (accountStatement as any).movements) || []
 
-  const totalAssigned = mockMovements
+  // Map backend movement shape to UI-friendly shape
+  const mappedMovements: any[] = movementsRaw.map((m: any) => ({
+    id: m.id,
+    date: m.createdAt ? new Date(m.createdAt) : m.date ? new Date(m.date) : new Date(),
+    type: m.type === "cargo" ? "asignacion" : m.type === "abono" ? "venta" : "pago",
+    description: m.description,
+    referenceNumber: m.referenceCode || m.reference_code || m.referenceNumber || "",
+    amount: Number(m.amount),
+    balance: Number(m.balance),
+  }))
+
+  const totalAssigned = mappedMovements
     .filter((m) => m.type === "asignacion")
     .reduce((sum, m) => sum + Math.abs(m.amount), 0)
 
-  const totalReceived = mockMovements.filter((m) => m.type === "venta").reduce((sum, m) => sum + m.amount, 0)
+  const totalReceived = mappedMovements.filter((m) => m.type === "venta").reduce((sum, m) => sum + m.amount, 0)
 
-  const totalPaid = mockMovements.filter((m) => m.type === "pago").reduce((sum, m) => sum + Math.abs(m.amount), 0)
+  const totalPaid = mappedMovements.filter((m) => m.type === "pago").reduce((sum, m) => sum + Math.abs(m.amount), 0)
 
   const handleSavePayment = () => {
-    console.log("[v0] Saving payment:", {
-      producerId: selectedProducer,
-      paymentDate,
-      amount: Number(amount),
-      paymentMethod,
-      reference,
-      evidenceFile: evidenceFile?.name,
-      notes: paymentNotes,
-    })
-    // Reset form
-    setPaymentDate(new Date().toISOString().split("T")[0])
-    setAmount("")
-    setPaymentMethod("transferencia")
-    setReference("")
-    setPaymentNotes("")
-    setEvidenceFile(null)
-    setIsPaymentDialogOpen(false)
+    ;(async () => {
+      try {
+        const payload = {
+          producerId: selectedProducer,
+          paymentDate,
+          amount: Number(amount),
+          method: paymentMethod,
+          reference,
+          notes: paymentNotes,
+        }
+        await apiCreatePayment(payload)
+        // Refresh account statement and producers list (balance)
+        await mutateAccount()
+        // Reset form
+        setPaymentDate(new Date().toISOString().split("T")[0])
+        setAmount("")
+        setPaymentMethod("transferencia")
+        setReference("")
+        setPaymentNotes("")
+        setEvidenceFile(null)
+        setIsPaymentDialogOpen(false)
+      } catch (err) {
+        console.error("Failed saving payment", err)
+        alert("Error al guardar pago: " + (err as any)?.message || err)
+      }
+    })()
   }
 
   const handleExport = () => {
@@ -131,11 +111,11 @@ export function AccountStatementsTab() {
                     <SelectValue placeholder="Seleccionar productor" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockProducers.map((producer) => (
-                      <SelectItem key={producer.id} value={producer.id}>
-                        {producer.code} - {producer.name}
-                      </SelectItem>
-                    ))}
+                    {(producers || []).map((producer) => (
+                          <SelectItem key={producer.id} value={producer.id}>
+                            {producer.code} - {producer.name}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -346,7 +326,7 @@ export function AccountStatementsTab() {
               <CardDescription>Historial completo de movimientos del productor</CardDescription>
             </CardHeader>
             <CardContent>
-              {mockMovements.length > 0 ? (
+              {mappedMovements.length > 0 ? (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -360,7 +340,7 @@ export function AccountStatementsTab() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mockMovements.map((movement) => (
+                      {mappedMovements.map((movement) => (
                         <TableRow key={movement.id}>
                           <TableCell className="text-sm">{formatDate(movement.date)}</TableCell>
                           <TableCell>

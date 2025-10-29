@@ -20,9 +20,16 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Edit, DollarSign, Package } from "lucide-react"
-import { mockShipments, mockFruitReceptions, mockProducers, mockProducts } from "@/lib/mock-data"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { ShipmentStatus } from "@/lib/types"
+import {
+  useShipments,
+  useFruitReceptions,
+  useProducers,
+  createShipment as apiCreateShipment,
+  updateShipmentStatus as apiUpdateShipmentStatus,
+} from "@/lib/hooks/use-producers"
+import { mutate as globalMutate } from "swr"
 
 const statusConfig: Record<
   ShipmentStatus,
@@ -52,11 +59,16 @@ export function ShipmentsTab() {
   const [salePrice, setSalePrice] = useState("")
   const [updateNotes, setUpdateNotes] = useState("")
 
-  const pendingReceptions = mockFruitReceptions.filter((r) => r.shipmentStatus === "pendiente")
+  const { fruitReceptions } = useFruitReceptions()
+  const { shipments, mutate: mutateShipments } = useShipments()
+  const { producers } = useProducers()
 
-  const filteredShipments = mockShipments.filter((shipment) =>
-    shipment.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const pendingReceptions = (fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente")
+
+  const filteredShipments = (shipments || []).filter((shipment) => {
+    const number = (shipment as any).shipmentNumber || (shipment as any).code || ""
+    return number.toLowerCase().includes(searchTerm.toLowerCase())
+  })
 
   const selectedReceptionsData = pendingReceptions.filter((r) => selectedReceptions.includes(r.id))
   const totalBoxes = selectedReceptionsData.reduce((sum, r) => sum + r.boxes, 0)
@@ -69,56 +81,50 @@ export function ShipmentsTab() {
   }
 
   const handleCreateShipment = () => {
-    console.log("[v0] Creating shipment with multiple receptions:", {
-      receptionIds: selectedReceptions,
-      totalBoxes,
-      producersInvolved,
-      carrier,
-      carrierContact,
-      shipmentDate,
-      status: "embarcada",
-      notes,
-    })
-    // Reset form
-    setSelectedReceptions([])
-    setCarrier("")
-    setCarrierContact("")
-    setShipmentDate(new Date().toISOString().split("T")[0])
-    setNotes("")
-    setIsCreateDialogOpen(false)
+    ;(async () => {
+      try {
+        // Backend DTO accepts: receptionIds, carrier?, driver?, notes?
+        // Do not send `date` (server sets date) and map carrierContact to `driver` field.
+        const payload: any = {
+          receptionIds: selectedReceptions,
+          carrier,
+          notes,
+        }
+        if (carrierContact) payload.driver = carrierContact
+        const created = await apiCreateShipment(payload)
+  // Refresh lists
+  await mutateShipments()
+  // Refresh receptions list
+  await globalMutate("fruit-receptions")
+        // Reset form
+        setSelectedReceptions([])
+        setCarrier("")
+        setCarrierContact("")
+        setShipmentDate(new Date().toISOString().split("T")[0])
+        setNotes("")
+        setIsCreateDialogOpen(false)
+        console.log("Created shipment", created)
+      } catch (err) {
+        console.error("Failed creating shipment", err)
+        alert("Error al crear embarque: " + (err as any)?.message || err)
+      }
+    })()
   }
 
   const handleUpdateShipment = () => {
-    if (updateStatus === "vendida" && salePrice) {
-      const shipment = mockShipments.find((s) => s.id === selectedShipment)
-      if (shipment) {
-        const receptions = mockFruitReceptions.filter((r) => shipment.receptionIds?.includes(r.id))
-        const producerAmounts = receptions.map((r) => ({
-          producerId: r.producerId,
-          producerName: mockProducers.find((p) => p.id === r.producerId)?.name,
-          boxes: r.boxes,
-          amount: r.boxes * Number(salePrice),
-        }))
-
-        console.log("[v0] Updating shipment to sold - generating account movements:", {
-          shipmentId: selectedShipment,
-          status: updateStatus,
-          salePrice: Number(salePrice),
-          totalAmount: totalBoxes * Number(salePrice),
-          producerAmounts,
-          arrivalDate,
-          notes: updateNotes,
-        })
+    ;(async () => {
+      try {
+        if (!selectedShipment) throw new Error("No shipment selected")
+        const salePriceNumber = updateStatus === "vendida" && salePrice ? Number(salePrice) : undefined
+        const updated = await apiUpdateShipmentStatus(selectedShipment, updateStatus, salePriceNumber)
+        await mutateShipments()
+        setIsUpdateDialogOpen(false)
+        console.log("Updated shipment", updated)
+      } catch (err) {
+        console.error("Failed updating shipment", err)
+        alert("Error al actualizar embarque: " + (err as any)?.message || err)
       }
-    } else {
-      console.log("[v0] Updating shipment status:", {
-        shipmentId: selectedShipment,
-        status: updateStatus,
-        arrivalDate: arrivalDate || undefined,
-        notes: updateNotes,
-      })
-    }
-    setIsUpdateDialogOpen(false)
+    })()
   }
 
   return (
@@ -191,9 +197,10 @@ export function ShipmentsTab() {
                           </TableRow>
                         ) : (
                           pendingReceptions.map((reception) => {
-                            const producer = mockProducers.find((p) => p.id === reception.producerId)
-                            const product = mockProducts.find((p) => p.id === reception.productId)
+                            const producer = producers?.find((p) => p.id === reception.producerId)
                             const isSelected = selectedReceptions.includes(reception.id)
+                            const receptionNumber = (reception as any).receptionNumber || (reception as any).code || ""
+                            const receptionDate = (reception as any).receptionDate || (reception as any).date || reception.createdAt
                             return (
                               <TableRow key={reception.id} className={isSelected ? "bg-blue-50" : ""}>
                                 <TableCell>
@@ -202,13 +209,13 @@ export function ShipmentsTab() {
                                     onCheckedChange={() => handleToggleReception(reception.id)}
                                   />
                                 </TableCell>
-                                <TableCell className="font-medium">{reception.receptionNumber}</TableCell>
+                                <TableCell className="font-medium">{receptionNumber}</TableCell>
                                 <TableCell>{producer?.name}</TableCell>
-                                <TableCell>{product?.name}</TableCell>
+                                <TableCell>{(reception as any).product?.name || "-"}</TableCell>
                                 <TableCell>{reception.boxes}</TableCell>
-                                <TableCell>{reception.weightPerBox} kg</TableCell>
-                                <TableCell>{reception.totalWeight} kg</TableCell>
-                                <TableCell>{formatDate(reception.receptionDate)}</TableCell>
+                                <TableCell>{reception.weightPerBox || "-"} kg</TableCell>
+                                <TableCell>{reception.totalWeight || "-"} kg</TableCell>
+                                <TableCell>{formatDate(receptionDate)}</TableCell>
                               </TableRow>
                             )
                           })
@@ -301,22 +308,25 @@ export function ShipmentsTab() {
             </TableHeader>
             <TableBody>
               {filteredShipments.map((shipment) => {
-                const config = statusConfig[shipment.status]
-                const receptions = mockFruitReceptions.filter((r) => shipment.receptionIds?.includes(r.id))
-                const producers = [...new Set(receptions.map((r) => r.producerId))]
-                  .map((id) => mockProducers.find((p) => p.id === id))
+                const config = statusConfig[(shipment as any).status as ShipmentStatus]
+                const receptionIds: string[] = (shipment as any).receptionIds || []
+                const receptions = (fruitReceptions || []).filter((r) => receptionIds.includes(r.id))
+                const producersList = [...new Set(receptions.map((r) => r.producerId))]
+                  .map((id) => producers.find((p) => p.id === id))
                   .filter(Boolean)
 
+                const shipmentNumber = (shipment as any).shipmentNumber || (shipment as any).code || ""
+                const shipmentDate = (shipment as any).shipmentDate || (shipment as any).date || (shipment as any).createdAt
                 return (
                   <TableRow key={shipment.id}>
-                    <TableCell className="font-medium">{shipment.shipmentNumber}</TableCell>
+                    <TableCell className="font-medium">{shipmentNumber}</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        {producers.length > 0 ? (
+                        {producersList.length > 0 ? (
                           <>
-                            <div>{producers[0]?.name}</div>
-                            {producers.length > 1 && (
-                              <div className="text-muted-foreground text-xs">+{producers.length - 1} más</div>
+                            <div>{producersList[0]?.name}</div>
+                            {producersList.length > 1 && (
+                              <div className="text-muted-foreground text-xs">+{producersList.length - 1} más</div>
                             )}
                           </>
                         ) : (
@@ -324,23 +334,23 @@ export function ShipmentsTab() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{shipment.totalBoxes}</TableCell>
+                    <TableCell>{(shipment as any).totalBoxes}</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div>{shipment.carrier}</div>
-                        {shipment.carrierContact && (
-                          <div className="text-muted-foreground text-xs">{shipment.carrierContact}</div>
+                        <div>{(shipment as any).carrier}</div>
+                        {(shipment as any).carrierContact && (
+                          <div className="text-muted-foreground text-xs">{(shipment as any).carrierContact}</div>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{shipment.shipmentDate ? formatDate(shipment.shipmentDate) : "-"}</TableCell>
-                    <TableCell>{shipment.arrivalDate ? formatDate(shipment.arrivalDate) : "-"}</TableCell>
+                    <TableCell>{shipmentDate ? formatDate(shipmentDate) : "-"}</TableCell>
+                    <TableCell>{(shipment as any).arrivalDate ? formatDate((shipment as any).arrivalDate) : "-"}</TableCell>
                     <TableCell>
-                      {shipment.salePrice ? (
+                      {(shipment as any).salePrice ? (
                         <div>
-                          <div className="font-semibold text-green-600">{formatCurrency(shipment.salePrice)}/caja</div>
+                          <div className="font-semibold text-green-600">{formatCurrency((shipment as any).salePrice)}/caja</div>
                           <div className="text-sm text-muted-foreground">
-                            Total: {formatCurrency(shipment.saleTotalAmount || 0)}
+                            Total: {formatCurrency((shipment as any).totalSale || 0)}
                           </div>
                         </div>
                       ) : (
@@ -350,7 +360,7 @@ export function ShipmentsTab() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={config.variant}>{config.label}</Badge>
+                      <Badge variant={config?.variant || "default"}>{config?.label || (shipment as any).status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -360,7 +370,7 @@ export function ShipmentsTab() {
                           title="Actualizar estado"
                           onClick={() => {
                             setSelectedShipment(shipment.id)
-                            setUpdateStatus(shipment.status)
+                            setUpdateStatus((shipment as any).status)
                             setIsUpdateDialogOpen(true)
                           }}
                         >
@@ -437,17 +447,17 @@ export function ShipmentsTab() {
                             Se generarán movimientos A FAVOR de cada productor según sus cajas:
                           </p>
                           {(() => {
-                            const shipment = mockShipments.find((s) => s.id === selectedShipment)
+                            const shipment = (shipments || []).find((s) => s.id === selectedShipment)
                             if (!shipment) return null
-                            const receptions = mockFruitReceptions.filter((r) => shipment.receptionIds?.includes(r.id))
+                            const receptions = (fruitReceptions || []).filter((r) => (shipment as any).receptionIds?.includes(r.id))
                             return (
                               <div className="space-y-1 text-xs">
                                 {receptions.map((r) => {
-                                  const producer = mockProducers.find((p) => p.id === r.producerId)
+                                  const producer = producers?.find((p) => p.id === r.producerId)
                                   const amount = r.boxes * Number(salePrice)
                                   return (
                                     <div key={r.id} className="flex justify-between">
-                                      <span>{producer?.name}:</span>
+                                      <span>{producer?.name || r.producerId}:</span>
                                       <span className="font-semibold">
                                         {r.boxes} cajas × {formatCurrency(Number(salePrice))} = {formatCurrency(amount)}
                                       </span>

@@ -73,13 +73,13 @@ export function FruitReceptionsTab() {
 
   const handleSave = async () => {
     try {
+      // Backend DTO accepts only: producerId, productId, warehouseId, boxes, quality?, notes?
+      // Do NOT send client-side `receptionDate` or `weightPerBox` since the server sets the date and derives totals.
       const payload = {
         producerId: selectedProducer,
         warehouseId: selectedWarehouse,
         productId: selectedProduct,
-        receptionDate,
         boxes: Number(boxes),
-        weightPerBox: Number(weightPerBox),
         notes,
       }
       const created = await apiPost("/producers/fruit-receptions", payload)

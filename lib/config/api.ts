@@ -1,11 +1,17 @@
 // API Configuration for connecting to NestJS backend
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+let API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 if (!API_BASE_URL) {
   throw new Error(
-    "Environment variable NEXT_PUBLIC_API_URL is not defined. Please set NEXT_PUBLIC_API_URL in your environment (e.g. .env.local) to the backend base URL."
+    "Environment variable NEXT_PUBLIC_API_URL is not defined. Please set NEXT_PUBLIC_API_URL in your environment (e.g. .env.local) to the backend base URL. Example: http://localhost:3001/api"
   )
+}
+
+// Normalize: ensure the base URL ends with '/api' because the backend sets a global prefix '/api'.
+API_BASE_URL = API_BASE_URL.replace(/\/+$/g, "")
+if (!API_BASE_URL.endsWith("/api")) {
+  API_BASE_URL = `${API_BASE_URL}/api`
 }
 
 export const API_ENDPOINTS = {
