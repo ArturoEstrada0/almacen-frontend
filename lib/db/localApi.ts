@@ -19,7 +19,8 @@ async function request(path: string, opts: RequestInit = {}) {
   const res = await fetch(url, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } })
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`Request failed ${res.status}: ${text}`)
+    // Mejorar el mensaje de error mostrando la URL y el texto del backend
+    throw new Error(`Request failed ${res.status} (${url}): ${text}`)
   }
   const contentType = res.headers.get("content-type") || ""
   if (contentType.includes("application/json")) return await res.json()
@@ -33,6 +34,9 @@ export async function apiGet(path: string, params?: Record<string, any>) {
     for (const k of Object.keys(params)) qs.append(k, String(params[k]))
     p = `${path}${p.includes("?") ? "&" : "?"}${qs.toString()}`
   }
+  // Para obtener el inventario de un almacén, usa la ruta correcta con el prefijo /api
+  // Ejemplo: apiGet('/inventory/warehouse/ID')
+  // Esto se convertirá en /api/inventory/warehouse/ID automáticamente
   return await request(p, { method: "GET" })
 }
 

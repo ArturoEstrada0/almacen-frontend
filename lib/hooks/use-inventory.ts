@@ -6,7 +6,7 @@ import type { InventoryItem, Movement } from "@/lib/types"
 
 export function useInventoryByWarehouse(warehouseId: string | null) {
   const { data, error, isLoading, mutate } = useSWR<InventoryItem[]>(
-    warehouseId ? `/inventory/warehouse/${warehouseId}` : null,
+    warehouseId ? `/api/inventory/warehouse/${warehouseId}` : null,
     async (url: string) => {
       const response = await api.get(url)
       // Map backend fields (snake_case / nested) to frontend-friendly camelCase
@@ -77,7 +77,7 @@ export function useMovements(filters?: {
   if (filters?.endDate) params.append("endDate", filters.endDate)
 
   const { data, error, isLoading, mutate } = useSWR<Movement[]>(
-    `/inventory/movements?${params.toString()}`,
+    `/api/inventory/movements?${params.toString()}`,
     async (url: string) => {
       const response = await api.get(url)
       const payload = Array.isArray(response) ? response : response?.data || []
@@ -168,7 +168,7 @@ export async function createMovement(data: {
     })),
   }
 
-  const response = await api.post("/inventory/movements", payload)
+  const response = await api.post("/api/inventory/movements", payload)
   return response
 }
 

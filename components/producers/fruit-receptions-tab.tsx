@@ -42,10 +42,10 @@ export function FruitReceptionsTab() {
     ;(async () => {
       try {
         const [pRes, wRes, prodRes, recRes] = await Promise.all([
-          apiGet("/producers"),
-          apiGet("/warehouses"),
-          apiGet("/products"),
-          apiGet("/producers/fruit-receptions/all"),
+          apiGet("/api/producers"),
+          apiGet("/api/warehouses"),
+          apiGet("/api/products"),
+          apiGet("/api/producers/fruit-receptions/all"),
         ])
         if (!mounted) return
         setProducers(Array.isArray(pRes) ? pRes : [])
@@ -82,7 +82,7 @@ export function FruitReceptionsTab() {
         boxes: Number(boxes),
         notes,
       }
-      const created = await apiPost("/producers/fruit-receptions", payload)
+      const created = await apiPost("/api/producers/fruit-receptions", payload)
       setReceptions((prev) => [created, ...(prev || [])])
       setSelectedProducer("")
       setSelectedWarehouse("")

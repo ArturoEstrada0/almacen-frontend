@@ -32,7 +32,7 @@ export function ProducersDirectoryTab() {
     async function load() {
       try {
         setLoading(true)
-        const data = await apiGet("/producers")
+        const data = await apiGet("/api/producers")
         if (mounted) setProducers(Array.isArray(data) ? data : [])
       } catch (err) {
         console.error("Error loading producers:", err)
@@ -66,10 +66,8 @@ export function ProducersDirectoryTab() {
         phone: formPhone,
         email: formEmail,
         address: formAddress,
-        city: formCity,
-        state: formState,
       }
-      const created = await apiPost("/producers", payload)
+      const created = await apiPost("/api/producers", payload)
       setProducers((prev) => [created, ...prev])
       setIsDialogOpen(false)
       // reset form

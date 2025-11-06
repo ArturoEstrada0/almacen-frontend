@@ -6,7 +6,7 @@ import type { Producer, InputAssignment, FruitReception, Shipment } from "@/lib/
 
 export async function getProducers() {
   try {
-    const data = await apiGet("/producers?is_active=true&order=name")
+    const data = await apiGet("/api/producers?is_active=true&order=name")
     return { data, error: null }
   } catch (error: any) {
     return { data: null, error: error.message }
@@ -15,13 +15,15 @@ export async function getProducers() {
 
 export async function createProducer(producer: Partial<Producer>) {
   try {
-    const data = await apiPost("/producers", {
-      code: producer.code,
-      name: producer.name,
-      email: producer.email,
-      phone: producer.phone,
-      address: producer.address,
-      taxId: (producer as any).taxId || (producer as any).rfc || undefined,
+    // Eliminar city y state si existen
+    const { city, state, ...producerClean } = producer
+    const data = await apiPost("/api/producers", {
+      code: producerClean.code,
+      name: producerClean.name,
+      email: producerClean.email,
+      phone: producerClean.phone,
+      address: producerClean.address,
+      taxId: (producerClean as any).taxId || (producerClean as any).rfc || undefined,
     })
 
     revalidatePath("/producers")
@@ -43,7 +45,7 @@ export async function createInputAssignment(
     const total = subtotal + tax
 
     // Insert assignment
-    const assignmentData = await apiPost("/input-assignments", {
+    const assignmentData = await apiPost("/api/input-assignments", {
       assignment_number: assignmentNumber,
       producer_id: assignment.producerId,
       warehouse_id: assignment.warehouseId,
@@ -64,10 +66,10 @@ export async function createInputAssignment(
       total: item.quantity * item.unitPrice * 1.16,
     }))
 
-    await apiPost("/input_assignment_items", itemsToInsert)
+    await apiPost("/api/input_assignment_items", itemsToInsert)
 
     // Create account movement via backend
-    await apiPost("/producer_account_movements", [
+    await apiPost("/api/producer_account_movements", [
       {
         producer_id: assignment.producerId,
         type: "asignacion",
@@ -91,7 +93,7 @@ export async function createInputAssignment(
 export async function createFruitReception(reception: Partial<FruitReception>) {
   try {
     const receptionNumber = `FR-${Date.now()}`
-    const data = await apiPost("/fruit-receptions", {
+    const data = await apiPost("/api/fruit-receptions", {
       reception_number: receptionNumber,
       producer_id: reception.producerId,
       warehouse_id: reception.warehouseId,
@@ -115,12 +117,12 @@ export async function createShipment(receptionIds: string[], shipmentData: Parti
   try {
     const shipmentNumber = `SH-${Date.now()}`
     // Get receptions data
-    const receptions = await apiGet(`/fruit-receptions?in=id,${receptionIds.join(",")}`)
+    const receptions = await apiGet(`/api/fruit-receptions?in=id,${receptionIds.join(",")}`)
 
     const totalBoxes = receptions?.reduce((sum: any, r: any) => sum + r.boxes, 0) || 0
 
     // Create shipment
-    const shipment = await apiPost("/shipments", {
+    const shipment = await apiPost("/api/shipments", {
       shipment_number: shipmentNumber,
       status: "embarcada",
       total_boxes: totalBoxes,
@@ -138,10 +140,10 @@ export async function createShipment(receptionIds: string[], shipmentData: Parti
       boxes: r.boxes,
     }))
 
-    await apiPost("/shipment_items", shipmentItems)
+    await apiPost("/api/shipment_items", shipmentItems)
 
     // Update receptions status
-    await apiPatch(`/fruit-receptions`, { filters: [{ field: "id", op: "in", value: receptionIds }], payload: { shipment_status: "embarcada", shipment_id: shipment.id } })
+    await apiPatch(`/api/fruit-receptions`, { filters: [{ field: "id", op: "in", value: receptionIds }], payload: { shipment_status: "embarcada", shipment_id: shipment.id } })
 
     revalidatePath("/producers")
     return { data: shipment, error: null }
@@ -153,7 +155,7 @@ export async function createShipment(receptionIds: string[], shipmentData: Parti
 export async function markShipmentAsSold(shipmentId: string, salePrice: number) {
   try {
     // Get shipment items
-    const items = await apiGet(`/shipment_items?eq=shipment_id,${shipmentId}&select=*,reception:fruit_receptions(producer_id)`)
+    const items = await apiGet(`/api/shipment_items?eq=shipment_id,${shipmentId}&select=*,reception:fruit_receptions(producer_id)`)
 
     // Calculate sale amounts for each item
     const updates = (items as any[] | undefined)?.map((item: any) => ({
@@ -163,21 +165,21 @@ export async function markShipmentAsSold(shipmentId: string, salePrice: number) 
 
     // Update shipment items with sale amounts
     for (const update of updates || []) {
-      await apiPatch(`/shipment_items/${update.id}`, { sale_amount: update.sale_amount })
+      await apiPatch(`/api/shipment_items/${update.id}`, { sale_amount: update.sale_amount })
     }
 
     // Calculate total
   const saleTotalAmount = (items as any[] | undefined)?.reduce((sum: number, item: any) => sum + item.boxes * salePrice, 0) || 0
 
     // Update shipment
-    await apiPatch(`/shipments/${shipmentId}`, { status: "vendida", sale_price: salePrice, sale_total_amount: saleTotalAmount })
+    await apiPatch(`/api/shipments/${shipmentId}`, { status: "vendida", sale_price: salePrice, sale_total_amount: saleTotalAmount })
 
     // Create account movements for each producer
-  const shipment = await apiGet(`/shipments?eq=id,${shipmentId}&select=shipment_number`)
+  const shipment = await apiGet(`/api/shipments?eq=id,${shipmentId}&select=shipment_number`)
 
     for (const item of items || []) {
       const saleAmount = item.boxes * salePrice
-      await apiPost(`/producer_account_movements`, [
+      await apiPost(`/api/producer_account_movements`, [
         {
           producer_id: item.reception.producer_id,
           type: "recepcion",
@@ -194,7 +196,7 @@ export async function markShipmentAsSold(shipmentId: string, salePrice: number) 
 
     // Update fruit receptions status
     const receptionIds = items?.map((item: any) => item.reception_id) || []
-    await apiPatch(`/fruit-receptions`, { filters: [{ field: "id", op: "in", value: receptionIds }], payload: { shipment_status: "vendida" } })
+    await apiPatch(`/api/fruit-receptions`, { filters: [{ field: "id", op: "in", value: receptionIds }], payload: { shipment_status: "vendida" } })
 
     revalidatePath("/producers")
     return { error: null }
@@ -205,7 +207,7 @@ export async function markShipmentAsSold(shipmentId: string, salePrice: number) 
 
 export async function getProducerAccountMovements(producerId: string) {
   try {
-    const data = await apiGet(`/producer_account_movements?eq=producer_id,${producerId}&order=date.desc`)
+    const data = await apiGet(`/api/producer_account_movements?eq=producer_id,${producerId}&order=date.desc`)
     return { data, error: null }
   } catch (error: any) {
     return { data: null, error: error.message }
@@ -224,18 +226,17 @@ export async function registerProducerPayment(payment: {
     const paymentNumber = `PP-${Date.now()}`
 
     // Insert payment
-    const paymentData = await apiPost(`/producer_payments`, {
+    const paymentData = await apiPost(`/api/producer_payments`, {
       payment_number: paymentNumber,
       producer_id: payment.producerId,
-      payment_date: new Date().toISOString(),
       amount: payment.amount,
-      payment_method: payment.paymentMethod,
+      payment_method: payment.paymentMethod, // Debe ser cash, transfer, check, other
       reference: payment.reference,
       evidence_url: payment.evidenceUrl,
       notes: payment.notes,
     })
 
-    await apiPost(`/producer_account_movements`, [
+    await apiPost(`/api/producer_account_movements`, [
       {
         producer_id: payment.producerId,
         type: "pago",

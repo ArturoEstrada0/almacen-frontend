@@ -24,8 +24,8 @@ export function AdjustmentsTab() {
               <SelectValue placeholder="Seleccionar producto" />
             </SelectTrigger>
             <SelectContent>
-              {mockProducts.map((product) => (
-                <SelectItem key={product.id} value={product.id}>
+              {mockProducts.map((product, index) => (
+                <SelectItem key={product.id + "-" + index} value={product.id}>
                   {product.name} ({product.sku})
                 </SelectItem>
               ))}
@@ -40,8 +40,8 @@ export function AdjustmentsTab() {
               <SelectValue placeholder="Seleccionar almacén" />
             </SelectTrigger>
             <SelectContent>
-              {mockWarehouses.map((warehouse) => (
-                <SelectItem key={warehouse.id} value={warehouse.id}>
+              {mockWarehouses.map((warehouse, index) => (
+                <SelectItem key={warehouse.id + "-" + index} value={warehouse.id}>
                   {warehouse.name}
                 </SelectItem>
               ))}

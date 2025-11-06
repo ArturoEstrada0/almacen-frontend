@@ -8,11 +8,8 @@ if (!API_BASE_URL) {
   )
 }
 
-// Normalize: ensure the base URL ends with '/api' because the backend sets a global prefix '/api'.
+// No modificar el sufijo, el backend ya tiene el prefijo /api
 API_BASE_URL = API_BASE_URL.replace(/\/+$/g, "")
-if (!API_BASE_URL.endsWith("/api")) {
-  API_BASE_URL = `${API_BASE_URL}/api`
-}
 
 export const API_ENDPOINTS = {
   // Products
@@ -70,25 +67,25 @@ export const API_ENDPOINTS = {
 
   // Producers
   producers: {
-    list: () => `${API_BASE_URL}/producers`,
-    get: (id: string) => `${API_BASE_URL}/producers/${id}`,
-    create: () => `${API_BASE_URL}/producers`,
+    list: () => `${API_BASE_URL}/api/producers`,
+    get: (id: string) => `${API_BASE_URL}/api/producers/${id}`,
+    create: () => `${API_BASE_URL}/api/producers`,
     inputAssignments: {
-      list: () => `${API_BASE_URL}/producers/input-assignments/all`,
-      create: () => `${API_BASE_URL}/producers/input-assignments`,
+      list: () => `${API_BASE_URL}/api/producers/input-assignments/all`,
+      create: () => `${API_BASE_URL}/api/producers/input-assignments`,
     },
     fruitReceptions: {
-      list: () => `${API_BASE_URL}/producers/fruit-receptions/all`,
-      create: () => `${API_BASE_URL}/producers/fruit-receptions`,
+      list: () => `${API_BASE_URL}/api/producers/fruit-receptions/all`,
+      create: () => `${API_BASE_URL}/api/producers/fruit-receptions`,
     },
     shipments: {
-      list: () => `${API_BASE_URL}/producers/shipments/all`,
-      create: () => `${API_BASE_URL}/producers/shipments`,
-      updateStatus: (id: string) => `${API_BASE_URL}/producers/shipments/${id}/status`,
+      list: () => `${API_BASE_URL}/api/producers/shipments/all`,
+      create: () => `${API_BASE_URL}/api/producers/shipments`,
+      updateStatus: (id: string) => `${API_BASE_URL}/api/producers/shipments/${id}/status`,
     },
-    accountStatement: (id: string) => `${API_BASE_URL}/producers/${id}/account-statement`,
+    accountStatement: (id: string) => `${API_BASE_URL}/api/producers/${id}/account-statement`,
     payments: {
-      create: () => `${API_BASE_URL}/producers/payments`,
+      create: () => `${API_BASE_URL}/api/producers/payments`,
     },
   },
 
@@ -155,8 +152,8 @@ export class ApiClient {
 }
 
 export const api = {
-  get: (url: string) => ApiClient.get<any>(`${API_BASE_URL}/api${url}`),
-  post: (url: string, data: any) => ApiClient.post<any>(`${API_BASE_URL}/api${url}`, data),
-  patch: (url: string, data: any) => ApiClient.patch<any>(`${API_BASE_URL}/api${url}`, data),
-  delete: (url: string) => ApiClient.delete<any>(`${API_BASE_URL}/api${url}`),
+  get: (url: string) => ApiClient.get<any>(`${API_BASE_URL}${url}`),
+  post: (url: string, data: any) => ApiClient.post<any>(`${API_BASE_URL}${url}`, data),
+  patch: (url: string, data: any) => ApiClient.patch<any>(`${API_BASE_URL}${url}`, data),
+  delete: (url: string) => ApiClient.delete<any>(`${API_BASE_URL}${url}`),
 }

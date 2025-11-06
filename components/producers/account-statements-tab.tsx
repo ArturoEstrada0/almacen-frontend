@@ -28,7 +28,6 @@ export function AccountStatementsTab() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
 
   // Payment form state
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0])
   const [amount, setAmount] = useState("")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("transferencia")
   const [reference, setReference] = useState("")
@@ -63,11 +62,17 @@ export function AccountStatementsTab() {
   const handleSavePayment = () => {
     ;(async () => {
       try {
+        // Traducir método de pago a inglés
+        const methodMap: Record<string, string> = {
+          efectivo: "cash",
+          transferencia: "transfer",
+          cheque: "check",
+          deposito: "other",
+        }
         const payload = {
           producerId: selectedProducer,
-          paymentDate,
           amount: Number(amount),
-          method: paymentMethod,
+          method: methodMap[paymentMethod] || "other",
           reference,
           notes: paymentNotes,
         }
@@ -75,7 +80,6 @@ export function AccountStatementsTab() {
         // Refresh account statement and producers list (balance)
         await mutateAccount()
         // Reset form
-        setPaymentDate(new Date().toISOString().split("T")[0])
         setAmount("")
         setPaymentMethod("transferencia")
         setReference("")
@@ -153,15 +157,6 @@ export function AccountStatementsTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="paymentDate">Fecha de Pago *</Label>
-                            <Input
-                              id="paymentDate"
-                              type="date"
-                              value={paymentDate}
-                              onChange={(e) => setPaymentDate(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
                             <Label htmlFor="amount">Monto *</Label>
                             <Input
                               id="amount"
@@ -172,24 +167,23 @@ export function AccountStatementsTab() {
                               onChange={(e) => setAmount(e.target.value)}
                             />
                           </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="method">Método de Pago *</Label>
-                          <Select
-                            value={paymentMethod}
-                            onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="efectivo">Efectivo</SelectItem>
-                              <SelectItem value="transferencia">Transferencia</SelectItem>
-                              <SelectItem value="cheque">Cheque</SelectItem>
-                              <SelectItem value="deposito">Depósito</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="space-y-2">
+                            <Label htmlFor="method">Método de Pago *</Label>
+                            <Select
+                              value={paymentMethod}
+                              onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="efectivo">Efectivo</SelectItem>
+                                <SelectItem value="transferencia">Transferencia</SelectItem>
+                                <SelectItem value="cheque">Cheque</SelectItem>
+                                <SelectItem value="deposito">Depósito</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
 
                         <div className="space-y-2">
