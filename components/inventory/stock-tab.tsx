@@ -72,6 +72,10 @@ export function StockTab({ warehouseId }: StockTabProps) {
     return "normal"
   }
 
+  function isUUID(str: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+  }
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -200,6 +204,15 @@ export function StockTab({ warehouseId }: StockTabProps) {
                           const reorder = window.prompt("Punto de reorden:", String(stock.reorderPoint || 0))
                           if (reorder === null) return
 
+                          if (!isUUID(stock.productId)) {
+                            alert("Error: El ID del producto no es un UUID válido.")
+                            return
+                          }
+                          if (!isUUID(warehouseId as string)) {
+                            alert("Error: El ID del almacén no es un UUID válido.")
+                            return
+                          }
+
                           try {
                             await updateInventoryStock({
                               productId: stock.productId,
@@ -208,8 +221,6 @@ export function StockTab({ warehouseId }: StockTabProps) {
                               maxStock: Number(max),
                               reorderPoint: Number(reorder),
                             })
-                            // revalidate inventory
-                            // mutate is available via hook but quick way: reload page or you can call window.location.reload()
                             window.location.reload()
                           } catch (err) {
                             console.error("Error updating inventory settings", err)
