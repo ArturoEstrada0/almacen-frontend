@@ -16,7 +16,14 @@ async function request(path: string, opts: RequestInit = {}) {
     normalized = path.startsWith("api") ? `/${path}` : `/api/${path}`
   }
   const url = `${API_URL}${normalized}`
-  const res = await fetch(url, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } })
+  let res: Response
+  try {
+    res = await fetch(url, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } })
+  } catch (err: any) {
+    // Network-level errors (e.g. ECONNREFUSED, DNS issues) end up here
+    throw new Error(`Network request failed for ${url}: ${err?.message || String(err)}`)
+  }
+
   if (!res.ok) {
     const text = await res.text()
     // Mejorar el mensaje de error mostrando la URL y el texto del backend
