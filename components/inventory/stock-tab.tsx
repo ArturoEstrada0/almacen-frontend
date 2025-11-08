@@ -12,6 +12,14 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { formatNumber } from "@/lib/utils/format"
 import { Search, AlertTriangle, Download, Upload, ArrowLeftRight } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface StockTabProps {
@@ -19,12 +27,28 @@ interface StockTabProps {
 }
 
 export function StockTab({ warehouseId }: StockTabProps) {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState<string>("all")
-
-  const { inventory } = useInventoryByWarehouse(warehouseId || null)
+  const { inventory: rawInventory } = useInventoryByWarehouse(warehouseId || null)
   const { products } = useProducts()
   const { movements } = useMovements({ warehouseId })
+
+  const inventory = Array.isArray(rawInventory) ? rawInventory : [];
+  // Calcular el valor total de productos con stock bajo
+  const lowStockValue = inventory.reduce((sum, stock) => {
+    const product = products.find((p) => p.id === stock.productId)
+    if (!product) return sum
+    const min = product.minStock || stock.minStock || 0
+    if (stock.currentStock < min) {
+      return sum + (stock.currentStock * (product.costPrice || 0))
+    }
+    return sum
+  }, 0)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingStock, setEditingStock] = useState<any | null>(null)
+  const [editMin, setEditMin] = useState<string>("")
+  const [editMax, setEditMax] = useState<string>("")
+  const [editReorder, setEditReorder] = useState<string>("")
 
   // Build a map of latest lot numbers by product from recent movements
   const latestLotByProduct = useMemo(() => {
@@ -78,6 +102,16 @@ export function StockTab({ warehouseId }: StockTabProps) {
 
   return (
     <>
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Valor de productos con stock bajo</CardTitle>
+          <CardDescription>
+            {lowStockValue > 0
+              ? `Total: $${lowStockValue.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+              : "No hay productos con stock bajo"}
+          </CardDescription>
+        </CardHeader>
+      </Card>
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
           <Button>
@@ -195,37 +229,12 @@ export function StockTab({ warehouseId }: StockTabProps) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={async () => {
-                          // simple prompt-based editor for min/max/reorder
-                          const min = window.prompt("Min stock:", String(stock.minStock || 0))
-                          if (min === null) return
-                          const max = window.prompt("Max stock:", String(stock.maxStock || 1000))
-                          if (max === null) return
-                          const reorder = window.prompt("Punto de reorden:", String(stock.reorderPoint || 0))
-                          if (reorder === null) return
-
-                          if (!isUUID(stock.productId)) {
-                            alert("Error: El ID del producto no es un UUID válido.")
-                            return
-                          }
-                          if (!isUUID(warehouseId as string)) {
-                            alert("Error: El ID del almacén no es un UUID válido.")
-                            return
-                          }
-
-                          try {
-                            await updateInventoryStock({
-                              productId: stock.productId,
-                              warehouseId: warehouseId as string,
-                              minStock: Number(min),
-                              maxStock: Number(max),
-                              reorderPoint: Number(reorder),
-                            })
-                            window.location.reload()
-                          } catch (err) {
-                            console.error("Error updating inventory settings", err)
-                            alert("Error actualizando inventario")
-                          }
+                        onClick={() => {
+                          setEditingStock(stock)
+                          setEditMin(String(stock.minStock || 0))
+                          setEditMax(String(stock.maxStock || 0))
+                          setEditReorder(String(stock.reorderPoint || 0))
+                          setEditDialogOpen(true)
                         }}
                       >
                         Editar
@@ -238,6 +247,70 @@ export function StockTab({ warehouseId }: StockTabProps) {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit Stock Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open)
+        if (!open) setEditingStock(null)
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar parámetros de stock</DialogTitle>
+            <DialogDescription>
+              Ajusta los valores mínimos, máximos y punto de reorden para el producto seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 py-2">
+            <div className="grid grid-cols-1 gap-1">
+              <label className="text-sm text-muted-foreground">Min Stock</label>
+              <Input value={editMin} onChange={(e) => setEditMin(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              <label className="text-sm text-muted-foreground">Max Stock</label>
+              <Input value={editMax} onChange={(e) => setEditMax(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              <label className="text-sm text-muted-foreground">Punto de Reorden</label>
+              <Input value={editReorder} onChange={(e) => setEditReorder(e.target.value)} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (!editingStock) return
+                if (!isUUID(editingStock.productId)) {
+                  alert("Error: El ID del producto no es un UUID válido.")
+                  return
+                }
+                if (!isUUID(warehouseId as string)) {
+                  alert("Error: El ID del almacén no es un UUID válido.")
+                  return
+                }
+
+                try {
+                  await updateInventoryStock({
+                    productId: editingStock.productId,
+                    warehouseId: warehouseId as string,
+                    minStock: Number(editMin || 0),
+                    maxStock: Number(editMax || 0),
+                    reorderPoint: Number(editReorder || 0),
+                  })
+                  // keep existing behaviour for now
+                  window.location.reload()
+                } catch (err) {
+                  console.error("Error updating inventory settings", err)
+                  alert("Error actualizando inventario")
+                }
+              }}
+            >
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

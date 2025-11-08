@@ -115,8 +115,7 @@ export async function updateProduct(id: string, product: Partial<Product>) {
 
 export async function deleteProduct(id: string) {
   try {
-    await apiPatch(`/products/${id}`, { is_active: false })
-
+    await apiPatch(`/products/${id}`, { active: false })
     revalidatePath("/products")
     return { error: null }
   } catch (error: any) {

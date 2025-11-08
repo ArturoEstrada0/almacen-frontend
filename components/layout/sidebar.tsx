@@ -24,7 +24,7 @@ const navigation = [
   { name: "Órdenes de Compra", href: "/purchase-orders", icon: ShoppingCart },
   { name: "Reportes", href: "/reports", icon: BarChart3 },
   { name: "Importar/Exportar", href: "/import-export", icon: FileText },
-  { name: "Configuración", href: "/settings", icon: Settings },
+  // { name: "Configuración", href: "/settings", icon: Settings },
 ]
 
 export function Sidebar() {
