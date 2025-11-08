@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
@@ -36,6 +37,10 @@ export function FruitReceptionsTab() {
   const [warehouses, setWarehouses] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [receptions, setReceptions] = useState<any[]>([])
+
+  // Estado para el modal de detalles
+  const [selectedReception, setSelectedReception] = useState<any | null>(null)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -121,6 +126,17 @@ export function FruitReceptionsTab() {
       default:
         return <Badge variant="outline">{status}</Badge>
     }
+  }
+
+  // Handler para ver detalles
+  const handleViewReception = (reception: any) => {
+    setSelectedReception(reception)
+    setIsViewDialogOpen(true)
+  }
+
+  // Handler para imprimir
+  const handlePrintReception = (reception: any) => {
+    window.print() // Personaliza si necesitas formato especial
   }
 
   return (
@@ -267,10 +283,10 @@ export function FruitReceptionsTab() {
                     <TableCell>{formatDate(reception.receptionDate)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" title="Imprimir recibo">
+                        <Button variant="ghost" size="sm" title="Imprimir recibo" onClick={() => handlePrintReception(reception)}>
                           <Printer className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" title="Ver detalles">
+                        <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewReception(reception)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       </div>
@@ -282,6 +298,32 @@ export function FruitReceptionsTab() {
           </Table>
         </div>
       </CardContent>
+
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalles de Recepción de Fruta</DialogTitle>
+            <DialogDescription>Información general de la recepción</DialogDescription>
+          </DialogHeader>
+          {selectedReception && (
+            <div className="grid gap-2 py-2">
+              <div><b>Código:</b> {selectedReception.code || selectedReception.receptionNumber}</div>
+              <div><b>Productor:</b> {producers.find(p => String(p.id) === String(selectedReception.producerId))?.name || '-'}</div>
+              <div><b>Producto:</b> {products.find(p => String(p.id) === String(selectedReception.productId))?.name || '-'}</div>
+              <div><b>Cajas:</b> {selectedReception.boxes}</div>
+              <div><b>Peso total:</b> {selectedReception.totalWeight} kg</div>
+              <div><b>Estatus de envío:</b> {selectedReception.shipmentStatus || 'pendiente'}</div>
+              <div><b>Fecha:</b> {formatDate(selectedReception.receptionDate)}</div>
+              <div><b>Notas:</b> {selectedReception.notes || '-'}</div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

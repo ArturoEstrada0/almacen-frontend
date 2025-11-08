@@ -110,8 +110,28 @@ export function AccountStatementsTab() {
   }
 
   const handleExport = () => {
-    console.log("[v0] Exporting account statement for producer:", selectedProducer)
-    // In real app, generate PDF or Excel
+    if (!accountStatement) return alert("No hay estado de cuenta para exportar.")
+    // Exportar como CSV
+    const rows = [
+      ["Fecha", "Tipo", "Referencia", "Monto", "Notas"],
+      ...((accountStatement.movements || []).map((m: any) => [
+        m.date || m.movementDate || "",
+        m.type || "",
+        m.reference || m.code || "",
+        m.amount || m.total || "",
+        m.notes || ""
+      ]))
+    ]
+    const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `estado_cuenta_${selectedProducer || "productor"}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   return (

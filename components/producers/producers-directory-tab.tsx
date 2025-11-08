@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Search, Edit, Eye, DollarSign } from "lucide-react"
 import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { formatCurrency } from "@/lib/utils/format"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function ProducersDirectoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -97,12 +98,13 @@ export function ProducersDirectoryTab() {
   // Estado y handler para ver detalles de productor
   const [selectedProducer, setSelectedProducer] = useState<any | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  // Estado para el modal de detalles
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
 
   // Handler para ver detalles
   const handleViewProducer = (producer: any) => {
     setSelectedProducer(producer)
-    // Aquí podrías abrir un modal o mostrar detalles
-    alert(`Detalles de: ${producer.name}`)
+    setIsViewDialogOpen(true)
   }
 
   // Handler para editar productor
@@ -268,9 +270,17 @@ export function ProducersDirectoryTab() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleViewProducer(producer)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="sm" onClick={() => handleViewProducer(producer)}>
+                              <Eye className="h-4 w-4 mr-1" />
+                              <span className="hidden md:inline">Ver</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Ver detalles del productor</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <Button variant="ghost" size="sm" onClick={() => handleEditProducer(producer)}>
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -365,6 +375,33 @@ export function ProducersDirectoryTab() {
               }
             }}>
               Guardar Cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalles del Productor</DialogTitle>
+            <DialogDescription>Información general del productor</DialogDescription>
+          </DialogHeader>
+          {selectedProducer && (
+            <div className="grid gap-2 py-2">
+              <div><b>Código:</b> {selectedProducer.code}</div>
+              <div><b>Nombre:</b> {selectedProducer.name}</div>
+              <div><b>RFC:</b> {selectedProducer.rfc || selectedProducer.taxId || '-'}</div>
+              <div><b>Teléfono:</b> {selectedProducer.phone || '-'}</div>
+              <div><b>Email:</b> {selectedProducer.email || '-'}</div>
+              <div><b>Dirección:</b> {selectedProducer.address || '-'}</div>
+              <div><b>Ciudad:</b> {selectedProducer.city || '-'}</div>
+              <div><b>Estado:</b> {selectedProducer.state || '-'}</div>
+              <div><b>Saldo:</b> {formatCurrency(selectedProducer.accountBalance || 0)}</div>
+              <div><b>Estatus:</b> {selectedProducer.isActive ? 'Activo' : 'Inactivo'}</div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>

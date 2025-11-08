@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
@@ -155,6 +156,22 @@ export function InputAssignmentsTab() {
       checkItemStock(item)
     })
   }, [selectedItems, selectedWarehouse])
+
+  // Estado para el modal de detalles
+  const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+
+  // Handler para ver detalles
+  const handleViewAssignment = (assignment: any) => {
+    setSelectedAssignment(assignment)
+    setIsViewDialogOpen(true)
+  }
+
+  // Handler para imprimir
+  const handlePrintAssignment = (assignment: any) => {
+    // Aquí puedes implementar la lógica de impresión real
+    window.print() // Esto imprime la página actual, puedes personalizarlo
+  }
 
   return (
     <Card>
@@ -330,10 +347,10 @@ export function InputAssignmentsTab() {
                     <TableCell className="font-semibold text-destructive">{formatCurrency(Number(assignment.total) || 0)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" title="Imprimir nota">
+                        <Button variant="ghost" size="sm" title="Imprimir nota" onClick={() => handlePrintAssignment(assignment)}>
                           <Printer className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" title="Ver detalles">
+                        <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewAssignment(assignment)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       </div>
@@ -345,6 +362,36 @@ export function InputAssignmentsTab() {
           </Table>
         </div>
       </CardContent>
+
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalles de Asignación de Insumos</DialogTitle>
+            <DialogDescription>Información general de la asignación</DialogDescription>
+          </DialogHeader>
+          {selectedAssignment && (
+            <div className="grid gap-2 py-2">
+              <div><b>Código:</b> {selectedAssignment.code || selectedAssignment.assignmentNumber}</div>
+              <div><b>Productor:</b> {producers.find(p => String(p.id) === String(selectedAssignment.producerId))?.name || '-'}</div>
+              <div><b>Almacén:</b> {warehouses.find(w => String(w.id) === String(selectedAssignment.warehouseId))?.name || '-'}</div>
+              <div><b>Fecha:</b> {formatDate(selectedAssignment.date || selectedAssignment.assignmentDate)}</div>
+              <div><b>Total:</b> {formatCurrency(Number(selectedAssignment.total) || 0)}</div>
+              <div><b>Notas:</b> {selectedAssignment.notes || '-'}</div>
+              <div><b>Items:</b></div>
+              <ul className="list-disc ml-4">
+                {selectedAssignment.items?.map((item: any, idx: number) => (
+                  <li key={idx}>{item.productName || item.productId} - {item.quantity} x {formatCurrency(item.unitPrice || 0)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

@@ -30,6 +30,7 @@ import {
   updateShipmentStatus as apiUpdateShipmentStatus,
 } from "@/lib/hooks/use-producers"
 import { mutate as globalMutate } from "swr"
+import { products } from "@/lib/mock-data"
 
 const statusConfig: Record<
   ShipmentStatus,
@@ -58,6 +59,10 @@ export function ShipmentsTab() {
   const [arrivalDate, setArrivalDate] = useState("")
   const [salePrice, setSalePrice] = useState("")
   const [updateNotes, setUpdateNotes] = useState("")
+
+  // Estado para el modal de detalles
+  const [viewShipment, setViewShipment] = useState<any | null>(null)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
 
   const { fruitReceptions } = useFruitReceptions()
   const { shipments, mutate: mutateShipments } = useShipments()
@@ -125,6 +130,12 @@ export function ShipmentsTab() {
         alert("Error al actualizar embarque: " + (err as any)?.message || err)
       }
     })()
+  }
+
+  // Handler para ver detalles
+  const handleViewShipment = (shipment: any) => {
+    setViewShipment(shipment)
+    setIsViewDialogOpen(true)
   }
 
   return (
@@ -376,7 +387,7 @@ export function ShipmentsTab() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" title="Ver detalles">
+                        <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewShipment(shipment)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       </div>
@@ -491,6 +502,33 @@ export function ShipmentsTab() {
               </Button>
               <Button onClick={handleUpdateShipment} disabled={updateStatus === "vendida" && !salePrice}>
                 Actualizar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Shipment Details Dialog */}
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Detalles de Embarque</DialogTitle>
+              <DialogDescription>Información general del embarque</DialogDescription>
+            </DialogHeader>
+            {viewShipment && (
+              <div className="grid gap-2 py-2">
+                <div><b>Código:</b> {viewShipment.code || viewShipment.shipmentNumber}</div>
+                <div><b>Productor:</b> {producers.find(p => String(p.id) === String(viewShipment.producerId))?.name || '-'}</div>
+                <div><b>Producto:</b> {Array.isArray(products) ? products.find(p => String(p.id) === String(viewShipment.productId))?.name || '-' : '-'}</div>
+                <div><b>Cajas:</b> {viewShipment.boxes}</div>
+                <div><b>Peso total:</b> {viewShipment.totalWeight} kg</div>
+                <div><b>Estado:</b> {viewShipment.status || '-'}</div>
+                <div><b>Fecha:</b> {formatDate(viewShipment.shipmentDate)}</div>
+                <div><b>Notas:</b> {viewShipment.notes || '-'}</div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+                Cerrar
               </Button>
             </DialogFooter>
           </DialogContent>
