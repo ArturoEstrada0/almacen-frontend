@@ -180,6 +180,7 @@ export async function updateInventoryStock(data: {
   maxStock?: number
   reorderPoint?: number
 }) {
-  const response = await api.patch(`/inventory/${data.productId}`, data)
+  // Cambia la ruta para incluir /api/
+  const response = await api.patch(`/api/inventory/${data.productId}`, data)
   return response.data
 }

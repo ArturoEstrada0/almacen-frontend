@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Eye, Trash2, Printer } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { useToast } from "@/hooks/use-toast"
 
 interface AssignmentItem {
   id: number
@@ -41,6 +42,7 @@ export function InputAssignmentsTab() {
   const [assignments, setAssignments] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     let mounted = true
@@ -79,7 +81,11 @@ export function InputAssignmentsTab() {
   const calculateTax = () => calculateSubtotal() * 0.16
   const calculateTotal = () => calculateSubtotal() + calculateTax()
 
+  // Estado para mostrar error en pantalla
+  const [saveError, setSaveError] = useState("")
+
   const handleSave = async () => {
+    setSaveError("")
     try {
       setSaving(true)
       const payload = {
@@ -97,8 +103,17 @@ export function InputAssignmentsTab() {
       setSelectedItems([])
       setIsDialogOpen(false)
     } catch (err) {
-      console.error("Error saving assignment:", err)
-      alert("Error saving assignment: " + ((err as any)?.message || String(err)))
+      const msg = (err as any)?.message || String(err)
+      if (msg.includes("Insufficient stock")) {
+        setSaveError("No hay suficiente stock para uno o más insumos asignados.")
+      } else {
+        setSaveError(msg)
+      }
+      toast({
+        title: "Error",
+        description: msg,
+        variant: "destructive"
+      })
     } finally {
       setSaving(false)
     }
@@ -112,6 +127,34 @@ export function InputAssignmentsTab() {
   })
 
   const insumoProducts = products.filter((p) => p.type !== "fruta")
+
+  // Estado para mostrar error por item
+  const [itemStockErrors, setItemStockErrors] = useState<Record<number, string>>({})
+
+  // Validar stock de cada item al cambiar cantidad o producto
+  async function checkItemStock(item: AssignmentItem) {
+    if (!item.productId || !selectedWarehouse || !item.quantity) return
+    try {
+      const inventory = await apiGet(`/inventory/warehouse/${selectedWarehouse}`)
+      const invItem = Array.isArray(inventory)
+        ? inventory.find((i: any) => i.product?.id === item.productId)
+        : null
+      const stock = invItem ? Number(invItem.quantity) : 0
+      setItemStockErrors(prev => ({
+        ...prev,
+        [item.id]: item.quantity > stock ? `No hay suficiente stock para este insumo. Solo hay ${stock} disponibles.` : ""
+      }))
+    } catch {
+      setItemStockErrors(prev => ({ ...prev, [item.id]: "" }))
+    }
+  }
+
+  // Efecto para validar stock de todos los items
+  useEffect(() => {
+    selectedItems.forEach(item => {
+      checkItemStock(item)
+    })
+  }, [selectedItems, selectedWarehouse])
 
   return (
     <Card>
@@ -188,9 +231,15 @@ export function InputAssignmentsTab() {
                         <Input
                           type="number"
                           value={it.quantity === 0 ? "" : String(it.quantity)}
-                          onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })}
+                          onChange={e => {
+                            updateItem(it.id, { quantity: Number(e.target.value) })
+                            checkItemStock({ ...it, quantity: Number(e.target.value) })
+                          }}
                           placeholder="Cantidad"
                         />
+                        {itemStockErrors[it.id] && (
+                          <div className="text-xs text-destructive font-semibold mt-1">{itemStockErrors[it.id]}</div>
+                        )}
                         <Input
                           type="number"
                           step="0.01"
@@ -239,6 +288,9 @@ export function InputAssignmentsTab() {
                 <Button onClick={handleSave} disabled={!selectedProducer || !selectedWarehouse || selectedItems.length === 0 || saving}>
                   {saving ? "Guardando..." : "Guardar Asignación"}
                 </Button>
+                {saveError && (
+                  <div className="text-xs text-destructive font-semibold mt-2">{saveError}</div>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -296,4 +348,3 @@ export function InputAssignmentsTab() {
     </Card>
   )
 }
- 

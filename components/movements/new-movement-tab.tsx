@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -9,9 +9,96 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { mockProducts, mockWarehouses } from "@/lib/mock-data"
 import { TrendingUp, TrendingDown } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { apiGet } from "@/lib/db/localApi"
 
 export function NewMovementTab() {
   const [movementType, setMovementType] = useState<string>("entrada")
+  const { toast } = useToast()
+  // Estados para los campos principales
+  const [productOut, setProductOut] = useState<string>("")
+  const [warehouseOut, setWarehouseOut] = useState<string>("")
+  const [quantityOut, setQuantityOut] = useState<number>(0)
+  const [loading, setLoading] = useState(false)
+  const [availableStock, setAvailableStock] = useState<number | null>(null)
+  // Mensaje de stock insuficiente en pantalla
+  const [stockError, setStockError] = useState<string>("")
+
+  // Consultar stock cuando cambian producto, almacén o cantidad
+  async function checkStock(productId: string, warehouseId: string, quantity: number) {
+    if (!productId || !warehouseId) return
+    try {
+      const inventory = await apiGet(`/inventory/warehouse/${warehouseId}`)
+      const item = Array.isArray(inventory)
+        ? inventory.find((i: any) => i.product?.id === productId)
+        : null
+      const stock = item ? Number(item.quantity) : 0
+      setAvailableStock(stock)
+      if (quantity > stock) {
+        setStockError(`Solo hay ${stock} unidades disponibles en el almacén seleccionado.`)
+      } else {
+        setStockError("")
+      }
+    } catch (err) {
+      setAvailableStock(null)
+      setStockError("")
+    }
+  }
+
+  // Efecto para validar stock al cambiar cantidad, producto o almacén
+  useEffect(() => {
+    if (productOut && warehouseOut && quantityOut > 0) {
+      checkStock(productOut, warehouseOut, quantityOut)
+    } else {
+      setStockError("")
+    }
+  }, [productOut, warehouseOut, quantityOut])
+
+  // Handler para registrar salida
+  async function handleRegisterSalida() {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/inventory/movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "salida",
+          warehouseId: warehouseOut,
+          items: [{ productId: productOut, quantity: quantityOut }],
+        }),
+      })
+      if (!res.ok) {
+        let data = { message: "" }
+        try { data = await res.json() } catch {}
+        if (data.message && data.message.includes("Insufficient stock")) {
+          toast({
+            title: "Error de stock",
+            description: "No hay suficiente stock para realizar la salida.",
+            variant: "destructive"
+          })
+        } else {
+          toast({
+            title: "Error",
+            description: data.message || "Ocurrió un error al registrar la salida.",
+            variant: "destructive"
+          })
+        }
+        setLoading(false)
+        return
+      }
+      toast({
+        title: "Salida registrada",
+        description: "La salida de inventario se registró correctamente."
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "No se pudo conectar con el servidor.",
+        variant: "destructive"
+      })
+    }
+    setLoading(false)
+  }
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -85,9 +172,9 @@ export function NewMovementTab() {
             <Textarea id="notes-in" placeholder="Observaciones adicionales..." />
           </div>
 
-          <Button className="w-full">
+          <Button className="w-full" onClick={handleRegisterEntrada} disabled={loading}>
             <TrendingUp className="mr-2 h-4 w-4" />
-            Registrar Entrada
+            {loading ? "Registrando..." : "Registrar Entrada"}
           </Button>
         </CardContent>
       </Card>
@@ -132,7 +219,22 @@ export function NewMovementTab() {
 
           <div className="space-y-2">
             <Label htmlFor="quantity-out">Cantidad *</Label>
-            <Input id="quantity-out" type="number" placeholder="0" />
+            <Input id="quantity-out" type="number" placeholder="0" value={quantityOut === 0 ? "" : quantityOut} onChange={e => {
+              const value = Number(e.target.value)
+              setQuantityOut(value)
+              // Validar y mostrar error inmediatamente
+              if (availableStock !== null && value > availableStock) {
+                setStockError(`Solo hay ${availableStock} unidades disponibles en el almacén seleccionado.`)
+              } else {
+                setStockError("")
+              }
+            }} />
+            {availableStock !== null && (
+              <div className="text-xs text-muted-foreground">Stock disponible: {availableStock}</div>
+            )}
+            {stockError && (
+              <div className="text-xs text-destructive font-semibold mt-1">{stockError}</div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -162,9 +264,9 @@ export function NewMovementTab() {
             <Textarea id="notes-out" placeholder="Observaciones adicionales..." />
           </div>
 
-          <Button className="w-full" variant="destructive">
+          <Button className="w-full" variant="destructive" onClick={handleRegisterSalida} disabled={loading || !!stockError}>
             <TrendingDown className="mr-2 h-4 w-4" />
-            Registrar Salida
+            {loading ? "Registrando..." : "Registrar Salida"}
           </Button>
         </CardContent>
       </Card>

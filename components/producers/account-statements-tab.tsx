@@ -23,6 +23,22 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentMethod } from "@/lib/types"
 import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment } from "@/lib/hooks/use-producers"
 
+function safeCurrency(val: any) {
+  // Si el valor es string y tiene el mismo número repetido, lo corregimos
+  if (typeof val === "string" && val.length % 2 === 0) {
+    const half = val.length / 2;
+    // Solo si ambas mitades son iguales y el valor es mayor a 1 dígito
+    if (half > 1 && val.slice(0, half) === val.slice(half)) {
+      // Si la mitad es un solo dígito, lo convertimos a número
+      if (/^\d+$/.test(val.slice(0, half))) {
+        val = val.slice(0, half);
+      }
+    }
+  }
+  const num = typeof val === "string" ? Number(val.replace(/[^\d.-]/g, "")) : Number(val);
+  return isNaN(num) ? "$0.00" : formatCurrency(num);
+}
+
 export function AccountStatementsTab() {
   const [selectedProducer, setSelectedProducer] = useState<string>("")
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
@@ -144,7 +160,7 @@ export function AccountStatementsTab() {
                             <div className="space-y-1">
                               <p className="text-sm font-medium text-blue-900">Saldo Actual</p>
                               <p className="text-lg font-bold text-blue-900">
-                                {formatCurrency(Math.abs(producer?.accountBalance || 0))}
+                                {safeCurrency(producer?.accountBalance)}
                               </p>
                               <p className="text-xs text-blue-700">
                                 {(producer?.accountBalance || 0) > 0
@@ -267,7 +283,7 @@ export function AccountStatementsTab() {
                       producer.accountBalance > 0 ? "text-green-600" : producer.accountBalance < 0 ? "text-red-600" : ""
                     }
                   >
-                    {formatCurrency(Math.abs(producer.accountBalance))}
+                    {safeCurrency(producer.accountBalance)}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -286,7 +302,7 @@ export function AccountStatementsTab() {
                 <TrendingDown className="h-4 w-4 text-red-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-600">{formatCurrency(totalAssigned)}</div>
+                <div className="text-2xl font-bold text-red-600">{safeCurrency(totalAssigned)}</div>
                 <p className="text-xs text-muted-foreground mt-1">Insumos entregados</p>
               </CardContent>
             </Card>
@@ -297,7 +313,7 @@ export function AccountStatementsTab() {
                 <TrendingUp className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{formatCurrency(totalReceived)}</div>
+                <div className="text-2xl font-bold text-green-600">{safeCurrency(totalReceived)}</div>
                 <p className="text-xs text-muted-foreground mt-1">Fruta entregada y vendida</p>
               </CardContent>
             </Card>
@@ -308,7 +324,7 @@ export function AccountStatementsTab() {
                 <DollarSign className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-blue-600">{formatCurrency(totalPaid)}</div>
+                <div className="text-2xl font-bold text-blue-600">{safeCurrency(totalPaid)}</div>
                 <p className="text-xs text-muted-foreground mt-1">Pagos realizados</p>
               </CardContent>
             </Card>
@@ -361,7 +377,7 @@ export function AccountStatementsTab() {
                               }
                             >
                               {movement.amount > 0 ? "+" : ""}
-                              {formatCurrency(movement.amount)}
+                              {safeCurrency(movement.amount)}
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
@@ -374,7 +390,7 @@ export function AccountStatementsTab() {
                                     : "font-semibold"
                               }
                             >
-                              {formatCurrency(movement.balance)}
+                              {safeCurrency(movement.balance)}
                             </span>
                           </TableCell>
                         </TableRow>

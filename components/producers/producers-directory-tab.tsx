@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Edit, Eye, DollarSign } from "lucide-react"
-import { apiGet, apiPost } from "@/lib/db/localApi"
+import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { formatCurrency } from "@/lib/utils/format"
 
 export function ProducersDirectoryTab() {
@@ -93,6 +93,23 @@ export function ProducersDirectoryTab() {
       (producer.code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (producer.city || "").toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  // Estado y handler para ver detalles de productor
+  const [selectedProducer, setSelectedProducer] = useState<any | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+
+  // Handler para ver detalles
+  const handleViewProducer = (producer: any) => {
+    setSelectedProducer(producer)
+    // Aquí podrías abrir un modal o mostrar detalles
+    alert(`Detalles de: ${producer.name}`)
+  }
+
+  // Handler para editar productor
+  const handleEditProducer = (producer: any) => {
+    setSelectedProducer(producer)
+    setIsEditDialogOpen(true)
+  }
 
   return (
     <Card>
@@ -251,10 +268,10 @@ export function ProducersDirectoryTab() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => handleViewProducer(producer)}>
                         <Eye className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => handleEditProducer(producer)}>
                         <Edit className="h-4 w-4" />
                       </Button>
                     </div>
@@ -265,6 +282,93 @@ export function ProducersDirectoryTab() {
           </Table>
         </div>
       </CardContent>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Productor</DialogTitle>
+            <DialogDescription>Modifica la información del productor</DialogDescription>
+          </DialogHeader>
+          {selectedProducer && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-code">Código</Label>
+                  <Input id="edit-code" value={selectedProducer.code} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Nombre Completo</Label>
+                  <Input id="edit-name" value={selectedProducer.name} onChange={e => setSelectedProducer({ ...selectedProducer, name: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-rfc">RFC</Label>
+                  <Input id="edit-rfc" value={selectedProducer.rfc || ''} onChange={e => setSelectedProducer({ ...selectedProducer, rfc: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phone">Teléfono</Label>
+                  <Input id="edit-phone" value={selectedProducer.phone || ''} onChange={e => setSelectedProducer({ ...selectedProducer, phone: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input id="edit-email" value={selectedProducer.email || ''} onChange={e => setSelectedProducer({ ...selectedProducer, email: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-address">Dirección</Label>
+                <Input id="edit-address" value={selectedProducer.address || ''} onChange={e => setSelectedProducer({ ...selectedProducer, address: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-city">Ciudad</Label>
+                  <Input id="edit-city" value={selectedProducer.city || ''} onChange={e => setSelectedProducer({ ...selectedProducer, city: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-state">Estado</Label>
+                  <Input id="edit-state" value={selectedProducer.state || ''} onChange={e => setSelectedProducer({ ...selectedProducer, state: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={async () => {
+              try {
+                // Filtrar solo los campos permitidos por el DTO
+                const {
+                  name,
+                  code,
+                  email,
+                  phone,
+                  address,
+                  rfc,
+                  taxId,
+                } = selectedProducer
+                // taxId puede venir como rfc
+                const payload: any = {
+                  name,
+                  code,
+                  email,
+                  phone,
+                  address,
+                }
+                if (rfc) payload.taxId = rfc
+                if (taxId) payload.taxId = taxId
+                await apiPatch(`/api/producers/${selectedProducer.id}`, payload)
+                setIsEditDialogOpen(false)
+                const data = await apiGet("/api/producers")
+                setProducers(Array.isArray(data) ? data : [])
+              } catch (err) {
+                alert("Error actualizando productor: " + (err as any)?.message || String(err))
+              }
+            }}>
+              Guardar Cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
