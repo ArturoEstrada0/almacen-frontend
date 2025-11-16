@@ -102,10 +102,29 @@ export const API_ENDPOINTS = {
 export class ApiClient {
   private static async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: "An error occurred" }))
-      throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`)
+      // Try to parse JSON error body, otherwise read text
+      let parsed: any = null
+      try {
+        parsed = await response.json()
+      } catch (e) {
+        try {
+          parsed = await response.text()
+        } catch (e2) {
+          parsed = null
+        }
+      }
+
+      const msg = parsed && typeof parsed === 'object' && parsed.message ? parsed.message : parsed || response.statusText
+      throw new Error(`Request failed ${response.status} ${response.statusText} - ${msg} (url: ${response.url})`)
     }
-    return response.json()
+
+    // Parse response body (could be empty)
+    try {
+      return await response.json()
+    } catch (e) {
+      // If there's no JSON body, return an empty value
+      return undefined as unknown as T
+    }
   }
 
   static async get<T>(url: string): Promise<T> {

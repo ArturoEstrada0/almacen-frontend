@@ -253,7 +253,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
         setEditDialogOpen(open)
         if (!open) setEditingStock(null)
       }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar parámetros de stock</DialogTitle>
             <DialogDescription>

@@ -364,7 +364,7 @@ export function InputAssignmentsTab() {
       </CardContent>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalles de Asignación de Insumos</DialogTitle>
             <DialogDescription>Información general de la asignación</DialogDescription>
@@ -380,7 +380,9 @@ export function InputAssignmentsTab() {
               <div><b>Items:</b></div>
               <ul className="list-disc ml-4">
                 {selectedAssignment.items?.map((item: any, idx: number) => (
-                  <li key={idx}>{item.productName || item.productId} - {item.quantity} x {formatCurrency(item.unitPrice || 0)}</li>
+                  <li key={idx}>
+                    {item.product?.name || item.productName || item.productId} - {item.quantity} x {formatCurrency(Number(item.price || item.unitPrice || 0))}
+                  </li>
                 ))}
               </ul>
             </div>

@@ -78,13 +78,15 @@ export function FruitReceptionsTab() {
 
   const handleSave = async () => {
     try {
-      // Backend DTO accepts only: producerId, productId, warehouseId, boxes, quality?, notes?
-      // Do NOT send client-side `receptionDate` or `weightPerBox` since the server sets the date and derives totals.
+      // Send optional weight/date fields so backend can persist total weight
       const payload = {
         producerId: selectedProducer,
         warehouseId: selectedWarehouse,
         productId: selectedProduct,
         boxes: Number(boxes),
+        weightPerBox: weightPerBox ? Number(weightPerBox) : undefined,
+        totalWeight: totalWeight ? Number(totalWeight.toFixed(2)) : undefined,
+        date: receptionDate,
         notes,
       }
       const created = await apiPost("/api/producers/fruit-receptions", payload)
@@ -300,7 +302,7 @@ export function FruitReceptionsTab() {
       </CardContent>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalles de Recepción de Fruta</DialogTitle>
             <DialogDescription>Información general de la recepción</DialogDescription>

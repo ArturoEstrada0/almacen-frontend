@@ -76,7 +76,7 @@ export function ShipmentsTab() {
   })
 
   const selectedReceptionsData = pendingReceptions.filter((r) => selectedReceptions.includes(r.id))
-  const totalBoxes = selectedReceptionsData.reduce((sum, r) => sum + r.boxes, 0)
+  const totalBoxes = selectedReceptionsData.reduce((sum, r) => sum + Number(r.boxes || 0), 0)
   const producersInvolved = new Set(selectedReceptionsData.map((r) => r.producerId)).size
 
   const handleToggleReception = (receptionId: string) => {
@@ -134,7 +134,27 @@ export function ShipmentsTab() {
 
   // Handler para ver detalles
   const handleViewShipment = (shipment: any) => {
-    setViewShipment(shipment)
+    // Enriquecer el objeto de shipment con recepciones y datos derivados para asegurar que el modal tenga valores
+    const receptionIds: string[] = shipment.receptionIds || []
+    const embeddedReceptions: any[] = Array.isArray(shipment.receptions) && shipment.receptions.length > 0
+      ? shipment.receptions
+      : (fruitReceptions || []).filter((r) => receptionIds.includes(r.id))
+
+    const totalBoxesFromReceptions = embeddedReceptions.reduce((s, r) => s + Number(r.boxes || 0), 0)
+    const totalWeightFromReceptions = embeddedReceptions.reduce((s, r) => {
+      if (typeof r.totalWeight === 'number') return s + r.totalWeight
+      if (typeof r.boxes === 'number' && typeof r.weightPerBox === 'number') return s + r.boxes * r.weightPerBox
+      return s
+    }, 0)
+
+    const enriched: any = {
+      ...shipment,
+      receptions: embeddedReceptions,
+      totalBoxes: typeof shipment.totalBoxes === 'number' ? shipment.totalBoxes : totalBoxesFromReceptions,
+      totalWeight: typeof shipment.totalWeight === 'number' ? shipment.totalWeight : totalWeightFromReceptions,
+    }
+
+    setViewShipment(enriched)
     setIsViewDialogOpen(true)
   }
 
@@ -309,6 +329,7 @@ export function ShipmentsTab() {
                 <TableHead>Número</TableHead>
                 <TableHead>Productores</TableHead>
                 <TableHead>Cajas Totales</TableHead>
+                    <TableHead>Peso Total</TableHead>
                 <TableHead>Transportista</TableHead>
                 <TableHead>Embarque</TableHead>
                 <TableHead>Llegada</TableHead>
@@ -346,6 +367,18 @@ export function ShipmentsTab() {
                       </div>
                     </TableCell>
                     <TableCell>{(shipment as any).totalBoxes}</TableCell>
+                    <TableCell>
+                      {typeof (shipment as any).totalWeight === "number"
+                        ? `${(shipment as any).totalWeight.toFixed(2)} kg`
+                        : (() => {
+                            const computed = receptions.reduce((s, r) => {
+                              if (typeof r.totalWeight === "number") return s + r.totalWeight
+                              if (typeof r.boxes === "number" && typeof r.weightPerBox === "number") return s + r.boxes * r.weightPerBox
+                              return s
+                            }, 0)
+                            return computed > 0 ? `${computed.toFixed(2)} kg` : "-"
+                          })()}
+                    </TableCell>
                     <TableCell>
                       <div className="text-sm">
                         <div>{(shipment as any).carrier}</div>
@@ -401,7 +434,7 @@ export function ShipmentsTab() {
 
         {/* Update Shipment Dialog */}
         <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Actualizar Embarque</DialogTitle>
               <DialogDescription>Actualiza el estado y precio de venta del embarque</DialogDescription>
@@ -509,23 +542,88 @@ export function ShipmentsTab() {
 
         {/* View Shipment Details Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Detalles de Embarque</DialogTitle>
               <DialogDescription>Información general del embarque</DialogDescription>
             </DialogHeader>
-            {viewShipment && (
-              <div className="grid gap-2 py-2">
-                <div><b>Código:</b> {viewShipment.code || viewShipment.shipmentNumber}</div>
-                <div><b>Productor:</b> {producers.find(p => String(p.id) === String(viewShipment.producerId))?.name || '-'}</div>
-                <div><b>Producto:</b> {Array.isArray(products) ? products.find(p => String(p.id) === String(viewShipment.productId))?.name || '-' : '-'}</div>
-                <div><b>Cajas:</b> {viewShipment.boxes}</div>
-                <div><b>Peso total:</b> {viewShipment.totalWeight} kg</div>
-                <div><b>Estado:</b> {viewShipment.status || '-'}</div>
-                <div><b>Fecha:</b> {formatDate(viewShipment.shipmentDate)}</div>
-                <div><b>Notas:</b> {viewShipment.notes || '-'}</div>
-              </div>
-            )}
+            {viewShipment && (() => {
+              // Prefer shipments.receptions when available (server may embed them), otherwise fall back to global fruitReceptions
+              const shipmentReceptions: any[] =
+                Array.isArray(viewShipment.receptions) && viewShipment.receptions.length > 0
+                  ? viewShipment.receptions
+                  : (fruitReceptions || []).filter((r) => (viewShipment.receptionIds || []).includes(r.id))
+
+              const firstReception = shipmentReceptions[0]
+
+              // Producer: prefer embedded reception producer, then shipment.producerId, then producers list
+              const firstProducer =
+                firstReception?.producer ||
+                producers?.find((p) => String(p.id) === String(firstReception?.producerId)) ||
+                producers?.find((p) => String(p.id) === String(viewShipment.producerId))
+
+              // Product: prefer reception.product, then viewShipment.receptions[0].productId, then mock products
+              const productName =
+                firstReception?.product?.name ||
+                (firstReception?.productId && Array.isArray(products)
+                  ? products.find((p) => String(p.id) === String(firstReception.productId))?.name
+                  : undefined) ||
+                (viewShipment.productName as string) ||
+                "-"
+
+              // Boxes: prefer shipment.totalBoxes, then sum receptions
+              const boxesComputed =
+                typeof viewShipment.totalBoxes === "number"
+                  ? viewShipment.totalBoxes
+                  : shipmentReceptions.reduce((s, r) => s + Number(r.boxes || 0), 0)
+
+              // Weight: prefer server-provided shipment.totalWeight, otherwise sum reception.totalWeight or boxes * weightPerBox
+              const totalWeightComputed = shipmentReceptions.reduce((s, r) => {
+                if (typeof r.totalWeight === "number") return s + r.totalWeight
+                if (typeof r.boxes === "number" && typeof r.weightPerBox === "number") return s + r.boxes * r.weightPerBox
+                return s
+              }, 0)
+
+              const boxesDisplay = boxesComputed > 0 ? boxesComputed : "-"
+              const serverWeight = typeof viewShipment.totalWeight === "number" && !Number.isNaN(viewShipment.totalWeight)
+                ? Number(viewShipment.totalWeight)
+                : undefined
+              const weightToShow = serverWeight !== undefined ? serverWeight : totalWeightComputed
+              const weightDisplay = weightToShow && weightToShow > 0 ? `${weightToShow.toFixed(2)} kg` : "- kg"
+
+              const estado = viewShipment.status ? String(viewShipment.status).toLowerCase() : "-"
+              const fecha = viewShipment.shipmentDate ? formatDate(viewShipment.shipmentDate) : formatDate(viewShipment.createdAt || new Date())
+              const notas = viewShipment.notes || "-"
+
+              return (
+                <div className="grid gap-2 py-2">
+                  <div>
+                    <b>Código:</b> {viewShipment.code || viewShipment.shipmentNumber || "-"}
+                  </div>
+                  <div>
+                    <b>Productor:</b> {firstProducer?.name || "-"}
+                  </div>
+                  <div>
+                    <b>Producto:</b> {productName}
+                  </div>
+                  <div>
+                    <b>Cajas:</b> {boxesDisplay}
+                  </div>
+                  <div>
+                    <b>Peso total:</b> {weightDisplay}
+                  </div>
+                  <div>
+                    <b>Estado:</b> {estado}
+                  </div>
+                  <div>
+                    <b>Fecha:</b> {fecha}
+                  </div>
+                  <div>
+                    <b>Notas:</b> {notas}
+                  </div>
+                </div>
+              )
+            })()}
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
                 Cerrar

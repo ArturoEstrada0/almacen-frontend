@@ -46,7 +46,7 @@ export function WarehousesTab() {
                 Nuevo Almacén
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Crear Nuevo Almacén</DialogTitle>
                 <DialogDescription>Ingresa los datos del almacén</DialogDescription>

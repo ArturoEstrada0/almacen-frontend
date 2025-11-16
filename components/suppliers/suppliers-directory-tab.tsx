@@ -165,7 +165,7 @@ export function SuppliersDirectoryTab() {
                             <Send className="h-4 w-4" />
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
+                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Enviar Correo a {supplier.businessName}</DialogTitle>
                             <DialogDescription>Para: {supplier.email}</DialogDescription>

@@ -128,7 +128,7 @@ export function ProducersDirectoryTab() {
                 Nuevo Productor
               </Button>
             </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Nuevo Productor</DialogTitle>
                 <DialogDescription>Registra un nuevo productor en el sistema</DialogDescription>
@@ -293,7 +293,7 @@ export function ProducersDirectoryTab() {
         </div>
       </CardContent>
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Productor</DialogTitle>
             <DialogDescription>Modifica la información del productor</DialogDescription>
@@ -380,7 +380,7 @@ export function ProducersDirectoryTab() {
         </DialogContent>
       </Dialog>
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalles del Productor</DialogTitle>
             <DialogDescription>Información general del productor</DialogDescription>

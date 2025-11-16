@@ -39,16 +39,51 @@ function safeCurrency(val: any) {
   return isNaN(num) ? "$0.00" : formatCurrency(num);
 }
 
+function parseAmountToNumber(val: any) {
+  if (val === undefined || val === null || val === "") return 0
+  if (typeof val === "number") return val
+  let s = String(val).trim()
+  // Remove any currency symbols and spaces
+  s = s.replace(/[^0-9.,-]/g, "")
+
+  // If both dot and comma exist, decide which is decimal by position
+  if (s.indexOf(".") !== -1 && s.indexOf(",") !== -1) {
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      // comma is decimal separator, remove dots (thousands)
+      s = s.replace(/\./g, "").replace(/,/g, ".")
+    } else {
+      // dot is decimal separator, remove commas
+      s = s.replace(/,/g, "")
+    }
+  } else if (s.indexOf(",") !== -1) {
+    // only comma present => treat as decimal separator
+    s = s.replace(/\./g, "").replace(/,/g, ".")
+  } else {
+    // only dot or neither -> remove any grouping dots
+    // keep single dot as decimal
+    const parts = s.split(".")
+    if (parts.length > 1) {
+      // join all except last as thousands, keep last as decimals
+      s = parts.slice(0, -1).join("") + "." + parts[parts.length - 1]
+    }
+  }
+
+  const num = Number(s)
+  return isNaN(num) ? 0 : num
+}
+
 export function AccountStatementsTab() {
   const [selectedProducer, setSelectedProducer] = useState<string>("")
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
+  const [selectedAction, setSelectedAction] = useState<"pago" | "abono" | "devolucion" | null>(null)
 
   // Payment form state
   const [amount, setAmount] = useState("")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("transferencia")
   const [reference, setReference] = useState("")
   const [paymentNotes, setPaymentNotes] = useState("")
-  const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
 
   const { producers } = useProducers()
   const { accountStatement, mutate: mutateAccount } = useProducerAccountStatement(selectedProducer)
@@ -63,7 +98,10 @@ export function AccountStatementsTab() {
     type: m.type === "cargo" ? "asignacion" : m.type === "abono" ? "venta" : "pago",
     description: m.description,
     referenceNumber: m.referenceCode || m.reference_code || m.referenceNumber || "",
-    amount: Number(m.amount),
+    // Show asignaciones (cargo) as negative amounts so they render red and with a minus
+  // Show asignaciones (cargo) and pagos as negative amounts so they render red and with a minus
+  amount: m.type === "cargo" || m.type === "pago" ? -Number(m.amount) : Number(m.amount),
+    // Balance from backend may be string (decimal) or number; normalize to Number
     balance: Number(m.balance),
   }))
 
@@ -87,7 +125,7 @@ export function AccountStatementsTab() {
         }
         const payload = {
           producerId: selectedProducer,
-          amount: Number(amount),
+          amount: parseAmountToNumber(amount),
           method: methodMap[paymentMethod] || "other",
           reference,
           notes: paymentNotes,
@@ -100,7 +138,8 @@ export function AccountStatementsTab() {
         setPaymentMethod("transferencia")
         setReference("")
         setPaymentNotes("")
-        setEvidenceFile(null)
+        setInvoiceFile(null)
+        setReceiptFile(null)
         setIsPaymentDialogOpen(false)
       } catch (err) {
         console.error("Failed saving payment", err)
@@ -163,119 +202,207 @@ export function AccountStatementsTab() {
                 <div className="flex items-end gap-2">
                   <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Registrar Pago
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-xl">
-                      <DialogHeader>
-                        <DialogTitle>Registrar Pago</DialogTitle>
-                        <DialogDescription>Registra un pago realizado al productor {producer?.name}</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                          <div className="flex items-start gap-2">
-                            <DollarSign className="h-5 w-5 text-blue-600 mt-0.5" />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-blue-900">Saldo Actual</p>
-                              <p className="text-lg font-bold text-blue-900">
-                                {safeCurrency(producer?.accountBalance)}
-                              </p>
-                              <p className="text-xs text-blue-700">
-                                {(producer?.accountBalance || 0) > 0
-                                  ? "A favor del productor (le debemos)"
-                                  : "En contra del productor (nos debe)"}
-                              </p>
+                        <Button>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Registrar movimiento
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Registrar Movimiento</DialogTitle>
+                          <DialogDescription>Selecciona el tipo de movimiento que quieres registrar para {producer?.name}</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid grid-cols-3 gap-4">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedAction("pago")}
+                              onKeyDown={(e) => e.key === "Enter" && setSelectedAction("pago")}
+                              className={`rounded-lg border p-4 cursor-pointer ${selectedAction === "pago" ? "border-blue-600 bg-blue-50" : "border-gray-200 bg-white"}`}
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <DollarSign className="h-6 w-6 text-blue-600" />
+                                <div className="text-center">
+                                  <p className="text-sm font-medium">Registrar Pago</p>
+                                  <p className="text-xs text-muted-foreground">Registrar un pago al productor</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedAction("abono")}
+                              onKeyDown={(e) => e.key === "Enter" && setSelectedAction("abono")}
+                              className={`rounded-lg border p-4 cursor-pointer ${selectedAction === "abono" ? "border-green-600 bg-green-50" : "border-gray-200 bg-white"}`}
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <TrendingUp className="h-6 w-6 text-green-600" />
+                                <div className="text-center">
+                                  <p className="text-sm font-medium">Registrar Abono</p>
+                                  <p className="text-xs text-muted-foreground">Registrar un abono (crédito/anticipado)</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedAction("devolucion")}
+                              onKeyDown={(e) => e.key === "Enter" && setSelectedAction("devolucion")}
+                              className={`rounded-lg border p-4 cursor-pointer ${selectedAction === "devolucion" ? "border-red-600 bg-red-50" : "border-gray-200 bg-white"}`}
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <TrendingDown className="h-6 w-6 text-red-600" />
+                                <div className="text-center">
+                                  <p className="text-sm font-medium">Registrar Devolución</p>
+                                  <p className="text-xs text-muted-foreground">Registrar una devolución que afecta el saldo</p>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="amount">Monto *</Label>
-                            <Input
-                              id="amount"
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={amount}
-                              onChange={(e) => setAmount(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="method">Método de Pago *</Label>
-                            <Select
-                              value={paymentMethod}
-                              onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="efectivo">Efectivo</SelectItem>
-                                <SelectItem value="transferencia">Transferencia</SelectItem>
-                                <SelectItem value="cheque">Cheque</SelectItem>
-                                <SelectItem value="deposito">Depósito</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
+                          {/* Form area for selected action */}
+                          {selectedAction ? (
+                            <div className="mt-2 border-t pt-4">
+                              <p className="text-sm font-medium mb-2">Formulario: {selectedAction === "pago" ? "Pago" : selectedAction === "abono" ? "Abono" : "Devolución"}</p>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="amount">Monto *</Label>
+                                  <Input
+                                    id="amount"
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="0.00"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="reference">Referencia</Label>
+                                  <Input id="reference" placeholder="Referencia" value={reference} onChange={(e) => setReference(e.target.value)} />
+                                </div>
+                              </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="reference">Referencia</Label>
-                          <Input
-                            id="reference"
-                            placeholder="Número de cheque, transferencia, etc."
-                            value={reference}
-                            onChange={(e) => setReference(e.target.value)}
-                          />
-                        </div>
+                              <div className="space-y-2 mt-3">
+                                <Label htmlFor="paymentNotes">Notas</Label>
+                                <Textarea id="paymentNotes" placeholder="Observaciones..." value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} rows={3} />
+                              </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="evidence">Evidencia (Comprobante)</Label>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              id="evidence"
-                              type="file"
-                              accept="image/*,application/pdf"
-                              onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
-                              className="flex-1"
-                            />
-                            {evidenceFile && (
-                              <Button type="button" variant="ghost" size="sm" onClick={() => setEvidenceFile(null)}>
-                                Quitar
-                              </Button>
-                            )}
-                          </div>
-                          {evidenceFile && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <FileText className="h-3 w-3" />
-                              {evidenceFile.name}
-                            </p>
+                                {selectedAction === "pago" && (
+                                  <div className="space-y-3 mt-3">
+                                    <div>
+                                      <Label htmlFor="invoice">Factura (PDF/Imagen)</Label>
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          id="invoice"
+                                          type="file"
+                                          accept="image/*,application/pdf"
+                                          onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+                                          className="flex-1"
+                                        />
+                                        {invoiceFile && (
+                                          <Button type="button" variant="ghost" size="sm" onClick={() => setInvoiceFile(null)}>
+                                            Quitar
+                                          </Button>
+                                        )}
+                                      </div>
+                                      {invoiceFile && (
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                          <FileText className="h-3 w-3" />
+                                          {invoiceFile.name}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <div>
+                                      <Label htmlFor="receipt">Comprobante (PDF/Imagen)</Label>
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          id="receipt"
+                                          type="file"
+                                          accept="image/*,application/pdf"
+                                          onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                                          className="flex-1"
+                                        />
+                                        {receiptFile && (
+                                          <Button type="button" variant="ghost" size="sm" onClick={() => setReceiptFile(null)}>
+                                            Quitar
+                                          </Button>
+                                        )}
+                                      </div>
+                                      {receiptFile && (
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                          <FileText className="h-3 w-3" />
+                                          {receiptFile.name}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                              <div className="flex justify-end gap-2 mt-4">
+                                <Button variant="outline" onClick={() => { setIsPaymentDialogOpen(false); setSelectedAction(null); }}>
+                                  Cancelar
+                                </Button>
+                                <Button
+                                  onClick={async () => {
+                                    if (!amount || parseAmountToNumber(amount) <= 0) return
+
+                                    try {
+                                      if (selectedAction === "pago") {
+                                        await handleSavePayment()
+                                        return
+                                      }
+
+                                      // For 'abono' and 'devolucion' create account movements via API
+                                      const typePayload = selectedAction === "abono" ? "abono" : "cargo"
+                                      // Map Spanish UI payment methods to API values
+                                      const methodMap: Record<string, string> = {
+                                        efectivo: "cash",
+                                        transferencia: "transfer",
+                                        cheque: "check",
+                                        deposito: "other",
+                                      }
+
+                                      const payload: any = {
+                                        producerId: selectedProducer,
+                                        amount: parseAmountToNumber(amount),
+                                        // Map to API enum; fallback to 'other' if unknown
+                                        method: paymentMethod ? methodMap[paymentMethod] || "other" : undefined,
+                                        reference,
+                                        notes: paymentNotes,
+                                        type: typePayload,
+                                      }
+
+                                      await apiCreatePayment(payload)
+                                      await mutateAccount()
+
+                                      // Reset form
+                                      setAmount("")
+                                      setReference("")
+                                      setPaymentNotes("")
+                                      setInvoiceFile(null)
+                                      setReceiptFile(null)
+                                      setSelectedAction(null)
+                                      setIsPaymentDialogOpen(false)
+                                    } catch (err) {
+                                      console.error("Failed saving movement", err)
+                                      alert("Error al guardar movimiento: " + (err as any)?.message || err)
+                                    }
+                                  }}
+                                  disabled={!amount || parseAmountToNumber(amount) <= 0}
+                                >
+                                  Guardar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-muted-foreground">Selecciona una tarjeta arriba para iniciar el registro.</div>
                           )}
                         </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="paymentNotes">Notas</Label>
-                          <Textarea
-                            id="paymentNotes"
-                            placeholder="Observaciones adicionales..."
-                            value={paymentNotes}
-                            onChange={(e) => setPaymentNotes(e.target.value)}
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={handleSavePayment} disabled={!amount || Number(amount) <= 0}>
-                          Guardar Pago
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
+                      </DialogContent>
                   </Dialog>
                   <Button variant="outline" onClick={handleExport}>
                     <Download className="mr-2 h-4 w-4" />

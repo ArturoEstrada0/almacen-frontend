@@ -245,7 +245,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                               <Eye className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-3xl">
+                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                             <DialogHeader>
                               <DialogTitle>Orden de Compra {order.orderNumber}</DialogTitle>
                               <DialogDescription>Detalles de la orden de compra</DialogDescription>
@@ -328,7 +328,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
       {/* Receive Order Dialog */}
       <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Recibir Orden de Compra</DialogTitle>
             <DialogDescription>Registra la recepción de productos de la orden {order?.orderNumber}</DialogDescription>

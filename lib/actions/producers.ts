@@ -119,7 +119,7 @@ export async function createShipment(receptionIds: string[], shipmentData: Parti
     // Get receptions data
     const receptions = await apiGet(`/api/fruit-receptions?in=id,${receptionIds.join(",")}`)
 
-    const totalBoxes = receptions?.reduce((sum: any, r: any) => sum + r.boxes, 0) || 0
+    const totalBoxes = receptions?.reduce((sum: any, r: any) => sum + Number(r.boxes || 0), 0) || 0
 
     // Create shipment
     const shipment = await apiPost("/api/shipments", {
@@ -137,7 +137,7 @@ export async function createShipment(receptionIds: string[], shipmentData: Parti
       shipment_id: shipment.id,
       reception_id: r.id,
       producer_id: r.producer_id,
-      boxes: r.boxes,
+      boxes: Number(r.boxes || 0),
     }))
 
     await apiPost("/api/shipment_items", shipmentItems)
