@@ -78,14 +78,19 @@ export function FruitReceptionsTab() {
 
   const handleSave = async () => {
     try {
-      // El backend solo acepta: producerId, warehouseId, productId, boxes, notes
-      const payload = {
+      const payload: any = {
         producerId: selectedProducer,
         warehouseId: selectedWarehouse,
         productId: selectedProduct,
         boxes: Number(boxes),
-        notes,
+        date: receptionDate,
       }
+      
+      // Agregar campos opcionales solo si tienen valor
+      if (weightPerBox) payload.weightPerBox = Number(weightPerBox)
+      if (totalWeight) payload.totalWeight = Number(totalWeight.toFixed(2))
+      if (notes) payload.notes = notes
+      
       const created = await apiPost("/api/producers/fruit-receptions", payload)
       setReceptions((prev) => [created, ...(prev || [])])
       setSelectedProducer("")
