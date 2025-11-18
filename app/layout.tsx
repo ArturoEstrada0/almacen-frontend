@@ -7,7 +7,7 @@ import { Header } from "@/components/layout/header"
 import { ToastProvider } from "@/components/ui/toast-provider"
 
 const inter = Inter({ subsets: ["latin"] })
-//commit
+//
 export const metadata: Metadata = {
   title: "Sistema de Almacén - Gestión Integral",
   description: "Sistema modular de gestión de almacén para empresas",
