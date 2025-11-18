@@ -173,138 +173,185 @@ export function ShipmentsTab() {
                 Crear Embarque
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Crear Nuevo Embarque</DialogTitle>
-                <DialogDescription>
-                  Selecciona múltiples recepciones de diferentes productores para agrupar en un embarque
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                {selectedReceptions.length > 0 && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                    <div className="flex items-start gap-2">
-                      <Package className="h-5 w-5 text-blue-600 mt-0.5" />
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-blue-900">Resumen de Selección</p>
-                        <div className="text-sm text-blue-700 space-y-1">
-                          <p>
-                            <strong>{selectedReceptions.length}</strong> recepciones seleccionadas
-                          </p>
-                          <p>
-                            <strong>{producersInvolved}</strong> productores involucrados
-                          </p>
-                          <p>
-                            <strong>{totalBoxes}</strong> cajas totales
-                          </p>
+            <DialogContent 
+              className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0"
+            >
+              <div className="flex flex-col h-full p-6">
+                <DialogHeader className="shrink-0 space-y-2 pb-4">
+                  <DialogTitle className="text-xl">Crear Nuevo Embarque</DialogTitle>
+                  <DialogDescription className="text-sm">
+                    Selecciona múltiples recepciones de diferentes productores para agrupar en un embarque
+                  </DialogDescription>
+                </DialogHeader>
+              
+              <div className="flex-1 overflow-y-auto px-6 pb-4">
+                <div className="grid gap-6 py-4">
+                  {selectedReceptions.length > 0 && (
+                    <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <Package className="h-6 w-6 text-blue-600 mt-1 shrink-0" />
+                        <div className="space-y-2 flex-1">
+                          <p className="text-base font-semibold text-blue-900">Resumen de Selección</p>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="text-blue-600 font-medium text-xs">Recepciones</span>
+                              <span className="text-2xl font-bold text-blue-900">{selectedReceptions.length}</span>
+                            </div>
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="text-blue-600 font-medium text-xs">Productores</span>
+                              <span className="text-2xl font-bold text-blue-900">{producersInvolved}</span>
+                            </div>
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="text-blue-600 font-medium text-xs">Cajas Totales</span>
+                              <span className="text-2xl font-bold text-blue-900">{totalBoxes}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div className="space-y-2">
-                  <Label>Seleccionar Recepciones Pendientes</Label>
-                  <div className="rounded-md border max-h-[400px] overflow-y-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12"></TableHead>
-                          <TableHead>Número</TableHead>
-                          <TableHead>Productor</TableHead>
-                          <TableHead>Producto</TableHead>
-                          <TableHead>Cajas</TableHead>
-                          <TableHead>Peso/Caja</TableHead>
-                          <TableHead>Peso Total</TableHead>
-                          <TableHead>Fecha</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pendingReceptions.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                              No hay recepciones pendientes de embarque
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          pendingReceptions.map((reception) => {
-                            const producer = producers?.find((p) => p.id === reception.producerId)
-                            const isSelected = selectedReceptions.includes(reception.id)
-                            const receptionNumber = (reception as any).receptionNumber || (reception as any).code || ""
-                            const receptionDate = (reception as any).receptionDate || (reception as any).date || reception.createdAt
-                            return (
-                              <TableRow key={reception.id} className={isSelected ? "bg-blue-50" : ""}>
-                                <TableCell>
-                                  <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={() => handleToggleReception(reception.id)}
-                                  />
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">Seleccionar Recepciones Pendientes</Label>
+                    <div className="rounded-lg border-2 shadow-sm">
+                      <div className="max-h-[350px] overflow-y-auto">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-muted z-10">
+                            <TableRow className="hover:bg-muted">
+                              <TableHead className="w-16 text-center h-12">
+                                <Checkbox
+                                  checked={selectedReceptions.length === pendingReceptions.length && pendingReceptions.length > 0}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedReceptions(pendingReceptions.map(r => r.id))
+                                    } else {
+                                      setSelectedReceptions([])
+                                    }
+                                  }}
+                                />
+                              </TableHead>
+                              <TableHead className="font-semibold text-sm">Número</TableHead>
+                              <TableHead className="font-semibold text-sm">Productor</TableHead>
+                              <TableHead className="font-semibold text-sm">Producto</TableHead>
+                              <TableHead className="font-semibold text-sm text-right">Cajas</TableHead>
+                              <TableHead className="font-semibold text-sm text-right">Peso/Caja</TableHead>
+                              <TableHead className="font-semibold text-sm text-right">Peso Total</TableHead>
+                              <TableHead className="font-semibold text-sm">Fecha</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {pendingReceptions.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
+                                  No hay recepciones pendientes de embarque
                                 </TableCell>
-                                <TableCell className="font-medium">{receptionNumber}</TableCell>
-                                <TableCell>{producer?.name}</TableCell>
-                                <TableCell>{(reception as any).product?.name || "-"}</TableCell>
-                                <TableCell>{reception.boxes}</TableCell>
-                                <TableCell>{reception.weightPerBox || "-"} kg</TableCell>
-                                <TableCell>{reception.totalWeight || "-"} kg</TableCell>
-                                <TableCell>{formatDate(receptionDate)}</TableCell>
                               </TableRow>
-                            )
-                          })
-                        )}
-                      </TableBody>
-                    </Table>
+                            ) : (
+                              pendingReceptions.map((reception) => {
+                                const producer = producers?.find((p) => p.id === reception.producerId)
+                                const isSelected = selectedReceptions.includes(reception.id)
+                                const receptionNumber = (reception as any).receptionNumber || (reception as any).code || ""
+                                const receptionDate = (reception as any).receptionDate || (reception as any).date || reception.createdAt
+                                return (
+                                  <TableRow 
+                                    key={reception.id} 
+                                    className={`cursor-pointer transition-colors h-12 ${isSelected ? "bg-blue-100 hover:bg-blue-200" : "hover:bg-muted/50"}`}
+                                    onClick={() => handleToggleReception(reception.id)}
+                                  >
+                                    <TableCell className="text-center">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => handleToggleReception(reception.id)}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="font-medium text-sm">{receptionNumber}</TableCell>
+                                    <TableCell className="font-medium text-sm">{producer?.name || "-"}</TableCell>
+                                    <TableCell className="text-sm">{(reception as any).product?.name || "-"}</TableCell>
+                                    <TableCell className="text-right font-semibold text-sm">{reception.boxes}</TableCell>
+                                    <TableCell className="text-right text-sm">{reception.weightPerBox ? `${reception.weightPerBox} kg` : "-"}</TableCell>
+                                    <TableCell className="text-right font-semibold text-sm">{reception.totalWeight ? `${reception.totalWeight} kg` : "-"}</TableCell>
+                                    <TableCell className="whitespace-nowrap text-sm">{formatDate(receptionDate)}</TableCell>
+                                  </TableRow>
+                                )
+                              })
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="carrier">Transportista *</Label>
-                  <Input
-                    id="carrier"
-                    placeholder="Nombre de la empresa transportista"
-                    value={carrier}
-                    onChange={(e) => setCarrier(e.target.value)}
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="carrier" className="text-sm font-semibold">
+                        Transportista <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="carrier"
+                        placeholder="Nombre de la empresa transportista"
+                        value={carrier}
+                        onChange={(e) => setCarrier(e.target.value)}
+                        className="h-10 text-sm"
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="carrierContact">Contacto del Transportista</Label>
-                  <Input
-                    id="carrierContact"
-                    placeholder="Teléfono o email"
-                    value={carrierContact}
-                    onChange={(e) => setCarrierContact(e.target.value)}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="carrierContact" className="text-sm font-semibold">
+                        Contacto del Transportista
+                      </Label>
+                      <Input
+                        id="carrierContact"
+                        placeholder="Teléfono o email"
+                        value={carrierContact}
+                        onChange={(e) => setCarrierContact(e.target.value)}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="shipmentDate">Fecha de Embarque *</Label>
-                  <Input
-                    id="shipmentDate"
-                    type="date"
-                    value={shipmentDate}
-                    onChange={(e) => setShipmentDate(e.target.value)}
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="shipmentDate" className="text-sm font-semibold">
+                      Fecha de Embarque <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="shipmentDate"
+                      type="date"
+                      value={shipmentDate}
+                      onChange={(e) => setShipmentDate(e.target.value)}
+                      className="h-10 text-sm"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Notas</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Destino, observaciones, etc."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="notes" className="text-sm font-semibold">
+                      Notas
+                    </Label>
+                    <Textarea
+                      id="notes"
+                      placeholder="Destino, observaciones, etc."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                      className="text-sm resize-none"
+                    />
+                  </div>
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+
+              <DialogFooter className="shrink-0 pt-4 pb-6 px-6 border-t">
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} className="h-10 px-6 text-sm">
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateShipment} disabled={selectedReceptions.length === 0 || !carrier}>
-                  Crear Embarque
+                <Button 
+                  onClick={handleCreateShipment} 
+                  disabled={selectedReceptions.length === 0 || !carrier}
+                  className="h-10 px-6 text-sm"
+                >
+                  <Package className="mr-2 h-4 w-4" />
+                  Crear Embarque ({selectedReceptions.length} recepciones)
                 </Button>
               </DialogFooter>
+            </div>
             </DialogContent>
           </Dialog>
         </div>
