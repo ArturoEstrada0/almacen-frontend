@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Sistema de Almacén - Gestión Integral",
   description: "Sistema modular de gestión de almacén para empresas",
-    generator: 'v0.app'
+    generator: 'SOFTURE'
 }
 
 export default function RootLayout({
