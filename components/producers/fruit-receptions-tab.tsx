@@ -78,15 +78,12 @@ export function FruitReceptionsTab() {
 
   const handleSave = async () => {
     try {
-      // Send optional weight/date fields so backend can persist total weight
+      // El backend solo acepta: producerId, warehouseId, productId, boxes, notes
       const payload = {
         producerId: selectedProducer,
         warehouseId: selectedWarehouse,
         productId: selectedProduct,
         boxes: Number(boxes),
-        weightPerBox: weightPerBox ? Number(weightPerBox) : undefined,
-        totalWeight: totalWeight ? Number(totalWeight.toFixed(2)) : undefined,
-        date: receptionDate,
         notes,
       }
       const created = await apiPost("/api/producers/fruit-receptions", payload)
