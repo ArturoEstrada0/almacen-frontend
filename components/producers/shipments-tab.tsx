@@ -617,10 +617,10 @@ export function ShipmentsTab() {
 
         {/* View Shipment Details Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Detalles de Embarque</DialogTitle>
-              <DialogDescription>Información general del embarque</DialogDescription>
+              <DialogTitle className="text-2xl font-bold">Detalles del Embarque</DialogTitle>
+              <DialogDescription>Información completa del embarque y sus recepciones</DialogDescription>
             </DialogHeader>
             {viewShipment && (() => {
               // Prefer shipments.receptions when available (server may embed them), otherwise fall back to global fruitReceptions
@@ -628,23 +628,6 @@ export function ShipmentsTab() {
                 Array.isArray(viewShipment.receptions) && viewShipment.receptions.length > 0
                   ? viewShipment.receptions
                   : (fruitReceptions || []).filter((r) => (viewShipment.receptionIds || []).includes(r.id))
-
-              const firstReception = shipmentReceptions[0]
-
-              // Producer: prefer embedded reception producer, then shipment.producerId, then producers list
-              const firstProducer =
-                firstReception?.producer ||
-                producers?.find((p) => String(p.id) === String(firstReception?.producerId)) ||
-                producers?.find((p) => String(p.id) === String(viewShipment.producerId))
-
-              // Product: prefer reception.product, then viewShipment.receptions[0].productId, then mock products
-              const productName =
-                firstReception?.product?.name ||
-                (firstReception?.productId && Array.isArray(products)
-                  ? products.find((p) => String(p.id) === String(firstReception.productId))?.name
-                  : undefined) ||
-                (viewShipment.productName as string) ||
-                "-"
 
               // Boxes: prefer shipment.totalBoxes, then sum receptions
               const boxesComputed =
@@ -659,43 +642,240 @@ export function ShipmentsTab() {
                 return s
               }, 0)
 
-              const boxesDisplay = boxesComputed > 0 ? boxesComputed : "-"
               const serverWeight = typeof viewShipment.totalWeight === "number" && !Number.isNaN(viewShipment.totalWeight)
                 ? Number(viewShipment.totalWeight)
                 : undefined
               const weightToShow = serverWeight !== undefined ? serverWeight : totalWeightComputed
-              const weightDisplay = weightToShow && weightToShow > 0 ? `${weightToShow.toFixed(2)} kg` : "- kg"
+              const weightPerBox = boxesComputed > 0 && weightToShow > 0 ? (weightToShow / boxesComputed).toFixed(2) : "0.00"
 
               const estado = viewShipment.status ? String(viewShipment.status).toLowerCase() : "-"
+              const config = statusConfig[estado as ShipmentStatus] || { label: estado, variant: "default" as const }
               const fecha = viewShipment.shipmentDate ? formatDate(viewShipment.shipmentDate) : formatDate(viewShipment.createdAt || new Date())
-              const notas = viewShipment.notes || "-"
+              const notas = viewShipment.notes || "Sin notas"
+
+              // Get unique producers involved
+              const producersInvolved = [...new Set(shipmentReceptions.map((r) => r.producerId))]
+                .map((id) => producers?.find((p) => p.id === id))
+                .filter(Boolean)
 
               return (
-                <div className="grid gap-2 py-2">
-                  <div>
-                    <b>Código:</b> {viewShipment.code || viewShipment.shipmentNumber || "-"}
-                  </div>
-                  <div>
-                    <b>Productor:</b> {firstProducer?.name || "-"}
-                  </div>
-                  <div>
-                    <b>Producto:</b> {productName}
-                  </div>
-                  <div>
-                    <b>Cajas:</b> {boxesDisplay}
-                  </div>
-                  <div>
-                    <b>Peso total:</b> {weightDisplay}
-                  </div>
-                  <div>
-                    <b>Estado:</b> {estado}
-                  </div>
-                  <div>
-                    <b>Fecha:</b> {fecha}
-                  </div>
-                  <div>
-                    <b>Notas:</b> {notas}
-                  </div>
+                <div className="space-y-6 py-2">
+                  {/* Main Info Card */}
+                  <Card className="border-2 shadow-sm">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-lg">Información General</CardTitle>
+                          <CardDescription>Datos principales del embarque</CardDescription>
+                        </div>
+                        <Badge variant={config.variant} className="text-sm px-3 py-1">
+                          {config.label}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Número de Embarque</p>
+                          <p className="font-semibold text-base">{viewShipment.code || viewShipment.shipmentNumber || "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Fecha de Embarque</p>
+                          <p className="font-semibold text-base">{fecha}</p>
+                        </div>
+                      </div>
+                      
+                      {viewShipment.arrivalDate && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Fecha de Llegada</p>
+                          <p className="font-semibold text-base">{formatDate(viewShipment.arrivalDate)}</p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Transportista</p>
+                          <p className="font-semibold text-base">{viewShipment.carrier || "-"}</p>
+                        </div>
+                        {viewShipment.carrierContact && (
+                          <div>
+                            <p className="text-sm text-muted-foreground mb-1">Contacto</p>
+                            <p className="font-semibold text-base">{viewShipment.carrierContact}</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Metrics Card with gradient */}
+                  <Card className="border-2 shadow-sm bg-gradient-to-br from-blue-50 to-indigo-50">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Package className="h-5 w-5 text-blue-600" />
+                        Métricas del Embarque
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-3 gap-6">
+                        <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                          <p className="text-sm text-muted-foreground mb-2">Total de Cajas</p>
+                          <p className="text-3xl font-bold text-blue-600">{boxesComputed}</p>
+                        </div>
+                        <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                          <p className="text-sm text-muted-foreground mb-2">Peso Total</p>
+                          <p className="text-3xl font-bold text-blue-600">{weightToShow ? weightToShow.toFixed(2) : "0"}</p>
+                          <p className="text-xs text-muted-foreground mt-1">kg</p>
+                        </div>
+                        <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                          <p className="text-sm text-muted-foreground mb-2">Peso por Caja</p>
+                          <p className="text-3xl font-bold text-blue-600">{weightPerBox}</p>
+                          <p className="text-xs text-muted-foreground mt-1">kg/caja</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Sale Info Card (if sold) */}
+                  {viewShipment.status === "vendida" && viewShipment.salePrice && (
+                    <Card className="border-2 border-green-200 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <DollarSign className="h-5 w-5 text-green-600" />
+                          Información de Venta
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                            <p className="text-sm text-muted-foreground mb-2">Precio por Caja</p>
+                            <p className="text-3xl font-bold text-green-600">{formatCurrency(viewShipment.salePrice)}</p>
+                          </div>
+                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                            <p className="text-sm text-muted-foreground mb-2">Venta Total</p>
+                            <p className="text-3xl font-bold text-green-600">
+                              {formatCurrency((viewShipment.totalSale || (viewShipment.salePrice * boxesComputed)))}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Producers Involved */}
+                  {producersInvolved.length > 0 && (
+                    <Card className="border-2 shadow-sm">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg">Productores Involucrados</CardTitle>
+                        <CardDescription>{producersInvolved.length} productor(es) en este embarque</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {producersInvolved.map((producer) => {
+                            const producerReceptions = shipmentReceptions.filter((r) => r.producerId === producer?.id)
+                            const producerBoxes = producerReceptions.reduce((s, r) => s + Number(r.boxes || 0), 0)
+                            return (
+                              <div key={producer?.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                                <div>
+                                  <p className="font-semibold">{producer?.name}</p>
+                                  <p className="text-sm text-muted-foreground">{producer?.code}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-semibold text-blue-600">{producerBoxes} cajas</p>
+                                  <p className="text-xs text-muted-foreground">{producerReceptions.length} recepción(es)</p>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Receptions Table */}
+                  {shipmentReceptions.length > 0 && (
+                    <Card className="border-2 shadow-sm">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg">Recepciones Incluidas</CardTitle>
+                        <CardDescription>{shipmentReceptions.length} recepción(es) en este embarque</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="rounded-lg border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Número</TableHead>
+                                <TableHead>Folio</TableHead>
+                                <TableHead>Productor</TableHead>
+                                <TableHead>Producto</TableHead>
+                                <TableHead className="text-right">Cajas</TableHead>
+                                <TableHead className="text-right">Peso Total</TableHead>
+                                <TableHead>Fecha</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {shipmentReceptions.map((reception) => {
+                                const producer = producers?.find((p) => p.id === reception.producerId)
+                                const receptionNumber = reception.receptionNumber || reception.code || "-"
+                                const receptionDate = reception.receptionDate || reception.date || reception.createdAt
+                                const productName = reception.product?.name || reception.productName || "-"
+                                return (
+                                  <TableRow key={reception.id}>
+                                    <TableCell className="font-medium">{receptionNumber}</TableCell>
+                                    <TableCell>
+                                      {reception.trackingFolio ? (
+                                        <span className="font-mono text-xs bg-blue-50 px-2 py-1 rounded">
+                                          {reception.trackingFolio}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground">-</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>{producer?.name || "-"}</TableCell>
+                                    <TableCell>{productName}</TableCell>
+                                    <TableCell className="text-right font-semibold">{reception.boxes}</TableCell>
+                                    <TableCell className="text-right font-semibold">
+                                      {reception.totalWeight ? `${reception.totalWeight} kg` : "-"}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap">{formatDate(receptionDate)}</TableCell>
+                                  </TableRow>
+                                )
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Notes Section */}
+                  {notas && notas !== "Sin notas" && (
+                    <Card className="border-2 shadow-sm">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg">Notas</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm whitespace-pre-wrap bg-muted p-4 rounded-lg">{notas}</p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Audit Info */}
+                  <Card className="border-2 shadow-sm bg-muted/30">
+                    <CardContent className="pt-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground mb-1">Creado</p>
+                          <p className="font-medium">{formatDate(viewShipment.createdAt || new Date())}</p>
+                        </div>
+                        {viewShipment.updatedAt && (
+                          <div>
+                            <p className="text-muted-foreground mb-1">Actualizado</p>
+                            <p className="font-medium">{formatDate(viewShipment.updatedAt)}</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               )
             })()}
