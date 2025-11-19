@@ -360,34 +360,163 @@ export function FruitReceptionsTab() {
       </CardContent>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalles de Recepción de Fruta</DialogTitle>
-            <DialogDescription>Información general de la recepción</DialogDescription>
+            <DialogTitle className="text-2xl">Detalles de Recepción de Fruta</DialogTitle>
+            <DialogDescription>Información completa de la recepción</DialogDescription>
           </DialogHeader>
-          {selectedReception && (
-            <div className="grid gap-2 py-2">
-              <div><b>Código:</b> {selectedReception.code || selectedReception.receptionNumber}</div>
-              <div><b>Productor:</b> {producers.find(p => String(p.id) === String(selectedReception.producerId))?.name || '-'}</div>
-              <div><b>Producto:</b> {products.find(p => String(p.id) === String(selectedReception.productId))?.name || '-'}</div>
-              <div><b>Cajas:</b> {selectedReception.boxes}</div>
-              <div><b>Peso total:</b> {selectedReception.totalWeight} kg</div>
-              <div><b>Estatus de envío:</b> {selectedReception.shipmentStatus || 'pendiente'}</div>
-              <div><b>Fecha:</b> {formatDate(selectedReception.date || selectedReception.receptionDate)}</div>
-              {(selectedReception.returnedBoxes > 0 || selectedReception.returnedBoxesValue > 0) && (
-                <div className="border-t pt-2 mt-2">
-                  <div className="text-sm font-semibold text-primary mb-1">Devolución de Material</div>
-                  <div><b>Cajas devueltas:</b> {selectedReception.returnedBoxes || 0}</div>
-                  <div><b>Valor del material:</b> ${Number(selectedReception.returnedBoxesValue || 0).toFixed(2)}</div>
-                  <p className="text-xs text-green-600 mt-1">✓ Abono registrado en cuenta del productor</p>
+          {selectedReception && (() => {
+            const producer = producers.find(p => String(p.id) === String(selectedReception.producerId))
+            const warehouse = warehouses.find(w => String(w.id) === String(selectedReception.warehouseId))
+            const product = products.find(p => String(p.id) === String(selectedReception.productId))
+            const totalWeight = Number(selectedReception.totalWeight || 0)
+            const boxes = Number(selectedReception.boxes || 0)
+            const weightPerBox = boxes > 0 ? (totalWeight / boxes).toFixed(2) : '0.00'
+            
+            return (
+              <div className="space-y-6 py-4">
+                {/* Información principal */}
+                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg border">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Código de Recepción</Label>
+                    <p className="font-mono font-semibold text-lg">{selectedReception.code || selectedReception.receptionNumber}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Folio de Seguimiento</Label>
+                    <p className="font-mono font-semibold text-lg">{selectedReception.trackingFolio || '-'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Fecha de Recepción</Label>
+                    <p className="font-semibold">{formatDate(selectedReception.date || selectedReception.receptionDate)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Estado de Envío</Label>
+                    <Badge variant={
+                      selectedReception.shipmentStatus === 'enviado' ? 'default' : 
+                      selectedReception.shipmentStatus === 'en-transito' ? 'secondary' : 
+                      'outline'
+                    } className="mt-1">
+                      {selectedReception.shipmentStatus || 'pendiente'}
+                    </Badge>
+                  </div>
                 </div>
-              )}
-              <div><b>Notas:</b> {selectedReception.notes || '-'}</div>
-            </div>
-          )}
-          <DialogFooter>
+
+                {/* Información de Productor y Almacén */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 border rounded-lg">
+                    <Label className="text-sm font-semibold text-muted-foreground mb-2 block">Productor</Label>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-lg">{producer?.name || '-'}</p>
+                      {producer?.code && (
+                        <p className="text-sm text-muted-foreground">Código: {producer.code}</p>
+                      )}
+                      {producer?.phone && (
+                        <p className="text-sm text-muted-foreground">Teléfono: {producer.phone}</p>
+                      )}
+                      {producer?.email && (
+                        <p className="text-sm text-muted-foreground">Email: {producer.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 border rounded-lg">
+                    <Label className="text-sm font-semibold text-muted-foreground mb-2 block">Almacén</Label>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-lg">{warehouse?.name || '-'}</p>
+                      {warehouse?.address && (
+                        <p className="text-sm text-muted-foreground">Dirección: {warehouse.address}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Información del Producto y Cantidades */}
+                <div className="p-4 border rounded-lg bg-gradient-to-br from-green-50 to-emerald-50">
+                  <Label className="text-sm font-semibold text-muted-foreground mb-3 block">Producto Recibido</Label>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="font-semibold text-xl text-green-800">{product?.name || 'Producto desconocido'}</p>
+                      {product?.sku && (
+                        <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4 pt-3 border-t border-green-200">
+                      <div className="text-center">
+                        <Label className="text-xs text-muted-foreground block mb-1">Cajas Recibidas</Label>
+                        <p className="font-bold text-2xl text-green-700">{boxes}</p>
+                      </div>
+                      <div className="text-center">
+                        <Label className="text-xs text-muted-foreground block mb-1">Peso Total</Label>
+                        <p className="font-bold text-2xl text-green-700">{totalWeight} kg</p>
+                      </div>
+                      <div className="text-center">
+                        <Label className="text-xs text-muted-foreground block mb-1">Peso por Caja</Label>
+                        <p className="font-bold text-2xl text-green-700">{weightPerBox} kg</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Devolución de Material */}
+                {(selectedReception.returnedBoxes > 0 || selectedReception.returnedBoxesValue > 0) && (
+                  <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50">
+                    <Label className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                      <Badge variant="secondary" className="bg-blue-600 text-white">Devolución</Badge>
+                      Material de Empaque Devuelto
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Cajas Devueltas</Label>
+                        <p className="font-bold text-xl text-blue-700">{selectedReception.returnedBoxes || 0}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Valor del Material</Label>
+                        <p className="font-bold text-xl text-blue-700">
+                          ${Number(selectedReception.returnedBoxesValue || 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <p className="text-sm text-green-600 font-medium flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Abono registrado automáticamente en la cuenta del productor
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notas */}
+                {selectedReception.notes && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <Label className="text-sm font-semibold mb-2 block">Notas</Label>
+                    <p className="text-sm whitespace-pre-wrap">{selectedReception.notes}</p>
+                  </div>
+                )}
+
+                {/* Información de auditoría */}
+                <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground pt-4 border-t">
+                  <div>
+                    <Label className="text-xs">Creado</Label>
+                    <p>{selectedReception.createdAt ? formatDate(selectedReception.createdAt) : '-'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Última actualización</Label>
+                    <p>{selectedReception.updatedAt ? formatDate(selectedReception.updatedAt) : '-'}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
               Cerrar
+            </Button>
+            <Button variant="default">
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
             </Button>
           </DialogFooter>
         </DialogContent>

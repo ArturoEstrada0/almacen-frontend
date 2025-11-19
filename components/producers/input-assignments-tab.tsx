@@ -487,32 +487,146 @@ export function InputAssignmentsTab() {
       </CardContent>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalles de Asignación de Insumos</DialogTitle>
-            <DialogDescription>Información general de la asignación</DialogDescription>
+            <DialogTitle className="text-2xl">Detalles de Asignación</DialogTitle>
+            <DialogDescription>Información completa de la asignación de insumos</DialogDescription>
           </DialogHeader>
-          {selectedAssignment && (
-            <div className="grid gap-2 py-2">
-              <div><b>Código:</b> {selectedAssignment.code || selectedAssignment.assignmentNumber}</div>
-              <div><b>Productor:</b> {producers.find(p => String(p.id) === String(selectedAssignment.producerId))?.name || '-'}</div>
-              <div><b>Almacén:</b> {warehouses.find(w => String(w.id) === String(selectedAssignment.warehouseId))?.name || '-'}</div>
-              <div><b>Fecha:</b> {formatDate(selectedAssignment.date || selectedAssignment.assignmentDate)}</div>
-              <div><b>Total:</b> {formatCurrency(Number(selectedAssignment.total) || 0)}</div>
-              <div><b>Notas:</b> {selectedAssignment.notes || '-'}</div>
-              <div><b>Items:</b></div>
-              <ul className="list-disc ml-4">
-                {selectedAssignment.items?.map((item: any, idx: number) => (
-                  <li key={idx}>
-                    {item.product?.name || item.productName || item.productId} - {item.quantity} x {formatCurrency(Number(item.price || item.unitPrice || 0))}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <DialogFooter>
+          {selectedAssignment && (() => {
+            const producer = producers.find(p => String(p.id) === String(selectedAssignment.producerId))
+            const warehouse = warehouses.find(w => String(w.id) === String(selectedAssignment.warehouseId))
+            
+            return (
+              <div className="space-y-6 py-4">
+                {/* Información principal */}
+                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg border">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Código de Asignación</Label>
+                    <p className="font-mono font-semibold text-lg">{selectedAssignment.code || selectedAssignment.assignmentNumber}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Folio de Seguimiento</Label>
+                    <p className="font-mono font-semibold text-lg">{selectedAssignment.trackingFolio || '-'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Fecha de Asignación</Label>
+                    <p className="font-semibold">{formatDate(selectedAssignment.date || selectedAssignment.assignmentDate)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Total</Label>
+                    <p className="font-bold text-xl text-destructive">{formatCurrency(Number(selectedAssignment.total) || 0)}</p>
+                  </div>
+                </div>
+
+                {/* Información de Productor y Almacén */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 border rounded-lg">
+                    <Label className="text-sm font-semibold text-muted-foreground mb-2 block">Productor</Label>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-lg">{producer?.name || '-'}</p>
+                      {producer?.code && (
+                        <p className="text-sm text-muted-foreground">Código: {producer.code}</p>
+                      )}
+                      {producer?.phone && (
+                        <p className="text-sm text-muted-foreground">Teléfono: {producer.phone}</p>
+                      )}
+                      {producer?.email && (
+                        <p className="text-sm text-muted-foreground">Email: {producer.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 border rounded-lg">
+                    <Label className="text-sm font-semibold text-muted-foreground mb-2 block">Almacén</Label>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-lg">{warehouse?.name || '-'}</p>
+                      {warehouse?.address && (
+                        <p className="text-sm text-muted-foreground">Dirección: {warehouse.address}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items asignados */}
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">Insumos Asignados</Label>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50">
+                          <TableHead className="font-semibold">Producto</TableHead>
+                          <TableHead className="text-center font-semibold">Cantidad</TableHead>
+                          <TableHead className="text-right font-semibold">Precio Unit.</TableHead>
+                          <TableHead className="text-right font-semibold">Subtotal</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(selectedAssignment.items || []).map((item: any, idx: number) => {
+                          const product = products.find(p => String(p.id) === String(item.productId))
+                          const quantity = Number(item.quantity)
+                          const unitPrice = Number(item.price || item.unitPrice || 0)
+                          const subtotal = quantity * unitPrice
+                          
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">{product?.name || item.product?.name || 'Producto desconocido'}</p>
+                                  {product?.sku && (
+                                    <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center font-mono">{quantity}</TableCell>
+                              <TableCell className="text-right font-mono">{formatCurrency(unitPrice)}</TableCell>
+                              <TableCell className="text-right font-mono font-semibold">{formatCurrency(subtotal)}</TableCell>
+                            </TableRow>
+                          )
+                        })}
+                        <TableRow className="bg-slate-50 font-bold">
+                          <TableCell colSpan={3} className="text-right">TOTAL</TableCell>
+                          <TableCell className="text-right text-lg text-destructive">
+                            {formatCurrency(Number(selectedAssignment.total) || 0)}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* Notas */}
+                {selectedAssignment.notes && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <Label className="text-sm font-semibold mb-2 block">Notas</Label>
+                    <p className="text-sm whitespace-pre-wrap">{selectedAssignment.notes}</p>
+                  </div>
+                )}
+
+                {/* Información de auditoría */}
+                <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground pt-4 border-t">
+                  <div>
+                    <Label className="text-xs">Creado</Label>
+                    <p>{selectedAssignment.createdAt ? formatDate(selectedAssignment.createdAt) : '-'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Última actualización</Label>
+                    <p>{selectedAssignment.updatedAt ? formatDate(selectedAssignment.updatedAt) : '-'}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
               Cerrar
+            </Button>
+            <Button variant="default" onClick={() => {
+              if (selectedAssignment) {
+                handlePrintAssignment(selectedAssignment)
+              }
+            }}>
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
             </Button>
           </DialogFooter>
         </DialogContent>

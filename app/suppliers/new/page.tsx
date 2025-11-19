@@ -22,8 +22,14 @@ export default function NewSupplierPage() {
     address: "",
     contactName: "",
     businessType: "",
-    creditDays: "30",
+    creditDays: "",
     isActive: true,
+    bankNameMxn: "",
+    accountNumberMxn: "",
+    clabeMxn: "",
+    bankNameUsd: "",
+    accountNumberUsd: "",
+    swiftCodeUsd: "",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,8 +42,8 @@ export default function NewSupplierPage() {
 
     try {
       toast.loading("Creando proveedor...")
-      await apiPost(`/suppliers`, {
-        code: form.code || `SUP-${Date.now()}`,
+      await apiPost("/suppliers", {
+        code: form.code,
         name: form.name,
         taxId: form.taxId,
         email: form.email || undefined,
@@ -47,6 +53,12 @@ export default function NewSupplierPage() {
         businessType: form.businessType || undefined,
         creditDays: form.creditDays ? Number(form.creditDays) : undefined,
         isActive: form.isActive,
+        bankNameMxn: form.bankNameMxn || undefined,
+        accountNumberMxn: form.accountNumberMxn || undefined,
+        clabeMxn: form.clabeMxn || undefined,
+        bankNameUsd: form.bankNameUsd || undefined,
+        accountNumberUsd: form.accountNumberUsd || undefined,
+        swiftCodeUsd: form.swiftCodeUsd || undefined,
       })
       toast.success("Proveedor creado")
       router.push("/suppliers")
@@ -124,6 +136,84 @@ export default function NewSupplierPage() {
                 <div className="space-y-2">
                   <Label htmlFor="creditDays">Días de Crédito</Label>
                   <Input id="creditDays" type="number" value={form.creditDays} onChange={(e) => setForm({ ...form, creditDays: e.target.value })} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Cuenta Bancaria - Pesos (MXN)</CardTitle>
+                <CardDescription>Información para pagos en pesos mexicanos</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bankNameMxn">Banco</Label>
+                  <Input 
+                    id="bankNameMxn" 
+                    value={form.bankNameMxn} 
+                    onChange={(e) => setForm({ ...form, bankNameMxn: e.target.value })} 
+                    placeholder="BBVA, Banamex, Santander, etc."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="accountNumberMxn">Número de Cuenta</Label>
+                  <Input 
+                    id="accountNumberMxn" 
+                    value={form.accountNumberMxn} 
+                    onChange={(e) => setForm({ ...form, accountNumberMxn: e.target.value })} 
+                    placeholder="1234567890"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="clabeMxn">CLABE Interbancaria</Label>
+                  <Input 
+                    id="clabeMxn" 
+                    value={form.clabeMxn} 
+                    onChange={(e) => setForm({ ...form, clabeMxn: e.target.value })} 
+                    placeholder="012345678901234567"
+                    maxLength={18}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Cuenta Bancaria - Dólares (USD)</CardTitle>
+                <CardDescription>Información para pagos en dólares</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bankNameUsd">Banco</Label>
+                  <Input 
+                    id="bankNameUsd" 
+                    value={form.bankNameUsd} 
+                    onChange={(e) => setForm({ ...form, bankNameUsd: e.target.value })} 
+                    placeholder="Bank of America, Citibank, etc."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="accountNumberUsd">Número de Cuenta</Label>
+                  <Input 
+                    id="accountNumberUsd" 
+                    value={form.accountNumberUsd} 
+                    onChange={(e) => setForm({ ...form, accountNumberUsd: e.target.value })} 
+                    placeholder="9876543210"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="swiftCodeUsd">Código SWIFT</Label>
+                  <Input 
+                    id="swiftCodeUsd" 
+                    value={form.swiftCodeUsd} 
+                    onChange={(e) => setForm({ ...form, swiftCodeUsd: e.target.value })} 
+                    placeholder="BOFAUS3N"
+                    maxLength={11}
+                  />
                 </div>
               </CardContent>
             </Card>
