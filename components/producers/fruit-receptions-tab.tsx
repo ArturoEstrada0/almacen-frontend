@@ -17,6 +17,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Printer } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
@@ -173,33 +174,32 @@ export function FruitReceptionsTab() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Productor *</Label>
-                    <Select value={selectedProducer} onValueChange={setSelectedProducer}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar productor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {producers.map((producer) => (
-                          <SelectItem key={producer.id} value={producer.id}>
-                            {producer.code} - {producer.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ComboBox
+                      value={selectedProducer}
+                      onChange={setSelectedProducer}
+                      options={producers.map((producer) => ({
+                        value: producer.id,
+                        label: `${producer.code} - ${producer.name}`,
+                        subtitle: producer.code
+                      }))}
+                      placeholder="Seleccionar productor"
+                      searchPlaceholder="Buscar productor..."
+                      emptyMessage="No se encontró el productor"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Almacén *</Label>
-                    <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar almacén" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>
-                            {warehouse.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ComboBox
+                      value={selectedWarehouse}
+                      onChange={setSelectedWarehouse}
+                      options={warehouses.map((warehouse) => ({
+                        value: warehouse.id,
+                        label: warehouse.name
+                      }))}
+                      placeholder="Seleccionar almacén"
+                      searchPlaceholder="Buscar almacén..."
+                      emptyMessage="No se encontró el almacén"
+                    />
                   </div>
                 </div>
 
@@ -221,18 +221,18 @@ export function FruitReceptionsTab() {
 
                 <div className="space-y-2">
                   <Label>Producto (Fruta) *</Label>
-                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fruitProducts.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.sku} - {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ComboBox
+                    value={selectedProduct}
+                    onChange={setSelectedProduct}
+                    options={fruitProducts.map((product) => ({
+                      value: product.id,
+                      label: `${product.sku} - ${product.name}`,
+                      subtitle: product.sku
+                    }))}
+                    placeholder="Seleccionar producto"
+                    searchPlaceholder="Buscar producto..."
+                    emptyMessage="No se encontró el producto"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

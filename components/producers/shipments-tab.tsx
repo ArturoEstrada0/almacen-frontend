@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Edit, DollarSign, Package } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"

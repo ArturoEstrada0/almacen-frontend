@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -236,18 +237,18 @@ export function AccountStatementsTab() {
             <div className="flex gap-4">
               <div className="flex-1">
                 <Label htmlFor="producer">Seleccionar Productor</Label>
-                <Select value={selectedProducer} onValueChange={setSelectedProducer}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar productor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(producers || []).map((producer) => (
-                          <SelectItem key={producer.id} value={producer.id}>
-                            {producer.code} - {producer.name}
-                          </SelectItem>
-                        ))}
-                  </SelectContent>
-                </Select>
+                <ComboBox
+                  value={selectedProducer}
+                  onChange={setSelectedProducer}
+                  options={(producers || []).map((producer) => ({
+                    value: producer.id,
+                    label: `${producer.code} - ${producer.name}`,
+                    subtitle: producer.code
+                  }))}
+                  placeholder="Seleccionar productor"
+                  searchPlaceholder="Buscar productor..."
+                  emptyMessage="No se encontró el productor"
+                />
               </div>
               {selectedProducer && (
                 <div className="flex items-end gap-2">

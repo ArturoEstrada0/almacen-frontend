@@ -14,7 +14,7 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Eye, Trash2, Printer, Pencil } from "lucide-react"
@@ -298,33 +298,32 @@ export function InputAssignmentsTab() {
                 <div className="grid grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label>Productor *</Label>
-                    <Select value={selectedProducer} onValueChange={setSelectedProducer}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar productor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {producers.map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>
-                            {p.code} - {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ComboBox
+                      value={selectedProducer}
+                      onChange={setSelectedProducer}
+                      options={producers.map((p) => ({
+                        value: String(p.id),
+                        label: `${p.code} - ${p.name}`,
+                        subtitle: p.code
+                      }))}
+                      placeholder="Seleccionar productor"
+                      searchPlaceholder="Buscar productor..."
+                      emptyMessage="No se encontró el productor"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Almacén *</Label>
-                    <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar almacén" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {warehouses.map((w) => (
-                          <SelectItem key={w.id} value={String(w.id)}>
-                            {w.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ComboBox
+                      value={selectedWarehouse}
+                      onChange={setSelectedWarehouse}
+                      options={warehouses.map((w) => ({
+                        value: String(w.id),
+                        label: w.name
+                      }))}
+                      placeholder="Seleccionar almacén"
+                      searchPlaceholder="Buscar almacén..."
+                      emptyMessage="No se encontró el almacén"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Fecha *</Label>
@@ -349,18 +348,18 @@ export function InputAssignmentsTab() {
                   <div className="space-y-2">
                     {selectedItems.map((it) => (
                       <div key={it.id} className="grid grid-cols-4 gap-2">
-                        <Select value={it.productId} onValueChange={(v) => updateItem(it.id, { productId: v })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Producto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {insumoProducts.map((p) => (
-                              <SelectItem key={p.id} value={String(p.id)}>
-                                {p.sku} - {p.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <ComboBox
+                          value={it.productId}
+                          onChange={(v) => updateItem(it.id, { productId: v })}
+                          options={insumoProducts.map((p) => ({
+                            value: String(p.id),
+                            label: `${p.sku} - ${p.name}`,
+                            subtitle: p.sku
+                          }))}
+                          placeholder="Seleccionar producto"
+                          searchPlaceholder="Buscar producto..."
+                          emptyMessage="No se encontró el producto"
+                        />
                         <Input
                           type="number"
                           value={it.quantity === 0 ? "" : String(it.quantity)}
