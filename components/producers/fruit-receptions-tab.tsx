@@ -31,6 +31,9 @@ export function FruitReceptionsTab() {
   const [receptionDate, setReceptionDate] = useState(new Date().toISOString().split("T")[0])
   const [boxes, setBoxes] = useState("")
   const [weightPerBox, setWeightPerBox] = useState("")
+  const [trackingFolio, setTrackingFolio] = useState("")
+  const [returnedBoxes, setReturnedBoxes] = useState("")
+  const [returnedBoxesValue, setReturnedBoxesValue] = useState("")
   const [notes, setNotes] = useState("")
 
   const [producers, setProducers] = useState<any[]>([])
@@ -80,15 +83,16 @@ export function FruitReceptionsTab() {
     try {
       const payload: any = {
         producerId: selectedProducer,
-        warehouseId: selectedWarehouse,
         productId: selectedProduct,
+        warehouseId: selectedWarehouse,
         boxes: Number(boxes),
         date: receptionDate,
-      }
-      
-      // Agregar campos opcionales solo si tienen valor
+        trackingFolio: trackingFolio || undefined,
+      }      // Agregar campos opcionales solo si tienen valor
       if (weightPerBox) payload.weightPerBox = Number(weightPerBox)
       if (totalWeight) payload.totalWeight = Number(totalWeight.toFixed(2))
+      if (returnedBoxes) payload.returnedBoxes = Number(returnedBoxes)
+      if (returnedBoxesValue) payload.returnedBoxesValue = Number(returnedBoxesValue)
       if (notes) payload.notes = notes
       
       const created = await apiPost("/api/producers/fruit-receptions", payload)
@@ -99,6 +103,9 @@ export function FruitReceptionsTab() {
       setReceptionDate(new Date().toISOString().split("T")[0])
       setBoxes("")
       setWeightPerBox("")
+      setTrackingFolio("")
+      setReturnedBoxes("")
+      setReturnedBoxesValue("")
       setNotes("")
       setIsDialogOpen(false)
     } catch (err) {
@@ -202,6 +209,17 @@ export function FruitReceptionsTab() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Folio de Seguimiento (Opcional)</Label>
+                  <Input 
+                    placeholder="TRK-XXXXX-XXXX" 
+                    value={trackingFolio} 
+                    onChange={(e) => setTrackingFolio(e.target.value.toUpperCase())}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Ingresa el folio de la asignación de insumos para vincular</p>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Producto (Fruta) *</Label>
                   <Select value={selectedProduct} onValueChange={setSelectedProduct}>
                     <SelectTrigger>
@@ -231,6 +249,36 @@ export function FruitReceptionsTab() {
                 <div className="space-y-2">
                   <Label>Peso Total (kg)</Label>
                   <Input value={totalWeight.toFixed(2)} disabled className="bg-muted" />
+                </div>
+
+                {/* Sección de Devolución de Material de Empaque */}
+                <div className="border-t pt-4 mt-4">
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-primary">Devolución de Material de Empaque</h4>
+                    <p className="text-xs text-muted-foreground">Si el productor devuelve cajas u otro material, registra aquí para generar un abono en su cuenta</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Cantidad de Cajas Devueltas</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="0" 
+                        value={returnedBoxes} 
+                        onChange={(e) => setReturnedBoxes(e.target.value)} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Valor del Material ($)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        placeholder="0.00" 
+                        value={returnedBoxesValue} 
+                        onChange={(e) => setReturnedBoxesValue(e.target.value)} 
+                      />
+                      <p className="text-xs text-muted-foreground">Se generará un abono por este monto</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -263,6 +311,7 @@ export function FruitReceptionsTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Número</TableHead>
+                <TableHead>Folio Seguimiento</TableHead>
                 <TableHead>Productor</TableHead>
                 <TableHead>Producto</TableHead>
                 <TableHead>Cajas</TableHead>
@@ -279,12 +328,19 @@ export function FruitReceptionsTab() {
                 return (
                   <TableRow key={reception.id}>
                     <TableCell className="font-medium">{reception.code || reception.receptionNumber}</TableCell>
+                    <TableCell>
+                      {reception.trackingFolio ? (
+                        <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{reception.trackingFolio}</span>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>{producer?.name}</TableCell>
                     <TableCell>{product?.name}</TableCell>
                     <TableCell>{reception.boxes}</TableCell>
                     <TableCell>{reception.totalWeight} kg</TableCell>
                     <TableCell>{getShipmentStatusBadge(reception.shipmentStatus || "pendiente")}</TableCell>
-                    <TableCell>{formatDate(reception.receptionDate)}</TableCell>
+                    <TableCell>{formatDate(reception.date || reception.receptionDate)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" title="Imprimir recibo" onClick={() => handlePrintReception(reception)}>
@@ -317,7 +373,15 @@ export function FruitReceptionsTab() {
               <div><b>Cajas:</b> {selectedReception.boxes}</div>
               <div><b>Peso total:</b> {selectedReception.totalWeight} kg</div>
               <div><b>Estatus de envío:</b> {selectedReception.shipmentStatus || 'pendiente'}</div>
-              <div><b>Fecha:</b> {formatDate(selectedReception.receptionDate)}</div>
+              <div><b>Fecha:</b> {formatDate(selectedReception.date || selectedReception.receptionDate)}</div>
+              {(selectedReception.returnedBoxes > 0 || selectedReception.returnedBoxesValue > 0) && (
+                <div className="border-t pt-2 mt-2">
+                  <div className="text-sm font-semibold text-primary mb-1">Devolución de Material</div>
+                  <div><b>Cajas devueltas:</b> {selectedReception.returnedBoxes || 0}</div>
+                  <div><b>Valor del material:</b> ${Number(selectedReception.returnedBoxesValue || 0).toFixed(2)}</div>
+                  <p className="text-xs text-green-600 mt-1">✓ Abono registrado en cuenta del productor</p>
+                </div>
+              )}
               <div><b>Notas:</b> {selectedReception.notes || '-'}</div>
             </div>
           )}

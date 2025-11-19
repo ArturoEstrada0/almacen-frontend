@@ -92,24 +92,53 @@ export function AccountStatementsTab() {
   const movementsRaw: any[] = (accountStatement && (accountStatement as any).movements) || []
 
   // Map backend movement shape to UI-friendly shape
-  const mappedMovements: any[] = movementsRaw.map((m: any) => ({
-    id: m.id,
-    date: m.createdAt ? new Date(m.createdAt) : m.date ? new Date(m.date) : new Date(),
-    type: m.type === "cargo" ? "asignacion" : m.type === "abono" ? "venta" : "pago",
-    description: m.description,
-    referenceNumber: m.referenceCode || m.reference_code || m.referenceNumber || "",
-    // Show asignaciones (cargo) as negative amounts so they render red and with a minus
-  // Show asignaciones (cargo) and pagos as negative amounts so they render red and with a minus
-  amount: m.type === "cargo" || m.type === "pago" ? -Number(m.amount) : Number(m.amount),
-    // Balance from backend may be string (decimal) or number; normalize to Number
-    balance: Number(m.balance),
-  }))
+  const mappedMovements: any[] = movementsRaw.map((m: any) => {
+    // Determinar subtipo basado en descripción
+    let subtype = m.type
+    if (m.type === "cargo") {
+      subtype = "asignacion"
+    } else if (m.type === "abono") {
+      if (m.description?.includes("Venta de embarque")) {
+        subtype = "venta"
+      } else if (m.description?.includes("Devolución de material")) {
+        subtype = "devolucion"
+      } else {
+        subtype = "abono"
+      }
+    } else if (m.type === "pago") {
+      subtype = "pago"
+    }
+
+    // Determinar el signo del monto según el subtipo
+    // Cargo (asignación): negativo (aumenta deuda)
+    // Devolución: negativo (reduce lo que le debemos)
+    // Venta: positivo (aumenta lo que le debemos)
+    // Pago: negativo (el productor nos paga, reduce lo que le debemos)
+    let amount = Number(m.amount)
+    if (subtype === "asignacion" || subtype === "devolucion" || subtype === "pago") {
+      amount = -Math.abs(amount)
+    } else {
+      amount = Math.abs(amount)
+    }
+
+    return {
+      id: m.id,
+      date: m.createdAt ? new Date(m.createdAt) : m.date ? new Date(m.date) : new Date(),
+      type: subtype,
+      description: m.description,
+      referenceNumber: m.referenceCode || m.reference_code || m.referenceNumber || "",
+      amount: amount,
+      balance: Number(m.balance),
+    }
+  })
 
   const totalAssigned = mappedMovements
     .filter((m) => m.type === "asignacion")
     .reduce((sum, m) => sum + Math.abs(m.amount), 0)
 
   const totalReceived = mappedMovements.filter((m) => m.type === "venta").reduce((sum, m) => sum + m.amount, 0)
+
+  const totalReturned = mappedMovements.filter((m) => m.type === "devolucion").reduce((sum, m) => sum + Math.abs(m.amount), 0)
 
   const totalPaid = mappedMovements.filter((m) => m.type === "pago").reduce((sum, m) => sum + Math.abs(m.amount), 0)
 
@@ -342,6 +371,34 @@ export function AccountStatementsTab() {
                                   </div>
                                 )}
 
+                                {selectedAction === "abono" && (
+                                  <div className="space-y-3 mt-3">
+                                    <div>
+                                      <Label htmlFor="abono-receipt">Comprobante (PDF/Imagen)</Label>
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          id="abono-receipt"
+                                          type="file"
+                                          accept="image/*,application/pdf"
+                                          onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                                          className="flex-1"
+                                        />
+                                        {receiptFile && (
+                                          <Button type="button" variant="ghost" size="sm" onClick={() => setReceiptFile(null)}>
+                                            Quitar
+                                          </Button>
+                                        )}
+                                      </div>
+                                      {receiptFile && (
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                          <FileText className="h-3 w-3" />
+                                          {receiptFile.name}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
                               <div className="flex justify-end gap-2 mt-4">
                                 <Button variant="outline" onClick={() => { setIsPaymentDialogOpen(false); setSelectedAction(null); }}>
                                   Cancelar
@@ -417,7 +474,7 @@ export function AccountStatementsTab() {
 
       {selectedProducer && producer && (
         <>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Saldo Actual</CardTitle>
@@ -467,6 +524,17 @@ export function AccountStatementsTab() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Material Devuelto</CardTitle>
+                <TrendingDown className="h-4 w-4 text-orange-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">{safeCurrency(totalReturned)}</div>
+                <p className="text-xs text-muted-foreground mt-1">Cajas y empaque recuperado</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Pagado</CardTitle>
                 <DollarSign className="h-4 w-4 text-blue-500" />
               </CardHeader>
@@ -503,14 +571,24 @@ export function AccountStatementsTab() {
                           <TableCell>
                             <Badge
                               variant={
-                                movement.type === "pago" ? "secondary" : movement.amount > 0 ? "default" : "outline"
+                                movement.type === "venta" 
+                                  ? "default" 
+                                  : movement.type === "pago" 
+                                    ? "secondary"
+                                    : "outline"
                               }
                             >
                               {movement.type === "asignacion"
                                 ? "Asignación"
                                 : movement.type === "venta"
                                   ? "Venta"
-                                  : "Pago"}
+                                  : movement.type === "devolucion"
+                                    ? "Devolución"
+                                    : movement.type === "pago"
+                                      ? "Pago"
+                                      : movement.type === "abono"
+                                        ? "Abono"
+                                        : movement.type}
                             </Badge>
                           </TableCell>
                           <TableCell className="max-w-xs">

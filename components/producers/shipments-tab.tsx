@@ -88,10 +88,10 @@ export function ShipmentsTab() {
   const handleCreateShipment = () => {
     ;(async () => {
       try {
-        // Backend DTO accepts: receptionIds, carrier?, driver?, notes?
-        // Do not send `date` (server sets date) and map carrierContact to `driver` field.
+        // Backend DTO accepts: receptionIds, carrier?, driver?, notes?, date?
         const payload: any = {
           receptionIds: selectedReceptions,
+          date: shipmentDate,
           carrier,
           notes,
         }
@@ -231,6 +231,7 @@ export function ShipmentsTab() {
                                 />
                               </TableHead>
                               <TableHead className="font-semibold text-sm">Número</TableHead>
+                              <TableHead className="font-semibold text-sm">Folio</TableHead>
                               <TableHead className="font-semibold text-sm">Productor</TableHead>
                               <TableHead className="font-semibold text-sm">Producto</TableHead>
                               <TableHead className="font-semibold text-sm text-right">Cajas</TableHead>
@@ -242,7 +243,7 @@ export function ShipmentsTab() {
                           <TableBody>
                             {pendingReceptions.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
+                                <TableCell colSpan={9} className="text-center text-muted-foreground py-12 text-sm">
                                   No hay recepciones pendientes de embarque
                                 </TableCell>
                               </TableRow>
@@ -265,6 +266,13 @@ export function ShipmentsTab() {
                                       />
                                     </TableCell>
                                     <TableCell className="font-medium text-sm">{receptionNumber}</TableCell>
+                                    <TableCell className="text-sm">
+                                      {reception.trackingFolio ? (
+                                        <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{reception.trackingFolio}</span>
+                                      ) : (
+                                        <span className="text-muted-foreground">-</span>
+                                      )}
+                                    </TableCell>
                                     <TableCell className="font-medium text-sm">{producer?.name || "-"}</TableCell>
                                     <TableCell className="text-sm">{(reception as any).product?.name || "-"}</TableCell>
                                     <TableCell className="text-right font-semibold text-sm">{reception.boxes}</TableCell>
@@ -374,6 +382,7 @@ export function ShipmentsTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Número</TableHead>
+                <TableHead>Folio Seguimiento</TableHead>
                 <TableHead>Productores</TableHead>
                 <TableHead>Cajas Totales</TableHead>
                     <TableHead>Peso Total</TableHead>
@@ -399,6 +408,24 @@ export function ShipmentsTab() {
                 return (
                   <TableRow key={shipment.id}>
                     <TableCell className="font-medium">{shipmentNumber}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const folios = [...new Set(receptions.map((r) => r.trackingFolio).filter(Boolean))]
+                        if (folios.length === 0 && (shipment as any).trackingFolio) {
+                          return <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{(shipment as any).trackingFolio}</span>
+                        }
+                        if (folios.length === 0) return <span className="text-muted-foreground text-sm">-</span>
+                        if (folios.length === 1) {
+                          return <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{folios[0]}</span>
+                        }
+                        return (
+                          <div className="text-sm">
+                            <span className="font-mono text-xs bg-blue-50 px-1 py-0.5 rounded">{folios[0]}</span>
+                            <div className="text-muted-foreground text-xs">+{folios.length - 1} más</div>
+                          </div>
+                        )
+                      })()}
+                    </TableCell>
                     <TableCell>
                       <div className="text-sm">
                         {producersList.length > 0 ? (

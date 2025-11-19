@@ -10,6 +10,17 @@ export function formatNumber(num: number): string {
 }
 
 export function formatDate(date: Date | string): string {
+  // Si es un string en formato YYYY-MM-DD, parsearlo localmente sin conversión UTC
+  if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
+    return new Intl.DateTimeFormat("es-MX", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(d)
+  }
+  
   const d = typeof date === "string" ? new Date(date) : date
   return new Intl.DateTimeFormat("es-MX", {
     year: "numeric",

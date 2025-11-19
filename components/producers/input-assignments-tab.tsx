@@ -17,8 +17,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Search, Eye, Trash2, Printer } from "lucide-react"
-import { apiGet, apiPost } from "@/lib/db/localApi"
+import { Plus, Search, Eye, Trash2, Printer, Pencil } from "lucide-react"
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/db/localApi"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { useToast } from "@/hooks/use-toast"
 
@@ -32,8 +32,12 @@ interface AssignmentItem {
 export function InputAssignmentsTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editingAssignment, setEditingAssignment] = useState<any>(null)
   const [selectedProducer, setSelectedProducer] = useState("")
   const [selectedWarehouse, setSelectedWarehouse] = useState("")
+  const [assignmentDate, setAssignmentDate] = useState(new Date().toISOString().split("T")[0])
+  const [trackingFolio, setTrackingFolio] = useState("")
   const [notes, setNotes] = useState("")
   const [selectedItems, setSelectedItems] = useState<AssignmentItem[]>([])
 
@@ -78,9 +82,82 @@ export function InputAssignmentsTab() {
   const updateItem = (id: number, patch: Partial<AssignmentItem>) =>
     setSelectedItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch } : it)))
 
-  const calculateSubtotal = () => selectedItems.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
-  const calculateTax = () => calculateSubtotal() * 0.16
-  const calculateTotal = () => calculateSubtotal() + calculateTax()
+  const generateFolio = () => {
+    const now = new Date()
+    const year = now.getFullYear().toString().slice(-2)
+    const month = (now.getMonth() + 1).toString().padStart(2, '0')
+    const day = now.getDate().toString().padStart(2, '0')
+    const random = Math.floor(Math.random() * 900 + 100)
+    return `${year}${month}${day}-${random}`
+  }
+
+  const handleCloseDialog = (open: boolean) => {
+    setIsDialogOpen(open)
+    if (!open) {
+      // Resetear formulario al cerrar
+      setIsEditMode(false)
+      setEditingAssignment(null)
+      setSelectedProducer("")
+      setSelectedWarehouse("")
+      setAssignmentDate(new Date().toISOString().split("T")[0])
+      setTrackingFolio("")
+      setNotes("")
+      setSelectedItems([])
+      setSaveError("")
+    }
+  }
+
+  const handleOpenDialog = () => {
+    setTrackingFolio(generateFolio())
+    setIsEditMode(false)
+    setEditingAssignment(null)
+    setIsDialogOpen(true)
+  }
+
+  const handleEditAssignment = (assignment: any) => {
+    setIsEditMode(true)
+    setEditingAssignment(assignment)
+    setSelectedProducer(String(assignment.producerId))
+    setSelectedWarehouse(String(assignment.warehouseId))
+    setAssignmentDate(assignment.date || assignment.assignmentDate)
+    setTrackingFolio(assignment.trackingFolio || "")
+    setNotes(assignment.notes || "")
+    
+    // Cargar items de la asignación
+    const items = (assignment.items || []).map((item: any) => ({
+      id: item.id || Date.now() + Math.random(),
+      productId: item.productId || item.product?.id,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+    }))
+    setSelectedItems(items)
+    setIsDialogOpen(true)
+  }
+
+  const handleDeleteAssignment = async (assignment: any) => {
+    if (!confirm(`¿Estás seguro de eliminar la asignación ${assignment.code || assignment.assignmentNumber}? Esta acción no se puede deshacer.`)) {
+      return
+    }
+    
+    try {
+      await apiDelete(`/producers/input-assignments/${assignment.id}`)
+      
+      setAssignments((prev) => prev.filter((a) => a.id !== assignment.id))
+      
+      toast({
+        title: "Éxito",
+        description: "Asignación eliminada correctamente",
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: (err as any)?.message || "Error al eliminar la asignación",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const calculateTotal = () => selectedItems.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
 
   // Estado para mostrar error en pantalla
   const [saveError, setSaveError] = useState("")
@@ -92,14 +169,37 @@ export function InputAssignmentsTab() {
       const payload = {
         producerId: Number(selectedProducer) || selectedProducer,
         warehouseId: Number(selectedWarehouse) || selectedWarehouse,
+        date: assignmentDate,
+        trackingFolio,
         notes,
         items: selectedItems.map((it) => ({ productId: it.productId, quantity: it.quantity, unitPrice: it.unitPrice })),
       }
-      const created = await apiPost("/producers/input-assignments", payload)
-      setAssignments((prev) => [created, ...(prev || [])])
+      
+      if (isEditMode && editingAssignment) {
+        // Modo edición
+        const updated = await apiPatch(`/producers/input-assignments/${editingAssignment.id}`, payload)
+        setAssignments((prev) => prev.map((a) => a.id === updated.id ? updated : a))
+        toast({
+          title: "Éxito",
+          description: "Asignación actualizada correctamente",
+        })
+      } else {
+        // Modo creación
+        const created = await apiPost("/producers/input-assignments", payload)
+        setAssignments((prev) => [created, ...(prev || [])])
+        toast({
+          title: "Éxito",
+          description: "Asignación creada correctamente",
+        })
+      }
+      
       // reset
+      setIsEditMode(false)
+      setEditingAssignment(null)
       setSelectedProducer("")
       setSelectedWarehouse("")
+      setAssignmentDate(new Date().toISOString().split("T")[0])
+      setTrackingFolio("")
       setNotes("")
       setSelectedItems([])
       setIsDialogOpen(false)
@@ -182,20 +282,20 @@ export function InputAssignmentsTab() {
             <CardDescription>Registra la entrega de insumos a productores (genera movimiento en contra)</CardDescription>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={handleOpenDialog}>
                 <Plus className="mr-2 h-4 w-4" />
                 Nueva Asignación
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Nueva Asignación</DialogTitle>
+                <DialogTitle>{isEditMode ? "Editar Asignación" : "Nueva Asignación"}</DialogTitle>
               </DialogHeader>
 
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label>Productor *</Label>
                     <Select value={selectedProducer} onValueChange={setSelectedProducer}>
@@ -225,6 +325,22 @@ export function InputAssignmentsTab() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fecha *</Label>
+                    <Input type="date" value={assignmentDate} onChange={(e) => setAssignmentDate(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Folio de Seguimiento</Label>
+                    <Input 
+                      type="text" 
+                      value={trackingFolio} 
+                      onChange={(e) => setTrackingFolio(e.target.value.toUpperCase())}
+                      placeholder="YYMMDD-XXX"
+                      maxLength={10}
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">Formato: YYMMDD-XXX (auto-generado, editable)</p>
                   </div>
                 </div>
 
@@ -282,15 +398,7 @@ export function InputAssignmentsTab() {
                   <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
                 </div>
 
-                <div className="border-t pt-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal:</span>
-                    <span className="font-medium">{formatCurrency(calculateSubtotal())}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>IVA (16%):</span>
-                    <span className="font-medium">{formatCurrency(calculateTax())}</span>
-                  </div>
+                <div className="border-t pt-4">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total:</span>
                     <span className="text-destructive">{formatCurrency(calculateTotal())}</span>
@@ -303,7 +411,7 @@ export function InputAssignmentsTab() {
                   Cancelar
                 </Button>
                 <Button onClick={handleSave} disabled={!selectedProducer || !selectedWarehouse || selectedItems.length === 0 || saving}>
-                  {saving ? "Guardando..." : "Guardar Asignación"}
+                  {saving ? "Guardando..." : isEditMode ? "Actualizar Asignación" : "Guardar Asignación"}
                 </Button>
                 {saveError && (
                   <div className="text-xs text-destructive font-semibold mt-2">{saveError}</div>
@@ -327,6 +435,7 @@ export function InputAssignmentsTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Número</TableHead>
+                <TableHead>Folio Seguimiento</TableHead>
                 <TableHead>Productor</TableHead>
                 <TableHead>Almacén</TableHead>
                 <TableHead>Fecha</TableHead>
@@ -341,6 +450,9 @@ export function InputAssignmentsTab() {
                 return (
                   <TableRow key={assignment.id}>
                     <TableCell className="font-medium">{assignment.code || assignment.assignmentNumber}</TableCell>
+                    <TableCell>
+                      <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{assignment.trackingFolio || '-'}</span>
+                    </TableCell>
                     <TableCell>{producer?.name}</TableCell>
                     <TableCell>{warehouse?.name}</TableCell>
                     <TableCell>{formatDate(assignment.date || assignment.assignmentDate)}</TableCell>
@@ -352,6 +464,18 @@ export function InputAssignmentsTab() {
                         </Button>
                         <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewAssignment(assignment)}>
                           <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" title="Editar asignación" onClick={() => handleEditAssignment(assignment)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title="Eliminar asignación" 
+                          onClick={() => handleDeleteAssignment(assignment)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
