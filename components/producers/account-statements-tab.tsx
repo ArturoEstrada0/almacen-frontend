@@ -84,6 +84,12 @@ export function AccountStatementsTab() {
   const [paymentNotes, setPaymentNotes] = useState("")
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  
+  // Nueva funcionalidad: selección de movimientos y retención
+  const [selectedMovements, setSelectedMovements] = useState<string[]>([])
+  const [hasRetention, setHasRetention] = useState(false)
+  const [retentionAmount, setRetentionAmount] = useState("")
+  const [retentionNotes, setRetentionNotes] = useState("")
 
   const { producers } = useProducers()
   const { accountStatement, mutate: mutateAccount } = useProducerAccountStatement(selectedProducer)
@@ -110,14 +116,16 @@ export function AccountStatementsTab() {
     }
 
     // Determinar el signo del monto según el subtipo
-    // Cargo (asignación): negativo (aumenta deuda)
-    // Devolución: negativo (reduce lo que le debemos)
-    // Venta: positivo (aumenta lo que le debemos)
-    // Pago: negativo (el productor nos paga, reduce lo que le debemos)
+    // Desde la perspectiva del saldo (lo que le debemos al productor):
+    // - Asignación (cargo): negativo - él nos debe, reduce el saldo
+    // - Devolución (abono): positivo - nos devuelve, aumenta lo que le debemos o reduce lo que nos debe
+    // - Venta (abono): positivo - le debemos más por su fruta
+    // - Pago: negativo - pagamos, reduce lo que le debemos
     let amount = Number(m.amount)
-    if (subtype === "asignacion" || subtype === "devolucion" || subtype === "pago") {
+    if (subtype === "asignacion" || subtype === "pago") {
       amount = -Math.abs(amount)
     } else {
+      // venta, devolucion, abono genérico
       amount = Math.abs(amount)
     }
 
@@ -152,13 +160,23 @@ export function AccountStatementsTab() {
           cheque: "check",
           deposito: "other",
         }
+        
+        const finalAmount = parseAmountToNumber(amount)
+        const retention = hasRetention ? parseAmountToNumber(retentionAmount) : 0
+        
         const payload = {
           producerId: selectedProducer,
-          amount: parseAmountToNumber(amount),
+          amount: finalAmount,
           method: methodMap[paymentMethod] || "other",
           reference,
           notes: paymentNotes,
+          selectedMovements: selectedMovements.length > 0 ? selectedMovements : undefined,
+          retention: retention > 0 ? {
+            amount: retention,
+            notes: retentionNotes
+          } : undefined
         }
+        
         await apiCreatePayment(payload)
         // Refresh account statement and producers list (balance)
         await mutateAccount()
@@ -169,6 +187,10 @@ export function AccountStatementsTab() {
         setPaymentNotes("")
         setInvoiceFile(null)
         setReceiptFile(null)
+        setSelectedMovements([])
+        setHasRetention(false)
+        setRetentionAmount("")
+        setRetentionNotes("")
         setIsPaymentDialogOpen(false)
       } catch (err) {
         console.error("Failed saving payment", err)
@@ -320,55 +342,176 @@ export function AccountStatementsTab() {
                               </div>
 
                                 {selectedAction === "pago" && (
-                                  <div className="space-y-3 mt-3">
-                                    <div>
-                                      <Label htmlFor="invoice">Factura (PDF/Imagen)</Label>
-                                      <div className="flex items-center gap-2">
-                                        <Input
-                                          id="invoice"
-                                          type="file"
-                                          accept="image/*,application/pdf"
-                                          onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
-                                          className="flex-1"
-                                        />
-                                        {invoiceFile && (
-                                          <Button type="button" variant="ghost" size="sm" onClick={() => setInvoiceFile(null)}>
-                                            Quitar
-                                          </Button>
-                                        )}
+                                  <>
+                                    {/* Sección de selección de movimientos */}
+                                    <div className="space-y-3 mt-4 border-t pt-4">
+                                      <div className="flex items-center justify-between">
+                                        <Label className="text-base font-semibold">Movimientos a Pagar (Opcional)</Label>
+                                        <span className="text-xs text-muted-foreground">
+                                          {selectedMovements.length} seleccionados
+                                        </span>
                                       </div>
-                                      {invoiceFile && (
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                          <FileText className="h-3 w-3" />
-                                          {invoiceFile.name}
-                                        </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Selecciona los movimientos específicos que este pago está cubriendo
+                                      </p>
+                                      
+                                      <div className="max-h-48 overflow-y-auto border rounded-md">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead className="w-12"></TableHead>
+                                              <TableHead>Fecha</TableHead>
+                                              <TableHead>Tipo</TableHead>
+                                              <TableHead>Referencia</TableHead>
+                                              <TableHead className="text-right">Monto</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {mappedMovements.filter(m => m.type !== "pago").map((mov) => (
+                                              <TableRow key={mov.id}>
+                                                <TableCell>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={selectedMovements.includes(mov.id)}
+                                                    onChange={(e) => {
+                                                      if (e.target.checked) {
+                                                        setSelectedMovements([...selectedMovements, mov.id])
+                                                      } else {
+                                                        setSelectedMovements(selectedMovements.filter(id => id !== mov.id))
+                                                      }
+                                                    }}
+                                                    className="h-4 w-4"
+                                                  />
+                                                </TableCell>
+                                                <TableCell className="text-xs">{formatDate(mov.date)}</TableCell>
+                                                <TableCell className="text-xs">
+                                                  <Badge variant={
+                                                    mov.type === "asignacion" || mov.type === "devolucion" ? "outline" :
+                                                    mov.type === "venta" ? "default" : "secondary"
+                                                  } className="text-xs">
+                                                    {mov.type === "asignacion" ? "Cargo" : 
+                                                     mov.type === "venta" ? "Abono" : 
+                                                     mov.type === "devolucion" ? "Devolución" : 
+                                                     mov.type === "pago" ? "Pago" : mov.type}
+                                                  </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-xs">{mov.referenceNumber || "-"}</TableCell>
+                                                <TableCell className="text-right text-xs">{safeCurrency(mov.amount)}</TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </div>
+
+                                    {/* Sección de retención */}
+                                    <div className="space-y-3 mt-4 border-t pt-4">
+                                      <div className="flex items-center space-x-2">
+                                        <input
+                                          type="checkbox"
+                                          id="hasRetention"
+                                          checked={hasRetention}
+                                          onChange={(e) => {
+                                            setHasRetention(e.target.checked)
+                                            if (!e.target.checked) {
+                                              setRetentionAmount("")
+                                              setRetentionNotes("")
+                                            }
+                                          }}
+                                          className="h-4 w-4"
+                                        />
+                                        <Label htmlFor="hasRetention" className="text-base font-semibold cursor-pointer">
+                                          Aplicar Retención
+                                        </Label>
+                                      </div>
+                                      
+                                      {hasRetention && (
+                                        <div className="space-y-3 ml-6 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                              <Label htmlFor="retentionAmount">Monto de Retención *</Label>
+                                              <Input
+                                                id="retentionAmount"
+                                                type="text"
+                                                inputMode="decimal"
+                                                placeholder="0.00"
+                                                value={retentionAmount}
+                                                onChange={(e) => setRetentionAmount(e.target.value)}
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label className="text-sm text-muted-foreground">Monto Neto</Label>
+                                              <div className="h-10 px-3 py-2 border rounded-md bg-white flex items-center font-semibold text-green-600">
+                                                {safeCurrency(parseAmountToNumber(amount) - parseAmountToNumber(retentionAmount))}
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label htmlFor="retentionNotes">Motivo de la Retención</Label>
+                                            <Textarea 
+                                              id="retentionNotes" 
+                                              placeholder="Ej: Retención por daños, faltantes, etc." 
+                                              value={retentionNotes} 
+                                              onChange={(e) => setRetentionNotes(e.target.value)} 
+                                              rows={2} 
+                                            />
+                                          </div>
+                                        </div>
                                       )}
                                     </div>
 
-                                    <div>
-                                      <Label htmlFor="receipt">Comprobante (PDF/Imagen)</Label>
-                                      <div className="flex items-center gap-2">
-                                        <Input
-                                          id="receipt"
-                                          type="file"
-                                          accept="image/*,application/pdf"
-                                          onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                                          className="flex-1"
-                                        />
-                                        {receiptFile && (
-                                          <Button type="button" variant="ghost" size="sm" onClick={() => setReceiptFile(null)}>
-                                            Quitar
-                                          </Button>
+                                    {/* Archivos adjuntos */}
+                                    <div className="space-y-3 mt-4 border-t pt-4">
+                                      <Label className="text-base font-semibold">Documentos</Label>
+                                      <div>
+                                        <Label htmlFor="invoice">Factura (PDF/Imagen)</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            id="invoice"
+                                            type="file"
+                                            accept="image/*,application/pdf"
+                                            onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+                                            className="flex-1"
+                                          />
+                                          {invoiceFile && (
+                                            <Button type="button" variant="ghost" size="sm" onClick={() => setInvoiceFile(null)}>
+                                              Quitar
+                                            </Button>
+                                          )}
+                                        </div>
+                                        {invoiceFile && (
+                                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                            <FileText className="h-3 w-3" />
+                                            {invoiceFile.name}
+                                          </p>
                                         )}
                                       </div>
-                                      {receiptFile && (
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                          <FileText className="h-3 w-3" />
-                                          {receiptFile.name}
-                                        </p>
-                                      )}
+
+                                      <div>
+                                        <Label htmlFor="receipt">Comprobante (PDF/Imagen)</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            id="receipt"
+                                            type="file"
+                                            accept="image/*,application/pdf"
+                                            onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                                            className="flex-1"
+                                          />
+                                          {receiptFile && (
+                                            <Button type="button" variant="ghost" size="sm" onClick={() => setReceiptFile(null)}>
+                                              Quitar
+                                            </Button>
+                                          )}
+                                        </div>
+                                        {receiptFile && (
+                                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                            <FileText className="h-3 w-3" />
+                                            {receiptFile.name}
+                                          </p>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
+                                  </>
                                 )}
 
                                 {selectedAction === "abono" && (
