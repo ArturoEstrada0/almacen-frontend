@@ -7,6 +7,7 @@ import { InputAssignmentsTab } from "@/components/producers/input-assignments-ta
 import { FruitReceptionsTab } from "@/components/producers/fruit-receptions-tab"
 import { ShipmentsTab } from "@/components/producers/shipments-tab"
 import { AccountStatementsTab } from "@/components/producers/account-statements-tab"
+import { PaymentReportsTab } from "@/components/producers/payment-reports-tab"
 
 export default function ProducersPage() {
   const [activeTab, setActiveTab] = useState("directory")
@@ -21,12 +22,13 @@ export default function ProducersPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="directory">Directorio</TabsTrigger>
           <TabsTrigger value="assignments">Asignación de Insumos</TabsTrigger>
           <TabsTrigger value="receptions">Recepción de Fruta</TabsTrigger>
           <TabsTrigger value="shipments">Embarques</TabsTrigger>
           <TabsTrigger value="accounts">Estados de Cuenta</TabsTrigger>
+          <TabsTrigger value="payments">Reportes de Pago</TabsTrigger>
         </TabsList>
 
         <TabsContent value="directory" className="space-y-4">
@@ -47,6 +49,10 @@ export default function ProducersPage() {
 
         <TabsContent value="accounts" className="space-y-4">
           <AccountStatementsTab />
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-4">
+          <PaymentReportsTab />
         </TabsContent>
       </Tabs>
     </div>

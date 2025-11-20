@@ -103,7 +103,12 @@ export function AccountStatementsTab() {
     // Determinar subtipo basado en descripción
     let subtype = m.type
     if (m.type === "cargo") {
-      subtype = "asignacion"
+      // Diferenciar entre asignación y retención
+      if (m.description?.includes("Retención")) {
+        subtype = "retencion"
+      } else {
+        subtype = "asignacion"
+      }
     } else if (m.type === "abono") {
       if (m.description?.includes("Venta de embarque")) {
         subtype = "venta"
@@ -119,11 +124,12 @@ export function AccountStatementsTab() {
     // Determinar el signo del monto según el subtipo
     // Desde la perspectiva del saldo (lo que le debemos al productor):
     // - Asignación (cargo): negativo - él nos debe, reduce el saldo
+    // - Retención (cargo): negativo - descontamos, reduce lo que le debemos
     // - Devolución (abono): positivo - nos devuelve, aumenta lo que le debemos o reduce lo que nos debe
     // - Venta (abono): positivo - le debemos más por su fruta
     // - Pago: negativo - pagamos, reduce lo que le debemos
     let amount = Number(m.amount)
-    if (subtype === "asignacion" || subtype === "pago") {
+    if (subtype === "asignacion" || subtype === "pago" || subtype === "retencion") {
       amount = -Math.abs(amount)
     } else {
       // venta, devolucion, abono genérico
@@ -139,7 +145,7 @@ export function AccountStatementsTab() {
       amount: amount,
       balance: Number(m.balance),
     }
-  })
+  }).sort((a, b) => b.date.getTime() - a.date.getTime()) // Orden descendente: más recientes primero
 
   const totalAssigned = mappedMovements
     .filter((m) => m.type === "asignacion")
@@ -719,7 +725,9 @@ export function AccountStatementsTab() {
                                   ? "default" 
                                   : movement.type === "pago" 
                                     ? "secondary"
-                                    : "outline"
+                                    : movement.type === "retencion"
+                                      ? "destructive"
+                                      : "outline"
                               }
                             >
                               {movement.type === "asignacion"
@@ -730,9 +738,11 @@ export function AccountStatementsTab() {
                                     ? "Devolución"
                                     : movement.type === "pago"
                                       ? "Pago"
-                                      : movement.type === "abono"
-                                        ? "Abono"
-                                        : movement.type}
+                                      : movement.type === "retencion"
+                                        ? "Retención"
+                                        : movement.type === "abono"
+                                          ? "Abono"
+                                          : movement.type}
                             </Badge>
                           </TableCell>
                           <TableCell className="max-w-xs">

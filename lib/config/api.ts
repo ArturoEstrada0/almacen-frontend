@@ -91,6 +91,14 @@ export const API_ENDPOINTS = {
     payments: {
       create: () => `${API_BASE_URL}/api/producers/payments`,
     },
+    paymentReports: {
+      list: () => `${API_BASE_URL}/api/producers/payment-reports/all`,
+      get: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}`,
+      create: () => `${API_BASE_URL}/api/producers/payment-reports`,
+      update: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}`,
+      updateStatus: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}/status`,
+      delete: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}`,
+    },
   },
 
   // Quotations

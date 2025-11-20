@@ -368,6 +368,38 @@ export interface ProducerAccountMovement {
   createdAt: Date
 }
 
+export type PaymentReportStatus = 'pendiente' | 'pagado' | 'cancelado'
+
+export interface PaymentReportItem {
+  id?: string
+  fruitReceptionId: string
+  fruitReception?: FruitReception
+  boxes: number
+  pricePerBox: number
+  subtotal: number
+}
+
+export interface PaymentReport {
+  id: string
+  code: string
+  producerId: string
+  producer?: Producer
+  items: PaymentReportItem[]
+  date: Date
+  subtotal: number
+  retentionAmount: number
+  retentionNotes?: string
+  totalToPay: number
+  status: PaymentReportStatus
+  paymentMethod?: string
+  paidAt?: Date
+  notes?: string
+  userId: string
+  userName: string
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface ProducerPayment {
   id: string
   paymentNumber: string

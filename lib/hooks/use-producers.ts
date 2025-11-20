@@ -2,7 +2,7 @@
 
 import useSWR from "swr"
 import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
-import type { Producer, InputAssignment, FruitReception, Shipment } from "@/lib/types"
+import type { Producer, InputAssignment, FruitReception, Shipment, PaymentReport } from "@/lib/types"
 
 export function useProducers() {
   const { data, error, isLoading, mutate } = useSWR<Producer[]>("producers", () =>
@@ -82,6 +82,19 @@ export function useProducerAccountStatement(producerId: string) {
   }
 }
 
+export function usePaymentReports() {
+  const { data, error, isLoading, mutate } = useSWR<PaymentReport[]>("payment-reports", () =>
+    ApiClient.get<PaymentReport[]>(API_ENDPOINTS.producers.paymentReports.list()),
+  )
+
+  return {
+    paymentReports: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+  }
+}
+
 export async function createProducer(data: Partial<Producer>) {
   return ApiClient.post<Producer>(API_ENDPOINTS.producers.create(), data)
 }
@@ -120,4 +133,20 @@ export async function deleteShipment(id: string) {
 
 export async function createPayment(data: any) {
   return ApiClient.post(API_ENDPOINTS.producers.payments.create(), data)
+}
+
+export async function createPaymentReport(data: any) {
+  return ApiClient.post<PaymentReport>(API_ENDPOINTS.producers.paymentReports.create(), data)
+}
+
+export async function updatePaymentReport(id: string, data: any) {
+  return ApiClient.patch<PaymentReport>(API_ENDPOINTS.producers.paymentReports.update(id), data)
+}
+
+export async function updatePaymentReportStatus(id: string, status: string, paymentMethod?: string) {
+  return ApiClient.patch<PaymentReport>(API_ENDPOINTS.producers.paymentReports.updateStatus(id), { status, paymentMethod })
+}
+
+export async function deletePaymentReport(id: string) {
+  return ApiClient.delete(API_ENDPOINTS.producers.paymentReports.delete(id))
 }
