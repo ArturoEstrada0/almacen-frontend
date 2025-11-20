@@ -77,11 +77,15 @@ export const API_ENDPOINTS = {
     fruitReceptions: {
       list: () => `${API_BASE_URL}/api/producers/fruit-receptions/all`,
       create: () => `${API_BASE_URL}/api/producers/fruit-receptions`,
+      update: (id: string) => `${API_BASE_URL}/api/producers/fruit-receptions/${id}`,
+      delete: (id: string) => `${API_BASE_URL}/api/producers/fruit-receptions/${id}`,
     },
     shipments: {
       list: () => `${API_BASE_URL}/api/producers/shipments/all`,
       create: () => `${API_BASE_URL}/api/producers/shipments`,
+      update: (id: string) => `${API_BASE_URL}/api/producers/shipments/${id}`,
       updateStatus: (id: string) => `${API_BASE_URL}/api/producers/shipments/${id}/status`,
+      delete: (id: string) => `${API_BASE_URL}/api/producers/shipments/${id}`,
     },
     accountStatement: (id: string) => `${API_BASE_URL}/api/producers/${id}/account-statement`,
     payments: {

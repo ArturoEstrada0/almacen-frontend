@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, DollarSign, Package } from "lucide-react"
+import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { ShipmentStatus } from "@/lib/types"
 import {
@@ -28,7 +28,9 @@ import {
   useFruitReceptions,
   useProducers,
   createShipment as apiCreateShipment,
+  updateShipment as apiUpdateShipment,
   updateShipmentStatus as apiUpdateShipmentStatus,
+  deleteShipment as apiDeleteShipment,
 } from "@/lib/hooks/use-producers"
 import { mutate as globalMutate } from "swr"
 import { products } from "@/lib/mock-data"
@@ -47,6 +49,7 @@ export function ShipmentsTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   const [selectedReceptions, setSelectedReceptions] = useState<string[]>([])
   const [carrier, setCarrier] = useState("")
@@ -54,7 +57,15 @@ export function ShipmentsTab() {
   const [shipmentDate, setShipmentDate] = useState(new Date().toISOString().split("T")[0])
   const [notes, setNotes] = useState("")
 
-  // For update dialog
+  // For edit dialog (edit general shipment info and receptions)
+  const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null)
+  const [editSelectedReceptions, setEditSelectedReceptions] = useState<string[]>([])
+  const [editCarrier, setEditCarrier] = useState("")
+  const [editCarrierContact, setEditCarrierContact] = useState("")
+  const [editShipmentDate, setEditShipmentDate] = useState("")
+  const [editNotes, setEditNotes] = useState("")
+
+  // For update dialog (status)
   const [selectedShipment, setSelectedShipment] = useState<string | null>(null)
   const [updateStatus, setUpdateStatus] = useState<ShipmentStatus>("embarcada")
   const [arrivalDate, setArrivalDate] = useState("")
@@ -157,6 +168,70 @@ export function ShipmentsTab() {
 
     setViewShipment(enriched)
     setIsViewDialogOpen(true)
+  }
+
+  const handleDeleteShipment = async (shipment: any) => {
+    if (shipment.status === "vendida") {
+      alert("No se puede eliminar un embarque que ya ha sido vendido")
+      return
+    }
+
+    if (!confirm(`¿Estás seguro de eliminar el embarque ${shipment.code || shipment.shipmentNumber}? Las recepciones volverán al estado pendiente.`)) {
+      return
+    }
+
+    try {
+      await apiDeleteShipment(shipment.id)
+      await mutateShipments()
+      await globalMutate("fruit-receptions")
+    } catch (err) {
+      console.error("Error deleting shipment:", err)
+      alert("Error al eliminar: " + (err as any)?.message || String(err))
+    }
+  }
+
+  const handleEditShipment = (shipment: any) => {
+    setEditingShipmentId(shipment.id)
+    
+    // Obtener IDs de recepciones actuales del embarque
+    const currentReceptionIds = shipment.receptionIds || 
+      (Array.isArray(shipment.receptions) ? shipment.receptions.map((r: any) => r.id) : [])
+    
+    setEditSelectedReceptions(currentReceptionIds)
+    setEditCarrier(shipment.carrier || "")
+    setEditCarrierContact(shipment.carrierContact || "")
+    setEditShipmentDate(shipment.date || shipment.shipmentDate || "")
+    setEditNotes(shipment.notes || "")
+    setIsEditDialogOpen(true)
+  }
+
+  const handleToggleEditReception = (receptionId: string) => {
+    setEditSelectedReceptions((prev) =>
+      prev.includes(receptionId) ? prev.filter((id) => id !== receptionId) : [...prev, receptionId]
+    )
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingShipmentId) return
+
+    try {
+      const payload: any = {
+        carrier: editCarrier,
+        date: editShipmentDate,
+        receptionIds: editSelectedReceptions,
+      }
+      if (editCarrierContact) payload.driver = editCarrierContact
+      if (editNotes) payload.notes = editNotes
+
+      await apiUpdateShipment(editingShipmentId, payload)
+      await mutateShipments()
+      await globalMutate("fruit-receptions")
+      setIsEditDialogOpen(false)
+      setEditingShipmentId(null)
+    } catch (err) {
+      console.error("Error updating shipment:", err)
+      alert("Error al actualizar: " + (err as any)?.message || String(err))
+    }
   }
 
   return (
@@ -483,18 +558,40 @@ export function ShipmentsTab() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Actualizar estado"
-                          onClick={() => {
-                            setSelectedShipment(shipment.id)
-                            setUpdateStatus((shipment as any).status)
-                            setIsUpdateDialogOpen(true)
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        {shipment.status !== "vendida" && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Editar embarque"
+                              onClick={() => handleEditShipment(shipment)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Actualizar estado"
+                              onClick={() => {
+                                setSelectedShipment(shipment.id)
+                                setUpdateStatus((shipment as any).status)
+                                setIsUpdateDialogOpen(true)
+                              }}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                              <DollarSign className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Eliminar embarque"
+                              onClick={() => handleDeleteShipment(shipment)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewShipment(shipment)}>
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -506,6 +603,249 @@ export function ShipmentsTab() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Edit Shipment Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0">
+            <div className="flex flex-col h-full p-6">
+              <DialogHeader className="shrink-0 space-y-2 pb-4">
+                <DialogTitle className="text-xl">Editar Embarque</DialogTitle>
+                <DialogDescription className="text-sm">
+                  Modifica la información del embarque y las recepciones incluidas
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto px-6 pb-4">
+                <div className="grid gap-6 py-4">
+                  {editSelectedReceptions.length > 0 && (
+                    <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <Package className="h-6 w-6 text-blue-600 mt-1 shrink-0" />
+                        <div className="space-y-2 flex-1">
+                          <p className="text-base font-semibold text-blue-900">Resumen de Selección</p>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="text-blue-600 font-medium text-xs">Recepciones</span>
+                              <span className="text-2xl font-bold text-blue-900">{editSelectedReceptions.length}</span>
+                            </div>
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="text-blue-600 font-medium text-xs">Productores</span>
+                              <span className="text-2xl font-bold text-blue-900">
+                                {(() => {
+                                  const allReceptions = [
+                                    ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
+                                    ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
+                                  ]
+                                  const selected = allReceptions.filter((r) => editSelectedReceptions.includes(r.id))
+                                  return new Set(selected.map((r) => r.producerId)).size
+                                })()}
+                              </span>
+                            </div>
+                            <div className="flex flex-col space-y-0.5">
+                              <span className="text-blue-600 font-medium text-xs">Cajas Totales</span>
+                              <span className="text-2xl font-bold text-blue-900">
+                                {(() => {
+                                  const allReceptions = [
+                                    ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
+                                    ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
+                                  ]
+                                  const selected = allReceptions.filter((r) => editSelectedReceptions.includes(r.id))
+                                  return selected.reduce((sum, r) => sum + Number(r.boxes || 0), 0)
+                                })()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">Seleccionar Recepciones</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Puedes agregar recepciones pendientes o mantener/quitar las actuales del embarque
+                    </p>
+                    <div className="rounded-lg border-2 shadow-sm">
+                      <div className="max-h-[300px] overflow-y-auto">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-muted z-10">
+                            <TableRow className="hover:bg-muted">
+                              <TableHead className="w-16 text-center h-12">
+                                <Checkbox
+                                  checked={(() => {
+                                    const available = [
+                                      ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
+                                      ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
+                                    ]
+                                    return editSelectedReceptions.length === available.length && available.length > 0
+                                  })()}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      const available = [
+                                        ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
+                                        ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
+                                      ]
+                                      setEditSelectedReceptions(available.map(r => r.id))
+                                    } else {
+                                      setEditSelectedReceptions([])
+                                    }
+                                  }}
+                                />
+                              </TableHead>
+                              <TableHead className="font-semibold text-sm">Número</TableHead>
+                              <TableHead className="font-semibold text-sm">Folio</TableHead>
+                              <TableHead className="font-semibold text-sm">Productor</TableHead>
+                              <TableHead className="font-semibold text-sm">Producto</TableHead>
+                              <TableHead className="font-semibold text-sm text-right">Cajas</TableHead>
+                              <TableHead className="font-semibold text-sm text-right">Peso Total</TableHead>
+                              <TableHead className="font-semibold text-sm">Estado</TableHead>
+                              <TableHead className="font-semibold text-sm">Fecha</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(() => {
+                              // Mostrar recepciones pendientes + las que están en el embarque actual
+                              const availableReceptions = [
+                                ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
+                                ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
+                              ]
+                              // Eliminar duplicados
+                              const uniqueReceptions = Array.from(new Map(availableReceptions.map(r => [r.id, r])).values())
+                              
+                              if (uniqueReceptions.length === 0) {
+                                return (
+                                  <TableRow>
+                                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12 text-sm">
+                                      No hay recepciones disponibles
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              }
+                              
+                              return uniqueReceptions.map((reception) => {
+                                const producer = producers?.find((p) => p.id === reception.producerId)
+                                const isSelected = editSelectedReceptions.includes(reception.id)
+                                const receptionNumber = (reception as any).receptionNumber || (reception as any).code || ""
+                                const receptionDate = (reception as any).receptionDate || (reception as any).date || reception.createdAt
+                                const isInCurrentShipment = editSelectedReceptions.includes(reception.id) && reception.shipmentStatus !== "pendiente"
+                                
+                                return (
+                                  <TableRow 
+                                    key={reception.id} 
+                                    className={`cursor-pointer transition-colors h-12 ${isSelected ? "bg-blue-100 hover:bg-blue-200" : "hover:bg-muted/50"}`}
+                                    onClick={() => handleToggleEditReception(reception.id)}
+                                  >
+                                    <TableCell className="text-center">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => handleToggleEditReception(reception.id)}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="font-medium text-sm">{receptionNumber}</TableCell>
+                                    <TableCell className="text-sm">
+                                      {reception.trackingFolio ? (
+                                        <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{reception.trackingFolio}</span>
+                                      ) : (
+                                        <span className="text-muted-foreground">-</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="font-medium text-sm">{producer?.name || "-"}</TableCell>
+                                    <TableCell className="text-sm">{(reception as any).product?.name || "-"}</TableCell>
+                                    <TableCell className="text-right font-semibold text-sm">{reception.boxes}</TableCell>
+                                    <TableCell className="text-right font-semibold text-sm">
+                                      {reception.totalWeight ? `${reception.totalWeight} kg` : "-"}
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                      {isInCurrentShipment ? (
+                                        <Badge variant="secondary" className="text-xs">En este embarque</Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-xs">Pendiente</Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap text-sm">{formatDate(receptionDate)}</TableCell>
+                                  </TableRow>
+                                )
+                              })
+                            })()}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="editCarrier" className="text-sm font-semibold">
+                        Transportista <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="editCarrier"
+                        placeholder="Nombre de la empresa transportista"
+                        value={editCarrier}
+                        onChange={(e) => setEditCarrier(e.target.value)}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editCarrierContact" className="text-sm font-semibold">
+                        Contacto del Transportista
+                      </Label>
+                      <Input
+                        id="editCarrierContact"
+                        placeholder="Teléfono o email"
+                        value={editCarrierContact}
+                        onChange={(e) => setEditCarrierContact(e.target.value)}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="editShipmentDate" className="text-sm font-semibold">
+                      Fecha de Embarque <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="editShipmentDate"
+                      type="date"
+                      value={editShipmentDate}
+                      onChange={(e) => setEditShipmentDate(e.target.value)}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="editNotes" className="text-sm font-semibold">
+                      Notas
+                    </Label>
+                    <Textarea
+                      id="editNotes"
+                      placeholder="Destino, observaciones, etc."
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      rows={3}
+                      className="text-sm resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="shrink-0 pt-4 pb-6 px-6 border-t">
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="h-10 px-6 text-sm">
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleSaveEdit} 
+                  disabled={editSelectedReceptions.length === 0 || !editCarrier || !editShipmentDate}
+                  className="h-10 px-6 text-sm"
+                >
+                  <Package className="mr-2 h-4 w-4" />
+                  Guardar Cambios ({editSelectedReceptions.length} recepciones)
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Update Shipment Dialog */}
         <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
@@ -708,7 +1048,7 @@ export function ShipmentsTab() {
                   </Card>
 
                   {/* Metrics Card with gradient */}
-                  <Card className="border-2 shadow-sm bg-gradient-to-br from-blue-50 to-indigo-50">
+                  <Card className="border-2 shadow-sm bg-linear-to-br from-blue-50 to-indigo-50">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-lg flex items-center gap-2">
                         <Package className="h-5 w-5 text-blue-600" />
@@ -737,7 +1077,7 @@ export function ShipmentsTab() {
 
                   {/* Sale Info Card (if sold) */}
                   {viewShipment.status === "vendida" && viewShipment.salePrice && (
-                    <Card className="border-2 border-green-200 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
+                    <Card className="border-2 border-green-200 shadow-sm bg-linear-to-br from-green-50 to-emerald-50">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg flex items-center gap-2">
                           <DollarSign className="h-5 w-5 text-green-600" />

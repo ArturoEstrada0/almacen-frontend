@@ -19,13 +19,19 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Printer } from "lucide-react"
+import { Plus, Search, Eye, Printer, Edit, Trash2 } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
 import { formatDate } from "@/lib/utils/format"
+import { 
+  updateFruitReception as apiUpdateFruitReception, 
+  deleteFruitReception as apiDeleteFruitReception 
+} from "@/lib/hooks/use-producers"
 
 export function FruitReceptionsTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editingReceptionId, setEditingReceptionId] = useState<string | null>(null)
   const [selectedProducer, setSelectedProducer] = useState("")
   const [selectedWarehouse, setSelectedWarehouse] = useState("")
   const [selectedProduct, setSelectedProduct] = useState("")
@@ -96,22 +102,71 @@ export function FruitReceptionsTab() {
       if (returnedBoxesValue) payload.returnedBoxesValue = Number(returnedBoxesValue)
       if (notes) payload.notes = notes
       
-      const created = await apiPost("/api/producers/fruit-receptions", payload)
-      setReceptions((prev) => [created, ...(prev || [])])
-      setSelectedProducer("")
-      setSelectedWarehouse("")
-      setSelectedProduct("")
-      setReceptionDate(new Date().toISOString().split("T")[0])
-      setBoxes("")
-      setWeightPerBox("")
-      setTrackingFolio("")
-      setReturnedBoxes("")
-      setReturnedBoxesValue("")
-      setNotes("")
-      setIsDialogOpen(false)
+      if (isEditMode && editingReceptionId) {
+        // Actualizar recepción existente
+        const updated = await apiUpdateFruitReception(editingReceptionId, payload)
+        setReceptions((prev) => prev.map((r) => (r.id === editingReceptionId ? updated : r)))
+      } else {
+        // Crear nueva recepción
+        const created = await apiPost("/api/producers/fruit-receptions", payload)
+        setReceptions((prev) => [created, ...(prev || [])])
+      }
+      
+      resetForm()
     } catch (err) {
       console.error("Error saving reception:", err)
       alert("Error: " + (err as any)?.message || String(err))
+    }
+  }
+
+  const resetForm = () => {
+    setSelectedProducer("")
+    setSelectedWarehouse("")
+    setSelectedProduct("")
+    setReceptionDate(new Date().toISOString().split("T")[0])
+    setBoxes("")
+    setWeightPerBox("")
+    setTrackingFolio("")
+    setReturnedBoxes("")
+    setReturnedBoxesValue("")
+    setNotes("")
+    setIsDialogOpen(false)
+    setIsEditMode(false)
+    setEditingReceptionId(null)
+  }
+
+  const handleEditReception = (reception: any) => {
+    setIsEditMode(true)
+    setEditingReceptionId(reception.id)
+    setSelectedProducer(reception.producerId)
+    setSelectedWarehouse(reception.warehouseId)
+    setSelectedProduct(reception.productId)
+    setReceptionDate(reception.date)
+    setBoxes(String(reception.boxes))
+    setWeightPerBox(String(reception.weightPerBox || ""))
+    setTrackingFolio(reception.trackingFolio || "")
+    setReturnedBoxes(String(reception.returnedBoxes || ""))
+    setReturnedBoxesValue(String(reception.returnedBoxesValue || ""))
+    setNotes(reception.notes || "")
+    setIsDialogOpen(true)
+  }
+
+  const handleDeleteReception = async (reception: any) => {
+    if (reception.shipmentStatus !== "pendiente") {
+      alert("No se puede eliminar una recepción que ya ha sido embarcada o vendida")
+      return
+    }
+
+    if (!confirm(`¿Estás seguro de eliminar la recepción ${reception.code || reception.receptionNumber}?`)) {
+      return
+    }
+
+    try {
+      await apiDeleteFruitReception(reception.id)
+      setReceptions((prev) => prev.filter((r) => r.id !== reception.id))
+    } catch (err) {
+      console.error("Error deleting reception:", err)
+      alert("Error al eliminar: " + (err as any)?.message || String(err))
     }
   }
 
@@ -168,7 +223,7 @@ export function FruitReceptionsTab() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Nueva Recepción de Fruta</DialogTitle>
+                <DialogTitle>{isEditMode ? "Editar Recepción de Fruta" : "Nueva Recepción de Fruta"}</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -287,11 +342,11 @@ export function FruitReceptionsTab() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button variant="outline" onClick={resetForm}>
                   Cancelar
                 </Button>
                 <Button onClick={handleSave} disabled={!selectedProducer || !selectedWarehouse || !selectedProduct || !boxes}>
-                  Guardar Recepción
+                  {isEditMode ? "Actualizar Recepción" : "Guardar Recepción"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -343,6 +398,27 @@ export function FruitReceptionsTab() {
                     <TableCell>{formatDate(reception.date || reception.receptionDate)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {reception.shipmentStatus === "pendiente" && (
+                          <>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Editar recepción" 
+                              onClick={() => handleEditReception(reception)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Eliminar recepción" 
+                              onClick={() => handleDeleteReception(reception)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         <Button variant="ghost" size="sm" title="Imprimir recibo" onClick={() => handlePrintReception(reception)}>
                           <Printer className="h-4 w-4" />
                         </Button>
@@ -431,7 +507,7 @@ export function FruitReceptionsTab() {
                 </div>
 
                 {/* Información del Producto y Cantidades */}
-                <div className="p-4 border rounded-lg bg-gradient-to-br from-green-50 to-emerald-50">
+                <div className="p-4 border rounded-lg bg-linear-to-br from-green-50 to-emerald-50">
                   <Label className="text-sm font-semibold text-muted-foreground mb-3 block">Producto Recibido</Label>
                   <div className="space-y-4">
                     <div>

@@ -94,12 +94,28 @@ export async function createFruitReception(data: any) {
   return ApiClient.post<FruitReception>(API_ENDPOINTS.producers.fruitReceptions.create(), data)
 }
 
+export async function updateFruitReception(id: string, data: any) {
+  return ApiClient.patch<FruitReception>(API_ENDPOINTS.producers.fruitReceptions.update(id), data)
+}
+
+export async function deleteFruitReception(id: string) {
+  return ApiClient.delete(API_ENDPOINTS.producers.fruitReceptions.delete(id))
+}
+
 export async function createShipment(data: any) {
   return ApiClient.post<Shipment>(API_ENDPOINTS.producers.shipments.create(), data)
 }
 
+export async function updateShipment(id: string, data: any) {
+  return ApiClient.patch<Shipment>(API_ENDPOINTS.producers.shipments.update(id), data)
+}
+
 export async function updateShipmentStatus(id: string, status: string, salePrice?: number) {
   return ApiClient.patch<Shipment>(API_ENDPOINTS.producers.shipments.updateStatus(id), { status, salePrice })
+}
+
+export async function deleteShipment(id: string) {
+  return ApiClient.delete(API_ENDPOINTS.producers.shipments.delete(id))
 }
 
 export async function createPayment(data: any) {
