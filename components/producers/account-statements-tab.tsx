@@ -125,15 +125,15 @@ export function AccountStatementsTab() {
     // Determinar el signo del monto según el subtipo
     // Desde la perspectiva del saldo (lo que le debemos al productor):
     // - Asignación (cargo): negativo - él nos debe, reduce el saldo
-    // - Abono (cargo): negativo - descontamos, reduce lo que le debemos
+    // - Abono/Retención (cargo): positivo - es un crédito a favor del productor
     // - Devolución (abono): positivo - nos devuelve, aumenta lo que le debemos o reduce lo que nos debe
     // - Venta (abono): positivo - le debemos más por su fruta
     // - Pago: negativo - pagamos, reduce lo que le debemos
     let amount = Number(m.amount)
-    if (subtype === "asignacion" || subtype === "pago" || subtype === "abono") {
+    if (subtype === "asignacion" || subtype === "pago") {
       amount = -Math.abs(amount)
     } else {
-      // venta, devolucion, abono genérico
+      // venta, devolucion, retencion (abono)
       amount = Math.abs(amount)
     }
 
