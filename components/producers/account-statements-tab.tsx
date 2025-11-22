@@ -464,7 +464,7 @@ export function AccountStatementsTab() {
                                             <div className="space-y-2">
                                               <Label className="text-sm text-muted-foreground">Monto Neto</Label>
                                               <div className="h-10 px-3 py-2 border rounded-md bg-white flex items-center font-semibold text-green-600">
-                                                {safeCurrency(parseAmountToNumber(amount) - parseAmountToNumber(retentionAmount))}
+                                                {safeCurrency(parseAmountToNumber(retentionAmount) - parseAmountToNumber(amount))}
                                               </div>
                                             </div>
                                           </div>
