@@ -86,7 +86,7 @@ export function AccountStatementsTab() {
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   
-  // Nueva funcionalidad: selección de movimientos y retención
+  // Nueva funcionalidad: selección de movimientos y abono
   const [selectedMovements, setSelectedMovements] = useState<string[]>([])
   const [hasRetention, setHasRetention] = useState(false)
   const [retentionAmount, setRetentionAmount] = useState("")
@@ -103,8 +103,8 @@ export function AccountStatementsTab() {
     // Determinar subtipo basado en descripción
     let subtype = m.type
     if (m.type === "cargo") {
-      // Diferenciar entre asignación y retención
-      if (m.description?.includes("Retención")) {
+      // Diferenciar entre asignación y abono
+      if (m.description?.includes("Abono")) {
         subtype = "retencion"
       } else {
         subtype = "asignacion"
@@ -124,12 +124,12 @@ export function AccountStatementsTab() {
     // Determinar el signo del monto según el subtipo
     // Desde la perspectiva del saldo (lo que le debemos al productor):
     // - Asignación (cargo): negativo - él nos debe, reduce el saldo
-    // - Retención (cargo): negativo - descontamos, reduce lo que le debemos
+    // - Abono (cargo): negativo - descontamos, reduce lo que le debemos
     // - Devolución (abono): positivo - nos devuelve, aumenta lo que le debemos o reduce lo que nos debe
     // - Venta (abono): positivo - le debemos más por su fruta
     // - Pago: negativo - pagamos, reduce lo que le debemos
     let amount = Number(m.amount)
-    if (subtype === "asignacion" || subtype === "pago" || subtype === "retencion") {
+    if (subtype === "asignacion" || subtype === "pago" || subtype === "abono") {
       amount = -Math.abs(amount)
     } else {
       // venta, devolucion, abono genérico
@@ -426,7 +426,7 @@ export function AccountStatementsTab() {
                                       </div>
                                     </div>
 
-                                    {/* Sección de retención */}
+                                    {/* Sección de abono */}
                                     <div className="space-y-3 mt-4 border-t pt-4">
                                       <div className="flex items-center space-x-2">
                                         <input
@@ -443,7 +443,7 @@ export function AccountStatementsTab() {
                                           className="h-4 w-4"
                                         />
                                         <Label htmlFor="hasRetention" className="text-base font-semibold cursor-pointer">
-                                          Aplicar Retención
+                                          Aplicar Abono
                                         </Label>
                                       </div>
                                       
@@ -451,7 +451,7 @@ export function AccountStatementsTab() {
                                         <div className="space-y-3 ml-6 p-3 bg-amber-50 border border-amber-200 rounded-md">
                                           <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                              <Label htmlFor="retentionAmount">Monto de Retención *</Label>
+                                              <Label htmlFor="retentionAmount">Monto de Abono *</Label>
                                               <Input
                                                 id="retentionAmount"
                                                 type="text"
@@ -468,14 +468,14 @@ export function AccountStatementsTab() {
                                               </div>
                                             </div>
                                           </div>
-                                          <div className="space-y-2">
-                                            <Label htmlFor="retentionNotes">Motivo de la Retención</Label>
-                                            <Textarea 
-                                              id="retentionNotes" 
-                                              placeholder="Ej: Retención por daños, faltantes, etc." 
-                                              value={retentionNotes} 
-                                              onChange={(e) => setRetentionNotes(e.target.value)} 
-                                              rows={2} 
+                                          <div className="space-y-2 col-span-2">
+                                            <Label htmlFor="retentionNotes">Motivo del Abono</Label>
+                                            <Textarea
+                                              id="retentionNotes"
+                                              placeholder="Ej: Abono por descuento, ajuste, etc." 
+                                              value={retentionNotes}
+                                              onChange={(e) => setRetentionNotes(e.target.value)}
+                                              rows={2}
                                             />
                                           </div>
                                         </div>
@@ -741,7 +741,7 @@ export function AccountStatementsTab() {
                                   : movement.type === "pago" 
                                     ? "secondary"
                                     : movement.type === "retencion"
-                                      ? "destructive"
+                                      ? "outline"
                                       : "outline"
                               }
                             >
@@ -754,7 +754,7 @@ export function AccountStatementsTab() {
                                     : movement.type === "pago"
                                       ? "Pago"
                                       : movement.type === "retencion"
-                                        ? "Retención"
+                                        ? "Abono"
                                         : movement.type === "abono"
                                           ? "Abono"
                                           : movement.type}
