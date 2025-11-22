@@ -888,11 +888,16 @@ export function ShipmentsTab() {
                     <Label htmlFor="salePrice">Precio de Venta por Caja *</Label>
                     <Input
                       id="salePrice"
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0.00"
                       value={salePrice}
-                      onChange={(e) => setSalePrice(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                          setSalePrice(value)
+                        }
+                      }}
                     />
                   </div>
 

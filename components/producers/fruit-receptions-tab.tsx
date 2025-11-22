@@ -293,11 +293,11 @@ export function FruitReceptionsTab() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Número de Cajas *</Label>
-                    <Input type="number" placeholder="0" value={boxes} onChange={(e) => setBoxes(e.target.value)} />
+                    <Input type="text" inputMode="numeric" placeholder="0" value={boxes} onChange={(e) => setBoxes(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Peso por Caja (kg)</Label>
-                    <Input type="number" step="0.01" placeholder="0.00" value={weightPerBox} onChange={(e) => setWeightPerBox(e.target.value)} />
+                    <Input type="text" inputMode="decimal" placeholder="0.00" value={weightPerBox} onChange={(e) => setWeightPerBox(e.target.value)} />
                   </div>
                 </div>
 
@@ -316,7 +316,8 @@ export function FruitReceptionsTab() {
                     <div className="space-y-2">
                       <Label>Cantidad de Cajas Devueltas</Label>
                       <Input 
-                        type="number" 
+                        type="text" 
+                        inputMode="numeric"
                         placeholder="0" 
                         value={returnedBoxes} 
                         onChange={(e) => setReturnedBoxes(e.target.value)} 
@@ -325,8 +326,8 @@ export function FruitReceptionsTab() {
                     <div className="space-y-2">
                       <Label>Valor del Material ($)</Label>
                       <Input 
-                        type="number" 
-                        step="0.01" 
+                        type="text" 
+                        inputMode="decimal"
                         placeholder="0.00" 
                         value={returnedBoxesValue} 
                         onChange={(e) => setReturnedBoxesValue(e.target.value)} 

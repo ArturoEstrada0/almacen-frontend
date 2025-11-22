@@ -361,11 +361,15 @@ export function InputAssignmentsTab() {
                           emptyMessage="No se encontró el producto"
                         />
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           value={it.quantity === 0 ? "" : String(it.quantity)}
                           onChange={e => {
-                            updateItem(it.id, { quantity: Number(e.target.value) })
-                            checkItemStock({ ...it, quantity: Number(e.target.value) })
+                            const value = e.target.value
+                            if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                              updateItem(it.id, { quantity: value === "" ? 0 : Number(value) })
+                              checkItemStock({ ...it, quantity: value === "" ? 0 : Number(value) })
+                            }
                           }}
                           placeholder="Cantidad"
                         />
@@ -373,10 +377,15 @@ export function InputAssignmentsTab() {
                           <div className="text-xs text-destructive font-semibold mt-1">{itemStockErrors[it.id]}</div>
                         )}
                         <Input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={it.unitPrice === 0 ? "" : String(it.unitPrice)}
-                          onChange={(e) => updateItem(it.id, { unitPrice: Number(e.target.value) })}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                              updateItem(it.id, { unitPrice: value === "" ? 0 : Number(value) })
+                            }
+                          }}
                           placeholder="Precio unitario"
                         />
                         <div className="flex items-center">
