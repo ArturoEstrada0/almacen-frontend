@@ -365,7 +365,6 @@ export function FruitReceptionsTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Número</TableHead>
                 <TableHead>Folio Seguimiento</TableHead>
                 <TableHead>Productor</TableHead>
                 <TableHead>Producto</TableHead>
@@ -382,7 +381,6 @@ export function FruitReceptionsTab() {
                 const product = products.find((p) => p.id === reception.productId)
                 return (
                   <TableRow key={reception.id}>
-                    <TableCell className="font-medium">{reception.code || reception.receptionNumber}</TableCell>
                     <TableCell>
                       {reception.trackingFolio ? (
                         <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{reception.trackingFolio}</span>
