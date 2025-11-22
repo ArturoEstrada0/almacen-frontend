@@ -319,7 +319,7 @@ export function ShipmentsTab() {
                           <TableBody>
                             {pendingReceptions.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={9} className="text-center text-muted-foreground py-12 text-sm">
+                                <TableCell colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
                                   No hay recepciones pendientes de embarque
                                 </TableCell>
                               </TableRow>
@@ -341,7 +341,6 @@ export function ShipmentsTab() {
                                         onCheckedChange={() => handleToggleReception(reception.id)}
                                       />
                                     </TableCell>
-                                    <TableCell className="font-medium text-sm">{receptionNumber}</TableCell>
                                     <TableCell className="text-sm">
                                       {reception.trackingFolio ? (
                                         <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{reception.trackingFolio}</span>
@@ -457,7 +456,6 @@ export function ShipmentsTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Número</TableHead>
                 <TableHead>Folio Seguimiento</TableHead>
                 <TableHead>Productores</TableHead>
                 <TableHead>Cajas Totales</TableHead>
@@ -483,7 +481,6 @@ export function ShipmentsTab() {
                 const shipmentDate = (shipment as any).shipmentDate || (shipment as any).date || (shipment as any).createdAt
                 return (
                   <TableRow key={shipment.id}>
-                    <TableCell className="font-medium">{shipmentNumber}</TableCell>
                     <TableCell>
                       {(() => {
                         const folios = [...new Set(receptions.map((r) => r.trackingFolio).filter(Boolean))]
@@ -715,7 +712,7 @@ export function ShipmentsTab() {
                               if (uniqueReceptions.length === 0) {
                                 return (
                                   <TableRow>
-                                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12 text-sm">
+                                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
                                       No hay recepciones disponibles
                                     </TableCell>
                                   </TableRow>
@@ -741,7 +738,6 @@ export function ShipmentsTab() {
                                         onCheckedChange={() => handleToggleEditReception(reception.id)}
                                       />
                                     </TableCell>
-                                    <TableCell className="font-medium text-sm">{receptionNumber}</TableCell>
                                     <TableCell className="text-sm">
                                       {reception.trackingFolio ? (
                                         <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{reception.trackingFolio}</span>
@@ -1148,7 +1144,6 @@ export function ShipmentsTab() {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Número</TableHead>
                                 <TableHead>Folio</TableHead>
                                 <TableHead>Productor</TableHead>
                                 <TableHead>Producto</TableHead>
@@ -1165,7 +1160,6 @@ export function ShipmentsTab() {
                                 const productName = reception.product?.name || reception.productName || "-"
                                 return (
                                   <TableRow key={reception.id}>
-                                    <TableCell className="font-medium">{receptionNumber}</TableCell>
                                     <TableCell>
                                       {reception.trackingFolio ? (
                                         <span className="font-mono text-xs bg-blue-50 px-2 py-1 rounded">

@@ -91,6 +91,7 @@ export function AccountStatementsTab() {
   const [hasRetention, setHasRetention] = useState(false)
   const [retentionAmount, setRetentionAmount] = useState("")
   const [retentionNotes, setRetentionNotes] = useState("")
+  const [retentionPaymentFile, setRetentionPaymentFile] = useState<File | null>(null)
 
   const { producers } = useProducers()
   const { accountStatement, mutate: mutateAccount } = useProducerAccountStatement(selectedProducer)
@@ -209,6 +210,7 @@ export function AccountStatementsTab() {
         setHasRetention(false)
         setRetentionAmount("")
         setRetentionNotes("")
+        setRetentionPaymentFile(null)
         setIsPaymentDialogOpen(false)
       } catch (err) {
         console.error("Failed saving payment", err)
@@ -438,6 +440,7 @@ export function AccountStatementsTab() {
                                             if (!e.target.checked) {
                                               setRetentionAmount("")
                                               setRetentionNotes("")
+                                              setRetentionPaymentFile(null)
                                             }
                                           }}
                                           className="h-4 w-4"
@@ -477,6 +480,29 @@ export function AccountStatementsTab() {
                                               onChange={(e) => setRetentionNotes(e.target.value)}
                                               rows={2}
                                             />
+                                          </div>
+                                          <div className="space-y-2 col-span-2">
+                                            <Label htmlFor="retentionPaymentFile">Complemento de Pago (PDF)</Label>
+                                            <div className="flex items-center gap-2">
+                                              <Input
+                                                id="retentionPaymentFile"
+                                                type="file"
+                                                accept="application/pdf"
+                                                onChange={(e) => setRetentionPaymentFile(e.target.files?.[0] || null)}
+                                                className="flex-1"
+                                              />
+                                              {retentionPaymentFile && (
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setRetentionPaymentFile(null)}>
+                                                  Quitar
+                                                </Button>
+                                              )}
+                                            </div>
+                                            {retentionPaymentFile && (
+                                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                                <FileText className="h-3 w-3" />
+                                                {retentionPaymentFile.name}
+                                              </p>
+                                            )}
                                           </div>
                                         </div>
                                       )}
@@ -570,7 +596,11 @@ export function AccountStatementsTab() {
                                 </Button>
                                 <Button
                                   onClick={async () => {
-                                    if (!amount || parseAmountToNumber(amount) <= 0) return
+                                    const finalAmount = selectedAction === "pago" && selectedMovements.length > 0 
+                                      ? calculateTotalFromSelectedMovements() 
+                                      : parseAmountToNumber(amount)
+                                    
+                                    if (finalAmount <= 0) return
 
                                     try {
                                       if (selectedAction === "pago") {
@@ -614,7 +644,11 @@ export function AccountStatementsTab() {
                                       alert("Error al guardar movimiento: " + (err as any)?.message || err)
                                     }
                                   }}
-                                  disabled={!amount || parseAmountToNumber(amount) <= 0}
+                                  disabled={
+                                    selectedAction === "pago" && selectedMovements.length > 0 
+                                      ? selectedMovements.length === 0 || calculateTotalFromSelectedMovements() <= 0
+                                      : !amount || parseAmountToNumber(amount) <= 0
+                                  }
                                 >
                                   Guardar
                                 </Button>
