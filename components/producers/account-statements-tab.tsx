@@ -83,8 +83,6 @@ export function AccountStatementsTab() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("transferencia")
   const [reference, setReference] = useState("")
   const [paymentNotes, setPaymentNotes] = useState("")
-  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
-  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   
   // Nueva funcionalidad: selección de movimientos y abono
   const [selectedMovements, setSelectedMovements] = useState<string[]>([])
@@ -204,8 +202,6 @@ export function AccountStatementsTab() {
         setPaymentMethod("transferencia")
         setReference("")
         setPaymentNotes("")
-        setInvoiceFile(null)
-        setReceiptFile(null)
         setSelectedMovements([])
         setHasRetention(false)
         setRetentionAmount("")
@@ -507,87 +503,7 @@ export function AccountStatementsTab() {
                                         </div>
                                       )}
                                     </div>
-
-                                    {/* Archivos adjuntos */}
-                                    <div className="space-y-3 mt-4 border-t pt-4">
-                                      <Label className="text-base font-semibold">Documentos</Label>
-                                      <div>
-                                        <Label htmlFor="invoice">Factura (PDF/Imagen)</Label>
-                                        <div className="flex items-center gap-2">
-                                          <Input
-                                            id="invoice"
-                                            type="file"
-                                            accept="image/*,application/pdf"
-                                            onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
-                                            className="flex-1"
-                                          />
-                                          {invoiceFile && (
-                                            <Button type="button" variant="ghost" size="sm" onClick={() => setInvoiceFile(null)}>
-                                              Quitar
-                                            </Button>
-                                          )}
-                                        </div>
-                                        {invoiceFile && (
-                                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                            <FileText className="h-3 w-3" />
-                                            {invoiceFile.name}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      <div>
-                                        <Label htmlFor="receipt">Comprobante (PDF/Imagen)</Label>
-                                        <div className="flex items-center gap-2">
-                                          <Input
-                                            id="receipt"
-                                            type="file"
-                                            accept="image/*,application/pdf"
-                                            onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                                            className="flex-1"
-                                          />
-                                          {receiptFile && (
-                                            <Button type="button" variant="ghost" size="sm" onClick={() => setReceiptFile(null)}>
-                                              Quitar
-                                            </Button>
-                                          )}
-                                        </div>
-                                        {receiptFile && (
-                                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                            <FileText className="h-3 w-3" />
-                                            {receiptFile.name}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
                                   </>
-                                )}
-
-                                {selectedAction === "abono" && (
-                                  <div className="space-y-3 mt-3">
-                                    <div>
-                                      <Label htmlFor="abono-receipt">Comprobante (PDF/Imagen)</Label>
-                                      <div className="flex items-center gap-2">
-                                        <Input
-                                          id="abono-receipt"
-                                          type="file"
-                                          accept="image/*,application/pdf"
-                                          onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                                          className="flex-1"
-                                        />
-                                        {receiptFile && (
-                                          <Button type="button" variant="ghost" size="sm" onClick={() => setReceiptFile(null)}>
-                                            Quitar
-                                          </Button>
-                                        )}
-                                      </div>
-                                      {receiptFile && (
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                          <FileText className="h-3 w-3" />
-                                          {receiptFile.name}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
                                 )}
 
                               <div className="flex justify-end gap-2 mt-4">
@@ -635,8 +551,6 @@ export function AccountStatementsTab() {
                                       setAmount("")
                                       setReference("")
                                       setPaymentNotes("")
-                                      setInvoiceFile(null)
-                                      setReceiptFile(null)
                                       setSelectedAction(null)
                                       setIsPaymentDialogOpen(false)
                                     } catch (err) {
