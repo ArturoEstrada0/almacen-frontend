@@ -14,10 +14,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Search, Eye } from "lucide-react"
+import { Search, Eye, CheckCircle } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentReport, PaymentReportStatus } from "@/lib/types"
 import { usePaymentReports } from "@/lib/hooks/use-producers"
+import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
+import { useToast } from "@/hooks/use-toast"
 
 const statusConfig: Record<
   PaymentReportStatus,
@@ -31,11 +33,21 @@ const statusConfig: Record<
 export function PaymentReportsTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // View state
   const [viewReport, setViewReport] = useState<PaymentReport | null>(null)
 
-  const { paymentReports } = usePaymentReports()
+  // Update to Pagado state
+  const [updateReport, setUpdateReport] = useState<PaymentReport | null>(null)
+  const [invoiceUrl, setInvoiceUrl] = useState("")
+  const [receiptUrl, setReceiptUrl] = useState("")
+  const [paymentComplementUrl, setPaymentComplementUrl] = useState("")
+  const [isrAmount, setIsrAmount] = useState("")
+
+  const { paymentReports, mutate } = usePaymentReports()
+  const { toast } = useToast()
 
   const filteredReports = (paymentReports || []).filter((report) =>
     report.code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -44,6 +56,54 @@ export function PaymentReportsTab() {
   const openViewDialog = (report: PaymentReport) => {
     setViewReport(report)
     setIsViewDialogOpen(true)
+  }
+
+  const openUpdateDialog = (report: PaymentReport) => {
+    setUpdateReport(report)
+    setInvoiceUrl("")
+    setReceiptUrl("")
+    setPaymentComplementUrl("")
+    setIsrAmount("")
+    setIsUpdateDialogOpen(true)
+  }
+
+  const handleUpdateToPagado = async () => {
+    if (!updateReport) return
+
+    try {
+      setIsSaving(true)
+      
+      const payload = {
+        status: "pagado" as PaymentReportStatus,
+        invoiceUrl: invoiceUrl || undefined,
+        receiptUrl: receiptUrl || undefined,
+        paymentComplementUrl: paymentComplementUrl || undefined,
+        isrAmount: isrAmount ? parseFloat(isrAmount) : undefined,
+      }
+
+      await ApiClient.patch(
+        API_ENDPOINTS.producers.paymentReports.updateStatus(updateReport.id),
+        payload
+      )
+
+      toast({
+        title: "Éxito",
+        description: "El reporte de pago ha sido actualizado a 'Pagado' y los movimientos han sido registrados.",
+      })
+
+      mutate()
+      setIsUpdateDialogOpen(false)
+      setUpdateReport(null)
+    } catch (error: any) {
+      console.error("Error updating payment report:", error)
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo actualizar el reporte de pago",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -79,7 +139,7 @@ export function PaymentReportsTab() {
                 <TableHead>Retención</TableHead>
                 <TableHead>Total a Pagar</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead className="w-[100px]">Ver</TableHead>
+                <TableHead className="w-[150px]">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -107,9 +167,17 @@ export function PaymentReportsTab() {
                         <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => openViewDialog(report)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => openViewDialog(report)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {report.status === "pendiente" && (
+                            <Button variant="default" size="sm" onClick={() => openUpdateDialog(report)}>
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Pagado
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -223,6 +291,111 @@ export function PaymentReportsTab() {
           )}
           <DialogFooter>
             <Button onClick={() => setIsViewDialogOpen(false)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update to Pagado Dialog */}
+      <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Actualizar Reporte a Pagado</DialogTitle>
+          </DialogHeader>
+          {updateReport && (
+            <div className="space-y-4">
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-medium">Código:</span>
+                  <span className="font-mono">{updateReport.code}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Productor:</span>
+                  <span>{updateReport.producer?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Subtotal:</span>
+                  <span>{formatCurrency(updateReport.subtotal)}</span>
+                </div>
+                {updateReport.retentionAmount > 0 && (
+                  <div className="flex justify-between text-destructive">
+                    <span className="font-medium">Retención:</span>
+                    <span>- {formatCurrency(updateReport.retentionAmount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-lg font-bold border-t pt-2">
+                  <span>Total a Pagar:</span>
+                  <span>{formatCurrency(updateReport.totalToPay)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-4 border-t pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Proporciona las URLs de los documentos y el monto de ISR (opcional). 
+                  Al guardar se registrarán los movimientos contables y se marcarán las recepciones como pagadas.
+                </p>
+
+                <div>
+                  <Label htmlFor="invoiceUrl">URL de la Factura (PDF) *</Label>
+                  <Input
+                    id="invoiceUrl"
+                    placeholder="https://ejemplo.com/factura.pdf"
+                    value={invoiceUrl}
+                    onChange={(e) => setInvoiceUrl(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="receiptUrl">URL del Comprobante (PDF) *</Label>
+                  <Input
+                    id="receiptUrl"
+                    placeholder="https://ejemplo.com/comprobante.pdf"
+                    value={receiptUrl}
+                    onChange={(e) => setReceiptUrl(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentComplementUrl">URL del Complemento de Pago (PDF) *</Label>
+                  <Input
+                    id="paymentComplementUrl"
+                    placeholder="https://ejemplo.com/complemento.pdf"
+                    value={paymentComplementUrl}
+                    onChange={(e) => setPaymentComplementUrl(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="isrAmount">Valor de ISR (opcional)</Label>
+                  <Input
+                    id="isrAmount"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={isrAmount}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (/^\d*\.?\d*$/.test(value)) {
+                        setIsrAmount(value)
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    El ISR se descontará del monto a pagar final
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUpdateDialogOpen(false)} disabled={isSaving}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleUpdateToPagado} 
+              disabled={isSaving || !invoiceUrl || !receiptUrl || !paymentComplementUrl}
+            >
+              {isSaving ? "Guardando..." : "Actualizar a Pagado"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
