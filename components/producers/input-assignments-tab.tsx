@@ -442,9 +442,9 @@ export function InputAssignmentsTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Número</TableHead>
                 <TableHead>Folio Seguimiento</TableHead>
                 <TableHead>Productor</TableHead>
+                <TableHead>Productos</TableHead>
                 <TableHead>Almacén</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Total</TableHead>
@@ -455,13 +455,26 @@ export function InputAssignmentsTab() {
               {filteredAssignments.map((assignment) => {
                 const producer = producers.find((p) => String(p.id) === String(assignment.producerId))
                 const warehouse = warehouses.find((w) => String(w.id) === String(assignment.warehouseId))
+                const assignmentProducts = (assignment.items || [])
+                  .map((item: any) => {
+                    const product = products.find(p => String(p.id) === String(item.productId))
+                    return product?.name || product?.sku || ''
+                  })
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .join(', ')
+                const moreCount = (assignment.items?.length || 0) - 2
+                
                 return (
                   <TableRow key={assignment.id}>
-                    <TableCell className="font-medium">{assignment.code || assignment.assignmentNumber}</TableCell>
                     <TableCell>
                       <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{assignment.trackingFolio || '-'}</span>
                     </TableCell>
                     <TableCell>{producer?.name}</TableCell>
+                    <TableCell className="max-w-xs">
+                      <span className="text-sm">{assignmentProducts}</span>
+                      {moreCount > 0 && <span className="text-xs text-muted-foreground ml-1">+{moreCount} más</span>}
+                    </TableCell>
                     <TableCell>{warehouse?.name}</TableCell>
                     <TableCell>{formatDate(assignment.date || assignment.assignmentDate)}</TableCell>
                     <TableCell className="font-semibold text-destructive">{formatCurrency(Number(assignment.total) || 0)}</TableCell>
