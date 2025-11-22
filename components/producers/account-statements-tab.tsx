@@ -157,6 +157,14 @@ export function AccountStatementsTab() {
 
   const totalPaid = mappedMovements.filter((m) => m.type === "pago").reduce((sum, m) => sum + Math.abs(m.amount), 0)
 
+  // Calcular el total automáticamente basado en movimientos seleccionados
+  const calculateTotalFromSelectedMovements = () => {
+    if (selectedMovements.length === 0) return 0
+    return mappedMovements
+      .filter(m => selectedMovements.includes(m.id) && m.type === "venta")
+      .reduce((sum, m) => sum + Math.abs(m.amount), 0)
+  }
+
   const handleSavePayment = () => {
     ;(async () => {
       try {
@@ -168,7 +176,10 @@ export function AccountStatementsTab() {
           deposito: "other",
         }
         
-        const finalAmount = parseAmountToNumber(amount)
+        // Si hay movimientos seleccionados, usar el total calculado
+        const finalAmount = selectedMovements.length > 0 
+          ? calculateTotalFromSelectedMovements() 
+          : parseAmountToNumber(amount)
         const retention = hasRetention ? parseAmountToNumber(retentionAmount) : 0
         
         const payload = {
@@ -333,9 +344,16 @@ export function AccountStatementsTab() {
                                     type="text"
                                     inputMode="decimal"
                                     placeholder="0.00"
-                                    value={amount}
+                                    value={selectedAction === "pago" && selectedMovements.length > 0 
+                                      ? formatCurrency(calculateTotalFromSelectedMovements())
+                                      : amount}
                                     onChange={(e) => setAmount(e.target.value)}
+                                    disabled={selectedAction === "pago" && selectedMovements.length > 0}
+                                    className={selectedAction === "pago" && selectedMovements.length > 0 ? "bg-muted" : ""}
                                   />
+                                  {selectedAction === "pago" && selectedMovements.length > 0 && (
+                                    <p className="text-xs text-muted-foreground">Calculado automáticamente desde los movimientos seleccionados</p>
+                                  )}
                                 </div>
                                 <div className="space-y-2">
                                   <Label htmlFor="reference">Referencia</Label>
@@ -353,13 +371,13 @@ export function AccountStatementsTab() {
                                     {/* Sección de selección de movimientos */}
                                     <div className="space-y-3 mt-4 border-t pt-4">
                                       <div className="flex items-center justify-between">
-                                        <Label className="text-base font-semibold">Movimientos a Pagar (Opcional)</Label>
+                                        <Label className="text-base font-semibold">Ventas a Pagar</Label>
                                         <span className="text-xs text-muted-foreground">
-                                          {selectedMovements.length} seleccionados
+                                          {selectedMovements.length} seleccionadas
                                         </span>
                                       </div>
                                       <p className="text-xs text-muted-foreground">
-                                        Selecciona los movimientos específicos que este pago está cubriendo
+                                        Selecciona las ventas que este pago está cubriendo. El monto se calculará automáticamente.
                                       </p>
                                       
                                       <div className="max-h-48 overflow-y-auto border rounded-md">
@@ -368,13 +386,13 @@ export function AccountStatementsTab() {
                                             <TableRow>
                                               <TableHead className="w-12"></TableHead>
                                               <TableHead>Fecha</TableHead>
-                                              <TableHead>Tipo</TableHead>
                                               <TableHead>Referencia</TableHead>
+                                              <TableHead>Descripción</TableHead>
                                               <TableHead className="text-right">Monto</TableHead>
                                             </TableRow>
                                           </TableHeader>
                                           <TableBody>
-                                            {mappedMovements.filter(m => m.type !== "pago").map((mov) => (
+                                            {mappedMovements.filter(m => m.type === "venta").map((mov) => (
                                               <TableRow key={mov.id}>
                                                 <TableCell>
                                                   <input
@@ -391,21 +409,18 @@ export function AccountStatementsTab() {
                                                   />
                                                 </TableCell>
                                                 <TableCell className="text-xs">{formatDate(mov.date)}</TableCell>
-                                                <TableCell className="text-xs">
-                                                  <Badge variant={
-                                                    mov.type === "asignacion" || mov.type === "devolucion" ? "outline" :
-                                                    mov.type === "venta" ? "default" : "secondary"
-                                                  } className="text-xs">
-                                                    {mov.type === "asignacion" ? "Cargo" : 
-                                                     mov.type === "venta" ? "Abono" : 
-                                                     mov.type === "devolucion" ? "Devolución" : 
-                                                     mov.type === "pago" ? "Pago" : mov.type}
-                                                  </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-xs">{mov.referenceNumber || "-"}</TableCell>
-                                                <TableCell className="text-right text-xs">{safeCurrency(mov.amount)}</TableCell>
+                                                <TableCell className="text-xs font-mono">{mov.referenceNumber || "-"}</TableCell>
+                                                <TableCell className="text-xs">{mov.description}</TableCell>
+                                                <TableCell className="text-right text-xs font-semibold text-green-600">{safeCurrency(mov.amount)}</TableCell>
                                               </TableRow>
                                             ))}
+                                            {mappedMovements.filter(m => m.type === "venta").length === 0 && (
+                                              <TableRow>
+                                                <TableCell colSpan={5} className="text-center text-muted-foreground text-sm py-8">
+                                                  No hay ventas pendientes de pago
+                                                </TableCell>
+                                              </TableRow>
+                                            )}
                                           </TableBody>
                                         </Table>
                                       </div>
