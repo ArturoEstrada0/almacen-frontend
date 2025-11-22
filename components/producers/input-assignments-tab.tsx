@@ -126,9 +126,9 @@ export function InputAssignmentsTab() {
     // Cargar items de la asignación
     const items = (assignment.items || []).map((item: any) => ({
       id: item.id || Date.now() + Math.random(),
-      productId: item.productId || item.product?.id,
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.unitPrice),
+      productId: String(item.productId || item.product?.id),
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.price || item.unitPrice || 0),
     }))
     setSelectedItems(items)
     setIsDialogOpen(true)
