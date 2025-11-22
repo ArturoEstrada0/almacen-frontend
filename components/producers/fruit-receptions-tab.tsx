@@ -21,11 +21,18 @@ import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Printer, Edit, Trash2 } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
-import { formatDate } from "@/lib/utils/format"
+import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { 
   updateFruitReception as apiUpdateFruitReception, 
   deleteFruitReception as apiDeleteFruitReception 
 } from "@/lib/hooks/use-producers"
+
+interface ReturnedItem {
+  id: number
+  productId: string
+  quantity: number
+  unitPrice: number
+}
 
 export function FruitReceptionsTab() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -41,6 +48,7 @@ export function FruitReceptionsTab() {
   const [trackingFolio, setTrackingFolio] = useState("")
   const [returnedBoxes, setReturnedBoxes] = useState("")
   const [returnedBoxesValue, setReturnedBoxesValue] = useState("")
+  const [returnedItems, setReturnedItems] = useState<ReturnedItem[]>([])
   const [notes, setNotes] = useState("")
 
   const [producers, setProducers] = useState<any[]>([])
@@ -77,6 +85,7 @@ export function FruitReceptionsTab() {
   }, [])
 
   const fruitProducts = products.filter((p) => p.type === "fruta")
+  const insumoProducts = products.filter((p) => p.type === "insumo")
 
   const filteredReceptions = receptions.filter((reception) => {
     const q = searchTerm.toLowerCase()
@@ -85,6 +94,17 @@ export function FruitReceptionsTab() {
   })
 
   const totalWeight = boxes && weightPerBox ? Number(boxes) * Number(weightPerBox) : 0
+
+  const addReturnedItem = () =>
+    setReturnedItems((s) => [...s, { id: Date.now(), productId: "", quantity: 0, unitPrice: 0 }])
+  
+  const removeReturnedItem = (id: number) => setReturnedItems((s) => s.filter((it) => it.id !== id))
+  
+  const updateReturnedItem = (id: number, patch: Partial<ReturnedItem>) =>
+    setReturnedItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+
+  const calculateReturnedTotal = () => 
+    returnedItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
 
   const handleSave = async () => {
     try {
@@ -95,11 +115,27 @@ export function FruitReceptionsTab() {
         boxes: Number(boxes),
         date: receptionDate,
         trackingFolio: trackingFolio || undefined,
-      }      // Agregar campos opcionales solo si tienen valor
+      }
+      
+      // Agregar campos opcionales solo si tienen valor
       if (weightPerBox) payload.weightPerBox = Number(weightPerBox)
       if (totalWeight) payload.totalWeight = Number(totalWeight.toFixed(2))
-      if (returnedBoxes) payload.returnedBoxes = Number(returnedBoxes)
-      if (returnedBoxesValue) payload.returnedBoxesValue = Number(returnedBoxesValue)
+      
+      // Si hay items devueltos, usar el nuevo sistema
+      if (returnedItems.length > 0) {
+        const returnedTotal = calculateReturnedTotal()
+        payload.returnedBoxesValue = returnedTotal
+        payload.returnedItems = returnedItems.map(item => ({
+          productId: item.productId,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice)
+        }))
+      } else {
+        // Fallback al sistema viejo para compatibilidad
+        if (returnedBoxes) payload.returnedBoxes = Number(returnedBoxes)
+        if (returnedBoxesValue) payload.returnedBoxesValue = Number(returnedBoxesValue)
+      }
+      
       if (notes) payload.notes = notes
       
       if (isEditMode && editingReceptionId) {
@@ -129,6 +165,7 @@ export function FruitReceptionsTab() {
     setTrackingFolio("")
     setReturnedBoxes("")
     setReturnedBoxesValue("")
+    setReturnedItems([])
     setNotes("")
     setIsDialogOpen(false)
     setIsEditMode(false)
@@ -147,6 +184,20 @@ export function FruitReceptionsTab() {
     setTrackingFolio(reception.trackingFolio || "")
     setReturnedBoxes(String(reception.returnedBoxes || ""))
     setReturnedBoxesValue(String(reception.returnedBoxesValue || ""))
+    
+    // Cargar items devueltos si existen
+    if (reception.returnedItems && Array.isArray(reception.returnedItems)) {
+      const items = reception.returnedItems.map((item: any) => ({
+        id: item.id || Date.now() + Math.random(),
+        productId: String(item.productId),
+        quantity: Number(item.quantity || 0),
+        unitPrice: Number(item.unitPrice || item.price || 0),
+      }))
+      setReturnedItems(items)
+    } else {
+      setReturnedItems([])
+    }
+    
     setNotes(reception.notes || "")
     setIsDialogOpen(true)
   }
@@ -309,31 +360,100 @@ export function FruitReceptionsTab() {
                 {/* Sección de Devolución de Material de Empaque */}
                 <div className="border-t pt-4 mt-4">
                   <div className="mb-3">
-                    <h4 className="text-sm font-semibold text-primary">Devolución de Material de Empaque</h4>
-                    <p className="text-xs text-muted-foreground">Si el productor devuelve cajas u otro material, registra aquí para generar un abono en su cuenta</p>
+                    <h4 className="text-sm font-semibold text-primary">Devolución de Material e Insumos</h4>
+                    <p className="text-xs text-muted-foreground">Si el productor devuelve material o insumos, registra aquí para generar un abono en su cuenta</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Cantidad de Cajas Devueltas</Label>
-                      <Input 
-                        type="text" 
-                        inputMode="numeric"
-                        placeholder="0" 
-                        value={returnedBoxes} 
-                        onChange={(e) => setReturnedBoxes(e.target.value)} 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Valor del Material ($)</Label>
-                      <Input 
-                        type="text" 
-                        inputMode="decimal"
-                        placeholder="0.00" 
-                        value={returnedBoxesValue} 
-                        onChange={(e) => setReturnedBoxesValue(e.target.value)} 
-                      />
-                      <p className="text-xs text-muted-foreground">Se generará un abono por este monto</p>
-                    </div>
+                  
+                  <div className="space-y-3">
+                    {returnedItems.map((item) => {
+                      const itemTotal = item.quantity * item.unitPrice
+                      return (
+                        <div key={item.id} className="grid grid-cols-12 gap-2 items-start p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="col-span-5">
+                            <Label className="text-xs mb-1 block">Producto/Insumo</Label>
+                            <ComboBox
+                              value={item.productId}
+                              onChange={(v) => updateReturnedItem(item.id, { productId: v })}
+                              options={insumoProducts.map((p) => ({
+                                value: String(p.id),
+                                label: `${p.sku} - ${p.name}`,
+                                subtitle: p.sku
+                              }))}
+                              placeholder="Seleccionar"
+                              searchPlaceholder="Buscar..."
+                              emptyMessage="No encontrado"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs mb-1 block">Cantidad</Label>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              value={item.quantity === 0 ? "" : String(item.quantity)}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                                  updateReturnedItem(item.id, { quantity: value === "" ? 0 : Number(value) })
+                                }
+                              }}
+                              placeholder="0"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs mb-1 block">Precio Unit.</Label>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              value={item.unitPrice === 0 ? "" : String(item.unitPrice)}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                                  updateReturnedItem(item.id, { unitPrice: value === "" ? 0 : Number(value) })
+                                }
+                              }}
+                              placeholder="0.00"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs mb-1 block">Total</Label>
+                            <Input
+                              value={formatCurrency(itemTotal)}
+                              disabled
+                              className="bg-white text-sm font-semibold"
+                            />
+                          </div>
+                          <div className="col-span-1 flex items-end">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => removeReturnedItem(item.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={addReturnedItem}
+                      className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar Item Devuelto
+                    </Button>
+                    
+                    {returnedItems.length > 0 && (
+                      <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg border border-green-200">
+                        <span className="text-sm font-semibold text-green-800">Total Abono por Devolución:</span>
+                        <span className="text-lg font-bold text-green-700">{formatCurrency(calculateReturnedTotal())}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
