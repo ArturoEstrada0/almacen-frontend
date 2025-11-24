@@ -312,6 +312,7 @@ export interface FruitReception {
   weightPerBox?: number
   totalWeight?: number
   shipmentStatus: "pendiente" | "embarcada" | "vendida" // Added shipment status
+  paymentStatus?: "pendiente" | "pagada" // Added payment status
   shipmentId?: string // Reference to shipment when grouped
   notes?: string
   userId: string

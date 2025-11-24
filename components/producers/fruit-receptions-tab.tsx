@@ -246,6 +246,24 @@ export function FruitReceptionsTab() {
     }
   }
 
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status) {
+      case "pagada":
+        return (
+          <Badge variant="default" className="bg-green-500 text-white">
+            Pagada
+          </Badge>
+        )
+      case "pendiente":
+      default:
+        return (
+          <Badge variant="outline" className="text-orange-600 border-orange-600">
+            Pendiente
+          </Badge>
+        )
+    }
+  }
+
   // Handler para ver detalles
   const handleViewReception = (reception: any) => {
     setSelectedReception(reception)
@@ -492,6 +510,7 @@ export function FruitReceptionsTab() {
                 <TableHead>Cajas</TableHead>
                 <TableHead>Peso Total</TableHead>
                 <TableHead>Estado Embarque</TableHead>
+                <TableHead>Estado Pago</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -514,6 +533,7 @@ export function FruitReceptionsTab() {
                     <TableCell>{reception.boxes}</TableCell>
                     <TableCell>{reception.totalWeight} kg</TableCell>
                     <TableCell>{getShipmentStatusBadge(reception.shipmentStatus || "pendiente")}</TableCell>
+                    <TableCell>{getPaymentStatusBadge(reception.paymentStatus || "pendiente")}</TableCell>
                     <TableCell>{formatDate(reception.date || reception.receptionDate)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -586,13 +606,15 @@ export function FruitReceptionsTab() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Estado de Envío</Label>
-                    <Badge variant={
-                      selectedReception.shipmentStatus === 'enviado' ? 'default' : 
-                      selectedReception.shipmentStatus === 'en-transito' ? 'secondary' : 
-                      'outline'
-                    } className="mt-1">
-                      {selectedReception.shipmentStatus || 'pendiente'}
-                    </Badge>
+                    <div className="mt-1">
+                      {getShipmentStatusBadge(selectedReception.shipmentStatus || 'pendiente')}
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Estado de Pago</Label>
+                    <div className="mt-1">
+                      {getPaymentStatusBadge(selectedReception.paymentStatus || 'pendiente')}
+                    </div>
                   </div>
                 </div>
 
