@@ -50,7 +50,7 @@ export function useInventoryByWarehouse(warehouseId: string | null) {
 
 export function useLowStockProducts(warehouseId?: string) {
   const { data, error, isLoading } = useSWR<InventoryItem[]>(
-    warehouseId ? `/inventory/low-stock?warehouseId=${warehouseId}` : "/inventory/low-stock",
+    warehouseId ? `/api/inventory/low-stock?warehouseId=${warehouseId}` : "/api/inventory/low-stock",
   async (url: string) => {
   const response = await api.get(url)
   return Array.isArray(response) ? response : response?.data
@@ -121,7 +121,7 @@ export function useMovements(filters?: {
 }
 
 export function useMovementById(id: string | null) {
-  const { data, error, isLoading } = useSWR<Movement>(id ? `/inventory/movements/${id}` : null, async (url: string) => {
+  const { data, error, isLoading } = useSWR<Movement>(id ? `/api/inventory/movements/${id}` : null, async (url: string) => {
     const response = await api.get(url)
     return response
   })

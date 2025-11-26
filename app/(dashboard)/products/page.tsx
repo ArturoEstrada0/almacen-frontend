@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/lib/utils/toast"
 import { deleteProduct } from "@/lib/actions/products"
+import { ProtectedCreate } from "@/components/auth/protected-action"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,12 +92,14 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Productos</h1>
           <p className="text-muted-foreground">Gestión completa del catálogo de productos</p>
         </div>
-        <Link href="/products/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Producto
-          </Button>
-        </Link>
+        <ProtectedCreate module="products">
+          <Link href="/products/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Producto
+            </Button>
+          </Link>
+        </ProtectedCreate>
       </div>
 
       {/* Filters */}

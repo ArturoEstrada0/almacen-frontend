@@ -108,10 +108,43 @@ export const API_ENDPOINTS = {
     create: () => `${API_BASE_URL}/quotations`,
     markWinner: (id: string, supplierId: string) => `${API_BASE_URL}/quotations/${id}/winner/${supplierId}`,
   },
+
+  // Users
+  users: {
+    list: () => `${API_BASE_URL}/api/users`,
+    get: (id: string) => `${API_BASE_URL}/api/users/${id}`,
+    create: () => `${API_BASE_URL}/api/users`,
+    update: (id: string) => `${API_BASE_URL}/api/users/${id}`,
+    delete: (id: string) => `${API_BASE_URL}/api/users/${id}`,
+    toggleActive: (id: string) => `${API_BASE_URL}/api/users/${id}/toggle-active`,
+    updatePassword: (id: string) => `${API_BASE_URL}/api/users/${id}/update-password`,
+  },
 }
 
 // API Client with error handling
 export class ApiClient {
+  private static async getAuthHeaders(): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+
+    // Get the Supabase session token
+    if (typeof window !== 'undefined') {
+      try {
+        const { supabase } = await import('@/lib/supabase/client')
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+      } catch (error) {
+        console.error('Error getting auth token:', error)
+      }
+    }
+
+    return headers
+  }
+
   private static async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       // Try to parse JSON error body, otherwise read text
@@ -127,6 +160,13 @@ export class ApiClient {
       }
 
       const msg = parsed && typeof parsed === 'object' && parsed.message ? parsed.message : parsed || response.statusText
+      
+      // Si es un error 401, redirigir al login
+      if (response.status === 401 && typeof window !== 'undefined') {
+        console.error('Sesión expirada, redirigiendo al login...')
+        window.location.href = '/auth/login'
+      }
+      
       throw new Error(`Request failed ${response.status} ${response.statusText} - ${msg} (url: ${response.url})`)
     }
 
@@ -140,43 +180,39 @@ export class ApiClient {
   }
 
   static async get<T>(url: string): Promise<T> {
+    const headers = await this.getAuthHeaders()
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
     })
     return this.handleResponse<T>(response)
   }
 
   static async post<T>(url: string, data: any): Promise<T> {
+    const headers = await this.getAuthHeaders()
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(data),
     })
     return this.handleResponse<T>(response)
   }
 
   static async patch<T>(url: string, data: any): Promise<T> {
+    const headers = await this.getAuthHeaders()
     const response = await fetch(url, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(data),
     })
     return this.handleResponse<T>(response)
   }
 
   static async delete<T>(url: string): Promise<T> {
+    const headers = await this.getAuthHeaders()
     const response = await fetch(url, {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
     })
     return this.handleResponse<T>(response)
   }
