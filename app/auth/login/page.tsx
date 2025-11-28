@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -29,7 +29,7 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -141,5 +141,29 @@ export default function LoginPage() {
         </form>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="space-y-3 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary">
+              <Package className="h-8 w-8 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-2xl font-bold">
+              Sistema de Almacén
+            </CardTitle>
+            <CardDescription>
+              Cargando...
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
