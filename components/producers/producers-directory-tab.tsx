@@ -20,6 +20,7 @@ import { Plus, Search, Edit, Eye, DollarSign } from "lucide-react"
 import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { formatCurrency } from "@/lib/utils/format"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
 
 export function ProducersDirectoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -122,12 +123,14 @@ export function ProducersDirectoryTab() {
             <CardDescription>Gestiona la información de tus productores</CardDescription>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Nuevo Productor
-              </Button>
-            </DialogTrigger>
+            <ProtectedCreate module="producers">
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuevo Productor
+                </Button>
+              </DialogTrigger>
+            </ProtectedCreate>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Nuevo Productor</DialogTitle>
@@ -281,9 +284,11 @@ export function ProducersDirectoryTab() {
                           <TooltipContent>Ver detalles del productor</TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                      <Button variant="ghost" size="sm" onClick={() => handleEditProducer(producer)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <ProtectedUpdate module="producers">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditProducer(producer)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </ProtectedUpdate>
                     </div>
                   </TableCell>
                 </TableRow>

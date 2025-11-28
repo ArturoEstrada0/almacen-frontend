@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentMethod } from "@/lib/types"
-import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment } from "@/lib/hooks/use-producers"
+import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment, getProducerReport } from "@/lib/hooks/use-producers"
 
 function safeCurrency(val: any) {
   // Si el valor es string y tiene el mismo número repetido, lo corregimos
@@ -240,6 +240,243 @@ export function AccountStatementsTab() {
     URL.revokeObjectURL(url)
   }
 
+  const handleGenerateReport = async () => {
+    if (!selectedProducer) return alert("Selecciona un productor")
+    
+    try {
+      const report = await getProducerReport(selectedProducer)
+      
+      // Crear un blob con el JSON del reporte
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `reporte_productor_${producer?.code || selectedProducer}_${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      // También podríamos abrir una ventana de impresión con el reporte formateado
+      const printWindow = window.open('', '_blank')
+      if (printWindow) {
+        printWindow.document.write(generatePrintableReport(report))
+        printWindow.document.close()
+        printWindow.focus()
+      }
+    } catch (error) {
+      console.error("Error al generar reporte:", error)
+      alert("Error al generar el reporte")
+    }
+  }
+
+  const generatePrintableReport = (report: any) => {
+    const formatCurrency = (val: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val)
+    const formatDate = (date: string) => new Date(date).toLocaleDateString('es-MX')
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reporte del Productor - ${report.producer.name}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            font-size: 12px;
+          }
+          h1 { font-size: 20px; margin-bottom: 5px; }
+          h2 { font-size: 16px; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #333; }
+          h3 { font-size: 14px; margin-top: 15px; margin-bottom: 8px; }
+          table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+          .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+          .summary-item { border: 1px solid #ddd; padding: 10px; border-radius: 4px; }
+          .summary-item .label { font-size: 11px; color: #666; }
+          .summary-item .value { font-size: 18px; font-weight: bold; margin-top: 5px; }
+          .positive { color: #16a34a; }
+          .negative { color: #dc2626; }
+          .text-right { text-align: right; }
+          .header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 3px solid #333; padding-bottom: 10px; }
+          .no-print { display: none; }
+          @media print {
+            .no-print { display: none !important; }
+            body { margin: 10px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1>Reporte del Productor</h1>
+            <p><strong>Código:</strong> ${report.producer.code}</p>
+            <p><strong>Nombre:</strong> ${report.producer.name}</p>
+            ${report.producer.rfc ? `<p><strong>RFC:</strong> ${report.producer.rfc}</p>` : ''}
+          </div>
+          <div style="text-align: right;">
+            <p><strong>Fecha de Generación:</strong></p>
+            <p>${formatDate(report.generatedAt)}</p>
+          </div>
+        </div>
+
+        <h2>Resumen General</h2>
+        <div class="summary">
+          <div class="summary-item">
+            <div class="label">Total Asignado (Insumos)</div>
+            <div class="value negative">-${formatCurrency(report.summary.totalAssigned)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">Total Ventas</div>
+            <div class="value positive">+${formatCurrency(report.summary.totalSales)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">Total Pagado</div>
+            <div class="value negative">-${formatCurrency(report.summary.totalPaid)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">Cajas Recibidas</div>
+            <div class="value">${report.summary.totalBoxesReceived.toLocaleString()}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">Cajas Embarcadas</div>
+            <div class="value">${report.summary.totalBoxesShipped.toLocaleString()}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">Saldo Actual</div>
+            <div class="value ${report.summary.currentBalance >= 0 ? 'positive' : 'negative'}">
+              ${formatCurrency(report.summary.currentBalance)}
+            </div>
+          </div>
+        </div>
+
+        <h2>Asignaciones de Insumos</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Folio</th>
+              <th>Fecha</th>
+              <th>Almacén</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.inputAssignments.map((a: any) => `
+              <tr>
+                <td>${a.code}</td>
+                <td>${a.trackingFolio || '-'}</td>
+                <td>${formatDate(a.date)}</td>
+                <td>${a.warehouse || '-'}</td>
+                <td class="text-right">${formatCurrency(a.total)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <h2>Recepciones de Fruta</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Folio</th>
+              <th>Fecha</th>
+              <th>Producto</th>
+              <th class="text-right">Cajas</th>
+              <th>Estado</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.fruitReceptions.map((r: any) => `
+              <tr>
+                <td>${r.code}</td>
+                <td>${r.trackingFolio || '-'}</td>
+                <td>${formatDate(r.date)}</td>
+                <td>${r.product}</td>
+                <td class="text-right">${r.boxes}</td>
+                <td>${r.shipmentStatus}</td>
+                <td class="text-right">${r.finalTotal ? formatCurrency(r.finalTotal) : '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <h2>Embarques</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Fecha</th>
+              <th class="text-right">Total Cajas</th>
+              <th>Estado</th>
+              <th class="text-right">Precio/Caja</th>
+              <th class="text-right">Total Venta</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.shipments.map((s: any) => `
+              <tr>
+                <td>${s.code}</td>
+                <td>${formatDate(s.date)}</td>
+                <td class="text-right">${s.totalBoxes}</td>
+                <td>${s.status}</td>
+                <td class="text-right">${s.salePricePerBox ? formatCurrency(s.salePricePerBox) : '-'}</td>
+                <td class="text-right">${s.totalSale ? formatCurrency(s.totalSale) : '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <h2>Movimientos de Cuenta</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Descripción</th>
+              <th>Referencia</th>
+              <th class="text-right">Monto</th>
+              <th class="text-right">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.accountMovements.map((m: any) => `
+              <tr>
+                <td>${m.date ? formatDate(m.date) : '-'}</td>
+                <td>${m.type}</td>
+                <td>${m.description || '-'}</td>
+                <td>${m.referenceCode || '-'}</td>
+                <td class="text-right ${m.amount >= 0 ? 'positive' : 'negative'}">
+                  ${formatCurrency(m.amount)}
+                </td>
+                <td class="text-right ${m.balance >= 0 ? 'positive' : 'negative'}">
+                  ${formatCurrency(m.balance)}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div style="margin-top: 40px; page-break-inside: avoid;">
+          <p style="font-size: 10px; color: #666;">
+            Reporte generado automáticamente el ${formatDate(report.generatedAt)}
+          </p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -267,6 +504,10 @@ export function AccountStatementsTab() {
               </div>
               {selectedProducer && (
                 <div className="flex items-end gap-2">
+                  <Button variant="outline" onClick={handleGenerateReport}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Generar Reporte
+                  </Button>
                   <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
                     <DialogTrigger asChild>
                         <Button>

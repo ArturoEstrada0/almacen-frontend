@@ -88,6 +88,7 @@ export const API_ENDPOINTS = {
       delete: (id: string) => `${API_BASE_URL}/api/producers/shipments/${id}`,
     },
     accountStatement: (id: string) => `${API_BASE_URL}/api/producers/${id}/account-statement`,
+    report: (id: string) => `${API_BASE_URL}/api/producers/${id}/report`,
     payments: {
       create: () => `${API_BASE_URL}/api/producers/payments`,
     },
@@ -118,6 +119,12 @@ export const API_ENDPOINTS = {
     delete: (id: string) => `${API_BASE_URL}/api/users/${id}`,
     toggleActive: (id: string) => `${API_BASE_URL}/api/users/${id}/toggle-active`,
     updatePassword: (id: string) => `${API_BASE_URL}/api/users/${id}/update-password`,
+  },
+
+  // Dashboard
+  dashboard: {
+    kpis: () => `${API_BASE_URL}/api/dashboard/kpis`,
+    profitReport: () => `${API_BASE_URL}/api/dashboard/profit-report`,
   },
 }
 

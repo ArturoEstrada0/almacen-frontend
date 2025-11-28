@@ -26,6 +26,7 @@ import {
   updateFruitReception as apiUpdateFruitReception, 
   deleteFruitReception as apiDeleteFruitReception 
 } from "@/lib/hooks/use-producers"
+import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 
 interface ReturnedItem {
   id: number
@@ -284,12 +285,14 @@ export function FruitReceptionsTab() {
             <CardDescription>Registra la entrega de fruta por parte de productores (sin ajuste de cuenta hasta venta)</CardDescription>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva Recepción
-              </Button>
-            </DialogTrigger>
+            <ProtectedCreate module="producers">
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva Recepción
+                </Button>
+              </DialogTrigger>
+            </ProtectedCreate>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{isEditMode ? "Editar Recepción de Fruta" : "Nueva Recepción de Fruta"}</DialogTitle>
@@ -539,23 +542,27 @@ export function FruitReceptionsTab() {
                       <div className="flex justify-end gap-2">
                         {reception.shipmentStatus === "pendiente" && (
                           <>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              title="Editar recepción" 
-                              onClick={() => handleEditReception(reception)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              title="Eliminar recepción" 
-                              onClick={() => handleDeleteReception(reception)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <ProtectedUpdate module="producers">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                title="Editar recepción" 
+                                onClick={() => handleEditReception(reception)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </ProtectedUpdate>
+                            <ProtectedDelete module="producers">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                title="Eliminar recepción" 
+                                onClick={() => handleDeleteReception(reception)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </ProtectedDelete>
                           </>
                         )}
                         <Button variant="ghost" size="sm" title="Imprimir recibo" onClick={() => handlePrintReception(reception)}>

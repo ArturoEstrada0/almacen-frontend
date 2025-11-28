@@ -150,3 +150,7 @@ export async function updatePaymentReportStatus(id: string, status: string, paym
 export async function deletePaymentReport(id: string) {
   return ApiClient.delete(API_ENDPOINTS.producers.paymentReports.delete(id))
 }
+
+export async function getProducerReport(producerId: string) {
+  return ApiClient.get(API_ENDPOINTS.producers.report(producerId))
+}

@@ -7,6 +7,7 @@ import { Plus, Building2, FileText } from "lucide-react"
 import Link from "next/link"
 import { QuotationsTab } from "@/components/suppliers/quotations-tab"
 import { SuppliersDirectoryTab } from "@/components/suppliers/suppliers-directory-tab"
+import { ProtectedCreate } from "@/components/auth/protected-action"
 
 export default function SuppliersPage() {
   const [activeTab, setActiveTab] = useState("directory")
@@ -18,12 +19,14 @@ export default function SuppliersPage() {
           <h1 className="text-3xl font-bold tracking-tight">Proveedores</h1>
           <p className="text-muted-foreground">Gestión de proveedores, cotizaciones y relaciones comerciales</p>
         </div>
-        <Link href="/suppliers/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Proveedor
-          </Button>
-        </Link>
+        <ProtectedCreate module="suppliers">
+          <Link href="/suppliers/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Proveedor
+            </Button>
+          </Link>
+        </ProtectedCreate>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

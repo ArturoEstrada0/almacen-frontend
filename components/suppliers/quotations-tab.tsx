@@ -15,6 +15,7 @@ import { Plus, Trash2, Send, Building2, Package } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ProtectedCreate, ProtectedDelete } from "@/components/auth/protected-action"
 import {
   Dialog,
   DialogContent,
@@ -141,10 +142,12 @@ export function QuotationsTab() {
               />
             </div>
             <div className="flex items-end">
-              <Button onClick={addQuotationItem}>
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar
-              </Button>
+              <ProtectedCreate module="suppliers">
+                <Button onClick={addQuotationItem}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar
+                </Button>
+              </ProtectedCreate>
             </div>
           </div>
 
@@ -168,9 +171,11 @@ export function QuotationsTab() {
                         <TableCell>{product?.name}</TableCell>
                         <TableCell>{item.quantity}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => removeQuotationItem(item.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <ProtectedDelete module="suppliers">
+                            <Button variant="ghost" size="icon" onClick={() => removeQuotationItem(item.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </ProtectedDelete>
                         </TableCell>
                       </TableRow>
                     )

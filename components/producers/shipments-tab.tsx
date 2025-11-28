@@ -34,6 +34,7 @@ import {
 } from "@/lib/hooks/use-producers"
 import { mutate as globalMutate } from "swr"
 import { products } from "@/lib/mock-data"
+import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 
 const statusConfig: Record<
   ShipmentStatus,
@@ -243,12 +244,14 @@ export function ShipmentsTab() {
             <CardDescription>Agrupa recepciones de múltiples productores y gestiona ventas</CardDescription>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Embarque
-              </Button>
-            </DialogTrigger>
+            <ProtectedCreate module="producers">
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear Embarque
+                </Button>
+              </DialogTrigger>
+            </ProtectedCreate>
             <DialogContent 
               className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0"
             >
@@ -557,36 +560,42 @@ export function ShipmentsTab() {
                       <div className="flex justify-end gap-2">
                         {shipment.status !== "vendida" && (
                           <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title="Editar embarque"
-                              onClick={() => handleEditShipment(shipment)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title="Actualizar estado"
-                              onClick={() => {
-                                setSelectedShipment(shipment.id)
-                                setUpdateStatus((shipment as any).status)
-                                setIsUpdateDialogOpen(true)
-                              }}
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            >
-                              <DollarSign className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title="Eliminar embarque"
-                              onClick={() => handleDeleteShipment(shipment)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <ProtectedUpdate module="producers">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Editar embarque"
+                                onClick={() => handleEditShipment(shipment)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </ProtectedUpdate>
+                            <ProtectedUpdate module="producers">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Actualizar estado"
+                                onClick={() => {
+                                  setSelectedShipment(shipment.id)
+                                  setUpdateStatus((shipment as any).status)
+                                  setIsUpdateDialogOpen(true)
+                                }}
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <DollarSign className="h-4 w-4" />
+                              </Button>
+                            </ProtectedUpdate>
+                            <ProtectedDelete module="producers">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Eliminar embarque"
+                                onClick={() => handleDeleteShipment(shipment)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </ProtectedDelete>
                           </>
                         )}
                         <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewShipment(shipment)}>

@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import { ProtectedUpdate } from "@/components/auth/protected-action"
 
 export function AccountsPayableTab() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -194,10 +195,12 @@ export function AccountsPayableTab() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(order.id)}>
-                        <DollarSign className="mr-2 h-4 w-4" />
-                        Registrar Pago
-                      </Button>
+                      <ProtectedUpdate module="purchaseOrders">
+                        <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(order.id)}>
+                          <DollarSign className="mr-2 h-4 w-4" />
+                          Registrar Pago
+                        </Button>
+                      </ProtectedUpdate>
                     </TableCell>
                   </TableRow>
                 )

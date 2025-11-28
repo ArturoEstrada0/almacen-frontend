@@ -24,6 +24,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
 
 interface PurchaseOrdersListTabProps {
   onCreateNew: () => void
@@ -120,10 +121,12 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
           <h2 className="text-2xl font-bold">Órdenes de Compra</h2>
           <p className="text-sm text-muted-foreground">Gestiona y recibe órdenes de compra</p>
         </div>
-        <Button onClick={onCreateNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Orden
-        </Button>
+        <ProtectedCreate module="purchaseOrders">
+          <Button onClick={onCreateNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva Orden
+          </Button>
+        </ProtectedCreate>
       </div>
 
       {/* Filters */}
@@ -234,10 +237,12 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         {order.status !== "completada" && order.status !== "cancelada" && (
-                          <Button variant="outline" size="sm" onClick={() => handleReceiveOrder(order.id)}>
-                            <Package className="mr-2 h-4 w-4" />
-                            Recibir
-                          </Button>
+                          <ProtectedUpdate module="purchaseOrders">
+                            <Button variant="outline" size="sm" onClick={() => handleReceiveOrder(order.id)}>
+                              <Package className="mr-2 h-4 w-4" />
+                              Recibir
+                            </Button>
+                          </ProtectedUpdate>
                         )}
                         <Dialog>
                           <DialogTrigger asChild>
