@@ -42,9 +42,9 @@ export function AccountsPayableTab() {
     return matchesSearch && matchesStatus
   })
 
-  const totalPayable = filteredOrders.reduce((sum, order) => sum + (order.total || 0), 0)
+  const totalPayable = filteredOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
   const overdueOrders = filteredOrders.filter((order) => order.dueDate && new Date() > new Date(order.dueDate))
-  const totalOverdue = overdueOrders.reduce((sum, order) => sum + (order.total || 0), 0)
+  const totalOverdue = overdueOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
 
   const handleRegisterPayment = (orderId: string) => {
     setSelectedOrder(orderId)
