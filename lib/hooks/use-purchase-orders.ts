@@ -41,3 +41,12 @@ export async function receivePurchaseOrder(orderId: string, itemId: string, quan
 export async function cancelPurchaseOrder(id: string) {
   return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.cancel(id), {})
 }
+
+export async function registerPayment(orderId: string, data: {
+  amount: number
+  paymentMethod?: string
+  reference?: string
+  notes?: string
+}) {
+  return ApiClient.post<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.registerPayment(orderId), data)
+}

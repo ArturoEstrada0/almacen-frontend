@@ -30,6 +30,7 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
   const [supplierId, setSupplierId] = useState("")
   const [warehouseId, setWarehouseId] = useState("")
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("")
+  const [creditDays, setCreditDays] = useState(0)
   const [items, setItems] = useState<PurchaseOrderItem[]>([])
   const [notes, setNotes] = useState("")
 
@@ -76,6 +77,7 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
         supplierId,
         warehouseId,
         expectedDate: expectedDeliveryDate,
+        creditDays,
         notes,
         items: items.map((it) => ({
           productId: it.productId,
@@ -96,6 +98,15 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
   }
 
   const supplier = suppliers.find((s) => s.id === supplierId)
+  
+  // Actualizar creditDays cuando se selecciona un proveedor
+  const handleSupplierChange = (value: string) => {
+    setSupplierId(value)
+    const selectedSupplier = suppliers.find((s) => s.id === value)
+    if (selectedSupplier) {
+      setCreditDays(selectedSupplier.paymentTerms || 0)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -113,7 +124,7 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Proveedor *</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
+              <Select value={supplierId} onValueChange={handleSupplierChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un proveedor" />
                 </SelectTrigger>
@@ -155,6 +166,19 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
                 value={expectedDeliveryDate}
                 onChange={(e) => setExpectedDeliveryDate(e.target.value)}
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Días de Crédito</Label>
+              <Input
+                type="number"
+                min="0"
+                value={creditDays}
+                onChange={(e) => setCreditDays(Number(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">
+                La fecha de vencimiento se calculará automáticamente
+              </p>
             </div>
           </div>
 

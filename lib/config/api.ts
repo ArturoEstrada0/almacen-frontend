@@ -63,6 +63,7 @@ export const API_ENDPOINTS = {
     create: () => `${API_BASE_URL}/api/purchase-orders`,
     receive: (id: string, itemId: string) => `${API_BASE_URL}/api/purchase-orders/${id}/receive/${itemId}`,
     cancel: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/cancel`,
+    registerPayment: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/payment`,
   },
 
   // Producers

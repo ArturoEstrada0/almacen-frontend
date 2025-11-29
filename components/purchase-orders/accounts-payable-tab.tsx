@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
+import { usePurchaseOrders, registerPayment } from "@/lib/hooks/use-purchase-orders"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { formatCurrency } from "@/lib/utils/format"
 import { Search, DollarSign, AlertCircle, Calendar } from "lucide-react"
@@ -22,8 +22,13 @@ export function AccountsPayableTab() {
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("")
+  const [paymentReference, setPaymentReference] = useState("")
+  const [paymentNotes, setPaymentNotes] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { purchaseOrders } = usePurchaseOrders()
+  const { purchaseOrders, mutate } = usePurchaseOrders()
   const { suppliers } = useSuppliers()
 
   const payableOrders = (purchaseOrders || []).filter((order) => order.paymentStatus !== "pagado")
@@ -32,7 +37,7 @@ export function AccountsPayableTab() {
   const supplier = suppliers.find((s) => s.id === order.supplierId)
     const matchesSearch =
       order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier?.businessName.toLowerCase().includes(searchTerm.toLowerCase())
+      supplier?.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = filterStatus === "all" || order.paymentStatus === filterStatus
     return matchesSearch && matchesStatus
   })
@@ -44,12 +49,47 @@ export function AccountsPayableTab() {
   const handleRegisterPayment = (orderId: string) => {
     setSelectedOrder(orderId)
     setPaymentDialogOpen(true)
+    setPaymentAmount("")
+    setPaymentMethod("")
+    setPaymentReference("")
+    setPaymentNotes("")
   }
 
-  const handleCompletePayment = () => {
-    toast.success("Pago registrado exitosamente")
-    setPaymentDialogOpen(false)
-    setSelectedOrder(null)
+  const handleCompletePayment = async () => {
+    if (!selectedOrder || !paymentAmount || Number(paymentAmount) <= 0) {
+      toast.error("Por favor ingresa un monto válido")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      console.log('[Payment] Registrando pago:', {
+        orderId: selectedOrder,
+        amount: Number(paymentAmount),
+        paymentMethod,
+        reference: paymentReference,
+        notes: paymentNotes,
+      })
+
+      const result = await registerPayment(selectedOrder, {
+        amount: Number(paymentAmount),
+        paymentMethod,
+        reference: paymentReference,
+        notes: paymentNotes,
+      })
+
+      console.log('[Payment] Pago registrado exitosamente:', result)
+
+      toast.success("Pago registrado exitosamente")
+      await mutate() // Refrescar la lista
+      setPaymentDialogOpen(false)
+      setSelectedOrder(null)
+    } catch (error: any) {
+      console.error('[Payment] Error al registrar pago:', error)
+      toast.error(error?.message || "Error al registrar el pago")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const order = selectedOrder ? (purchaseOrders || []).find((o) => o.id === selectedOrder) : null
@@ -166,7 +206,7 @@ export function AccountsPayableTab() {
                     <TableCell className="font-mono font-medium">{order.orderNumber}</TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{supplier?.businessName}</p>
+                        <p className="font-medium">{supplier?.name}</p>
                         <p className="text-xs text-muted-foreground">{supplier?.code}</p>
                       </div>
                     </TableCell>
@@ -223,22 +263,38 @@ export function AccountsPayableTab() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground">Proveedor</Label>
-                  <p className="font-medium">{suppliers.find((s) => s.id === order.supplierId)?.businessName}</p>
+                  <p className="font-medium">{suppliers.find((s) => s.id === order.supplierId)?.name}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Total de la Orden</Label>
                   <p className="font-medium">{formatCurrency(order.total)}</p>
                 </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Monto Pagado</Label>
+                  <p className="font-medium">{formatCurrency(order.amountPaid || 0)}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Saldo Pendiente</Label>
+                  <p className="font-medium text-orange-600">{formatCurrency((order.total || 0) - (order.amountPaid || 0))}</p>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Monto del Pago *</Label>
-                <Input type="number" step={0.01} placeholder="0.00" />
+                <Input 
+                  type="number" 
+                  step={0.01} 
+                  placeholder="0.00" 
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  disabled={isSubmitting}
+                  max={(order.total || 0) - (order.amountPaid || 0)}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Método de Pago *</Label>
-                <Select>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod} disabled={isSubmitting}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona un método" />
                   </SelectTrigger>
@@ -253,21 +309,31 @@ export function AccountsPayableTab() {
 
               <div className="space-y-2">
                 <Label>Referencia</Label>
-                <Input placeholder="Número de referencia, cheque, etc." />
+                <Input 
+                  placeholder="Número de referencia, cheque, etc." 
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  disabled={isSubmitting}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Notas</Label>
-                <Textarea placeholder="Observaciones sobre el pago..." />
+                <Textarea 
+                  placeholder="Observaciones sobre el pago..." 
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  disabled={isSubmitting}
+                />
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+                <Button variant="outline" onClick={() => setPaymentDialogOpen(false)} disabled={isSubmitting}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCompletePayment}>
+                <Button onClick={handleCompletePayment} disabled={isSubmitting}>
                   <DollarSign className="mr-2 h-4 w-4" />
-                  Registrar Pago
+                  {isSubmitting ? "Registrando..." : "Registrar Pago"}
                 </Button>
               </div>
             </div>
