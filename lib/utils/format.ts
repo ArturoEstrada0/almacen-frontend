@@ -1,4 +1,10 @@
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | null | undefined): string {
+  if (amount == null || isNaN(amount)) {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(0)
+  }
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: "MXN",

@@ -37,9 +37,9 @@ export function AccountsPayableTab() {
     return matchesSearch && matchesStatus
   })
 
-  const totalPayable = filteredOrders.reduce((sum, order) => sum + order.total, 0)
-  const overdueOrders = filteredOrders.filter((order) => new Date() > new Date(order.dueDate))
-  const totalOverdue = overdueOrders.reduce((sum, order) => sum + order.total, 0)
+  const totalPayable = filteredOrders.reduce((sum, order) => sum + (order.total || 0), 0)
+  const overdueOrders = filteredOrders.filter((order) => order.dueDate && new Date() > new Date(order.dueDate))
+  const totalOverdue = overdueOrders.reduce((sum, order) => sum + (order.total || 0), 0)
 
   const handleRegisterPayment = (orderId: string) => {
     setSelectedOrder(orderId)
@@ -94,8 +94,9 @@ export function AccountsPayableTab() {
             <div className="text-2xl font-bold text-orange-500">
               {
                 filteredOrders.filter((order) => {
+                  if (!order.dueDate) return false
                   const daysUntilDue = Math.ceil(
-                    (order.dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+                    (new Date(order.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
                   )
                   return daysUntilDue > 0 && daysUntilDue <= 7
                 }).length
