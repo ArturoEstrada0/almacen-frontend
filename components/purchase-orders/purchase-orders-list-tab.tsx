@@ -213,7 +213,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{supplier?.businessName}</p>
+                        <p className="font-medium">{supplier?.name}</p>
                         <p className="text-xs text-muted-foreground">{supplier?.code}</p>
                       </div>
                     </TableCell>
