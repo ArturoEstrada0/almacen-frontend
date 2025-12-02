@@ -133,10 +133,13 @@ export default function LoginPage() {
               </Link>
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex flex-col space-y-3">
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              El registro de nuevos usuarios solo está disponible para administradores
+            </p>
           </CardFooter>
         </form>
       </Card>
