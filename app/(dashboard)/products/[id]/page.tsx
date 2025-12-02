@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useProduct, updateProduct } from "@/lib/hooks/use-products"
 import { useCategories } from "@/lib/hooks/use-categories"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
+import { useInventoryByWarehouse } from "@/lib/hooks/use-inventory"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,6 +40,7 @@ export default function EditProductPage({ params }: Params) {
   const { product, isLoading, mutate } = useProduct(resolvedId ?? null)
   const { categories } = useCategories()
   const { warehouses } = useWarehouses()
+  const { inventory } = useInventoryByWarehouse(null)
 
   const [formData, setFormData] = useState<any>({
     sku: "",
@@ -52,6 +54,14 @@ export default function EditProductPage({ params }: Params) {
     salePrice: "",
     isActive: true,
   })
+
+  // Estado para configuración de inventario por almacén
+  const [warehouseInventory, setWarehouseInventory] = useState<Record<string, {
+    minStock: string
+    maxStock: string
+    reorderPoint: string
+    currentStock: string
+  }>>({})
 
   useEffect(() => {
     if (!product) return
@@ -69,6 +79,37 @@ export default function EditProductPage({ params }: Params) {
       isActive: (product as any).isActive !== undefined ? (product as any).isActive : true,
     })
   }, [product?.id])
+
+  // Cargar inventario existente cuando se cargan los datos
+  useEffect(() => {
+    if (!resolvedId || !inventory.length || !warehouses.length) return
+    
+    const inventoryByWarehouse: Record<string, any> = {}
+    warehouses.forEach((warehouse: any) => {
+      const existingInventory = inventory.find(
+        (inv: any) => inv.productId === resolvedId && inv.warehouseId === warehouse.id
+      )
+      
+      inventoryByWarehouse[warehouse.id] = {
+        minStock: existingInventory?.minStock?.toString() || "",
+        maxStock: existingInventory?.maxStock?.toString() || "",
+        reorderPoint: existingInventory?.reorderPoint?.toString() || "",
+        currentStock: existingInventory?.currentStock?.toString() || "0",
+      }
+    })
+    
+    setWarehouseInventory(inventoryByWarehouse)
+  }, [resolvedId, inventory, warehouses])
+
+  const updateWarehouseInventory = (warehouseId: string, field: string, value: string) => {
+    setWarehouseInventory(prev => ({
+      ...prev,
+      [warehouseId]: {
+        ...prev[warehouseId],
+        [field]: value,
+      }
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,7 +132,26 @@ export default function EditProductPage({ params }: Params) {
         salePrice: formData.salePrice ? Number(formData.salePrice) : undefined,
         active: formData.isActive,
       }
+      
+      // Actualizar producto base
       await updateProduct(id, payload)
+      
+      // Actualizar inventario por almacén
+      for (const warehouseId in warehouseInventory) {
+        const invData = warehouseInventory[warehouseId]
+        
+        // Solo actualizar si hay algún valor
+        if (invData.currentStock || invData.minStock || invData.maxStock || invData.reorderPoint) {
+          const inventoryPayload: any = {
+            warehouseId,
+            currentStock: invData.currentStock ? Number(invData.currentStock) : undefined,
+          }
+          
+          // Actualizar el producto con el stock actual de este almacén
+          await updateProduct(id, inventoryPayload)
+        }
+      }
+      
       toast.success("Producto actualizado")
       mutate()
       router.push("/products")
@@ -193,13 +253,14 @@ export default function EditProductPage({ params }: Params) {
             <Card>
               <CardHeader>
                 <CardTitle>Configuración de Inventario por Almacén</CardTitle>
-                <CardDescription>Define los niveles de stock mínimo, máximo y punto de reorden para cada almacén</CardDescription>
+                <CardDescription>Define los niveles de stock mínimo, máximo, punto de reorden y stock actual para cada almacén</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Almacén</TableHead>
+                      <TableHead>Stock Actual</TableHead>
                       <TableHead>Stock Mínimo</TableHead>
                       <TableHead>Stock Máximo</TableHead>
                       <TableHead>Punto de Reorden</TableHead>
@@ -215,13 +276,40 @@ export default function EditProductPage({ params }: Params) {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Input className="w-24" />
+                          <Input 
+                            type="number"
+                            step="0.01"
+                            className="w-24" 
+                            value={warehouseInventory[warehouse.id]?.currentStock || ""}
+                            onChange={(e) => updateWarehouseInventory(warehouse.id, "currentStock", e.target.value)}
+                          />
                         </TableCell>
                         <TableCell>
-                          <Input className="w-24" />
+                          <Input 
+                            type="number"
+                            step="0.01"
+                            className="w-24" 
+                            value={warehouseInventory[warehouse.id]?.minStock || ""}
+                            onChange={(e) => updateWarehouseInventory(warehouse.id, "minStock", e.target.value)}
+                          />
                         </TableCell>
                         <TableCell>
-                          <Input className="w-24" />
+                          <Input 
+                            type="number"
+                            step="0.01"
+                            className="w-24" 
+                            value={warehouseInventory[warehouse.id]?.maxStock || ""}
+                            onChange={(e) => updateWarehouseInventory(warehouse.id, "maxStock", e.target.value)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input 
+                            type="number"
+                            step="0.01"
+                            className="w-24" 
+                            value={warehouseInventory[warehouse.id]?.reorderPoint || ""}
+                            onChange={(e) => updateWarehouseInventory(warehouse.id, "reorderPoint", e.target.value)}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}

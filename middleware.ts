@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
   // Rutas públicas que no requieren autenticación
-  const publicPaths = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password']
+  const publicPaths = ['/auth/login', '/auth/forgot-password', '/auth/reset-password']
   const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path))
   const isRootPath = request.nextUrl.pathname === '/'
 
