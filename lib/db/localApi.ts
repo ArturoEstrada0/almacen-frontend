@@ -7,6 +7,28 @@ if (!API_URL) {
   )
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+
+  // Get the Supabase session token
+  if (typeof window !== 'undefined') {
+    try {
+      const { supabase } = await import('@/lib/supabase/client')
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+    } catch (error) {
+      console.error('Error getting auth token:', error)
+    }
+  }
+
+  return headers
+}
+
 async function request(path: string, opts: RequestInit = {}) {
   // Ensure API routes include the `/api` prefix used by the backend
   let normalized = path
@@ -16,9 +38,14 @@ async function request(path: string, opts: RequestInit = {}) {
     normalized = path.startsWith("api") ? `/${path}` : `/api/${path}`
   }
   const url = `${API_URL}${normalized}`
+  
+  // Get auth headers
+  const authHeaders = await getAuthHeaders()
+  const headers = { ...authHeaders, ...(opts.headers || {}) }
+  
   let res: Response
   try {
-    res = await fetch(url, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } })
+    res = await fetch(url, { ...opts, headers })
   } catch (err: any) {
     // Network-level errors (e.g. ECONNREFUSED, DNS issues) end up here
     throw new Error(`Network request failed for ${url}: ${err?.message || String(err)}`)
@@ -26,6 +53,13 @@ async function request(path: string, opts: RequestInit = {}) {
 
   if (!res.ok) {
     const text = await res.text()
+    
+    // Si es un error 401, redirigir al login
+    if (res.status === 401 && typeof window !== 'undefined') {
+      console.error('Sesión expirada, redirigiendo al login...')
+      window.location.href = '/auth/login'
+    }
+    
     // Mejorar el mensaje de error mostrando la URL y el texto del backend
     throw new Error(`Request failed ${res.status} (${url}): ${text}`)
   }

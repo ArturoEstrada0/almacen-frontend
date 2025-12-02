@@ -57,6 +57,7 @@ export function ProducersDirectoryTab() {
   const [formAddress, setFormAddress] = useState("")
   const [formCity, setFormCity] = useState("")
   const [formState, setFormState] = useState("")
+  const [formContactName, setFormContactName] = useState("")
 
   const handleCreateProducer = async () => {
     try {
@@ -68,6 +69,9 @@ export function ProducersDirectoryTab() {
         phone: formPhone,
         email: formEmail,
         address: formAddress,
+        city: formCity,
+        state: formState,
+        contactName: formContactName,
       }
       const created = await apiPost("/api/producers", payload)
       setProducers((prev) => [created, ...prev])
@@ -81,6 +85,7 @@ export function ProducersDirectoryTab() {
       setFormAddress("")
       setFormCity("")
       setFormState("")
+      setFormContactName("")
     } catch (err) {
       console.error("Error creating producer:", err)
       alert("Error creando productor: " + (err as any)?.message || String(err))
@@ -177,7 +182,7 @@ export function ProducersDirectoryTab() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="contact">Nombre de Contacto</Label>
-                  <Input id="contact" placeholder="Persona de contacto" />
+                  <Input id="contact" placeholder="Persona de contacto" value={formContactName} onChange={(e) => setFormContactName(e.target.value)} />
                 </div>
               </div>
               <DialogFooter>
@@ -343,6 +348,10 @@ export function ProducersDirectoryTab() {
                   <Input id="edit-state" value={selectedProducer.state || ''} onChange={e => setSelectedProducer({ ...selectedProducer, state: e.target.value })} />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-contact">Nombre de Contacto</Label>
+                <Input id="edit-contact" value={selectedProducer.contactName || ''} onChange={e => setSelectedProducer({ ...selectedProducer, contactName: e.target.value })} />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -360,6 +369,9 @@ export function ProducersDirectoryTab() {
                   address,
                   rfc,
                   taxId,
+                  city,
+                  state,
+                  contactName,
                 } = selectedProducer
                 // taxId puede venir como rfc
                 const payload: any = {
@@ -368,6 +380,9 @@ export function ProducersDirectoryTab() {
                   email,
                   phone,
                   address,
+                  city,
+                  state,
+                  contactName,
                 }
                 if (rfc) payload.taxId = rfc
                 if (taxId) payload.taxId = taxId
@@ -400,6 +415,7 @@ export function ProducersDirectoryTab() {
               <div><b>Dirección:</b> {selectedProducer.address || '-'}</div>
               <div><b>Ciudad:</b> {selectedProducer.city || '-'}</div>
               <div><b>Estado:</b> {selectedProducer.state || '-'}</div>
+              <div><b>Contacto:</b> {selectedProducer.contactName || '-'}</div>
               <div><b>Saldo:</b> {formatCurrency(selectedProducer.accountBalance || 0)}</div>
               <div><b>Estatus:</b> {selectedProducer.isActive ? 'Activo' : 'Inactivo'}</div>
             </div>
