@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PurchaseOrdersListTab } from "@/components/purchase-orders/purchase-orders-list-tab"
 import { NewPurchaseOrderTab } from "@/components/purchase-orders/new-purchase-order-tab"
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
+import { ProtectedCreate } from "@/components/auth/protected-action"
 
 export default function PurchaseOrdersPage() {
   const [activeTab, setActiveTab] = useState("list")
@@ -28,7 +29,9 @@ export default function PurchaseOrdersPage() {
         </TabsContent>
 
         <TabsContent value="new" className="space-y-4">
-          <NewPurchaseOrderTab onSuccess={() => setActiveTab("list")} />
+          <ProtectedCreate module="purchaseOrders">
+            <NewPurchaseOrderTab onSuccess={() => setActiveTab("list")} />
+          </ProtectedCreate>
         </TabsContent>
 
         <TabsContent value="payables" className="space-y-4">

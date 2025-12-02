@@ -11,6 +11,7 @@ import { motion } from "framer-motion"
 import { StockTab } from "@/components/inventory/stock-tab"
 import { MovementsTab } from "@/components/inventory/movements-tab"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ProtectedCreate } from "@/components/auth/protected-action"
 
 export default function InventoryPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null)
@@ -26,12 +27,14 @@ export default function InventoryPage() {
         </div>
 
         <div className="flex justify-end">
-          <Link href="/warehouses/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Almacén
-            </Button>
-          </Link>
+          <ProtectedCreate module="warehouses">
+            <Link href="/warehouses/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Almacén
+              </Button>
+            </Link>
+          </ProtectedCreate>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

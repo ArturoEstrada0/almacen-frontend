@@ -10,6 +10,7 @@ import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { Search, Building2, Edit, Trash2, Mail, Phone, Send } from "lucide-react"
 import Link from "next/link"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 import {
   Dialog,
   DialogContent,
@@ -200,14 +201,18 @@ export function SuppliersDirectoryTab() {
                           </div>
                         </DialogContent>
                       </Dialog>
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/suppliers/${supplier.id}`}>
-                          <Edit className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Button variant="ghost" size="icon">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <ProtectedUpdate module="suppliers">
+                        <Button variant="ghost" size="icon" asChild>
+                          <Link href={`/suppliers/${supplier.id}`}>
+                            <Edit className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </ProtectedUpdate>
+                      <ProtectedDelete module="suppliers">
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </ProtectedDelete>
                     </div>
                   </TableCell>
                 </TableRow>

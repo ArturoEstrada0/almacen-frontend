@@ -21,6 +21,7 @@ import { Plus, Search, Eye, Trash2, Printer, Pencil } from "lucide-react"
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/db/localApi"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { useToast } from "@/hooks/use-toast"
+import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 
 interface AssignmentItem {
   id: number
@@ -283,12 +284,14 @@ export function InputAssignmentsTab() {
           </div>
 
           <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenDialog}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva Asignación
-              </Button>
-            </DialogTrigger>
+            <ProtectedCreate module="producers">
+              <DialogTrigger asChild>
+                <Button onClick={handleOpenDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva Asignación
+                </Button>
+              </DialogTrigger>
+            </ProtectedCreate>
             <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{isEditMode ? "Editar Asignación" : "Nueva Asignación"}</DialogTitle>
@@ -486,18 +489,22 @@ export function InputAssignmentsTab() {
                         <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewAssignment(assignment)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" title="Editar asignación" onClick={() => handleEditAssignment(assignment)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          title="Eliminar asignación" 
-                          onClick={() => handleDeleteAssignment(assignment)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <ProtectedUpdate module="producers">
+                          <Button variant="ghost" size="sm" title="Editar asignación" onClick={() => handleEditAssignment(assignment)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </ProtectedUpdate>
+                        <ProtectedDelete module="producers">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            title="Eliminar asignación" 
+                            onClick={() => handleDeleteAssignment(assignment)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </ProtectedDelete>
                       </div>
                     </TableCell>
                   </TableRow>

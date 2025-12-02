@@ -20,6 +20,7 @@ import { motion } from "framer-motion"
 import { toast } from "@/lib/utils/toast"
 import { mutate as globalMutate } from "swr"
 import { api } from "@/lib/config/api"
+import { ProtectedCreate } from "@/components/auth/protected-action"
 
 interface MovementsTabProps {
   warehouseId?: string
@@ -295,8 +296,9 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
       </TabsContent>
 
       <TabsContent value="new" className="space-y-4">
-        <Card>
-          <CardHeader>
+        <ProtectedCreate module="movements">
+          <Card>
+            <CardHeader>
             <CardTitle>Registrar Nuevo Movimiento</CardTitle>
             <CardDescription>Registra entradas o salidas de inventario</CardDescription>
           </CardHeader>
@@ -323,8 +325,8 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue placeholder="Seleccionar almacén" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {(warehouses || []).map((warehouse: any, index: number) => (
+                        <SelectItem key={`new-wh-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>
                       ))}
@@ -379,11 +381,13 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
             </form>
           </CardContent>
         </Card>
+        </ProtectedCreate>
       </TabsContent>
 
       <TabsContent value="transfer" className="space-y-4">
-        <Card>
-          <CardHeader>
+        <ProtectedCreate module="movements">
+          <Card>
+            <CardHeader>
             <CardTitle>Traspaso entre Almacenes</CardTitle>
             <CardDescription>Transfiere productos de un almacén a otro</CardDescription>
           </CardHeader>
@@ -455,8 +459,8 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {(warehouses || []).map((warehouse: any, index: number) => (
+                        <SelectItem key={`from-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>
                       ))}
@@ -471,8 +475,8 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {(warehouses || []).map((warehouse: any, index: number) => (
+                        <SelectItem key={`to-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>
                       ))}
@@ -530,14 +534,16 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
             </form>
           </CardContent>
         </Card>
+        </ProtectedCreate>
       </TabsContent>
 
       <TabsContent value="adjustment" className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ajuste de Inventario</CardTitle>
-            <CardDescription>Corrige diferencias en el inventario físico vs sistema</CardDescription>
-          </CardHeader>
+        <ProtectedCreate module="movements">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ajuste de Inventario</CardTitle>
+              <CardDescription>Corrige diferencias en el inventario físico vs sistema</CardDescription>
+            </CardHeader>
           <CardContent>
             <form className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -548,8 +554,8 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue placeholder="Seleccionar almacén" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {(warehouses || []).map((warehouse: any, index: number) => (
+                        <SelectItem key={`adj-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>
                       ))}
@@ -564,15 +570,8 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue placeholder="Seleccionar producto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name} ({product.sku})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
+                      {products.map((product, index) => (
+                        <SelectItem key={`adj-prod-${product.id || index}`} value={product.id}>
                           {product.name} ({product.sku})
                         </SelectItem>
                       ))}
@@ -611,6 +610,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
             </form>
           </CardContent>
         </Card>
+        </ProtectedCreate>
       </TabsContent>
     </Tabs>
   )

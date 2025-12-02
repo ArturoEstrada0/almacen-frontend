@@ -5,9 +5,13 @@ import { api } from "@/lib/config/api"
 import type { InventoryItem, Movement } from "@/lib/types"
 
 export function useInventoryByWarehouse(warehouseId: string | null) {
+  const url = warehouseId 
+    ? `/api/inventory?warehouseId=${warehouseId}` 
+    : '/api/inventory'
+    
   const { data, error, isLoading, mutate } = useSWR<InventoryItem[]>(
-    warehouseId ? `/api/inventory/warehouse/${warehouseId}` : null,
-    async (url: string) => {
+    'inventory-all',
+    async () => {
       const response = await api.get(url)
       // Map backend fields (snake_case / nested) to frontend-friendly camelCase
       const payload = Array.isArray(response) ? response : (response?.data || [])

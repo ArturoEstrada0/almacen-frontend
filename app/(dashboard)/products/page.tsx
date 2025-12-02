@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/lib/utils/toast"
 import { deleteProduct } from "@/lib/actions/products"
-import { ProtectedCreate } from "@/components/auth/protected-action"
+import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -215,21 +215,25 @@ export default function ProductsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link href={`/products/${product.id}`}>
-                            <Edit className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setProductToDelete(product.id)
-                            setDeleteDialogOpen(true)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <ProtectedUpdate module="products">
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href={`/products/${product.id}`}>
+                              <Edit className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </ProtectedUpdate>
+                        <ProtectedDelete module="products">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setProductToDelete(product.id)
+                              setDeleteDialogOpen(true)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </ProtectedDelete>
                       </div>
                     </TableCell>
                   </TableRow>
