@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { mockSuppliers } from "@/lib/mock-data"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { Search, Building2, Edit, Trash2, Mail, Phone, Send } from "lucide-react"
+import { updateSupplier } from "@/lib/hooks/use-suppliers"
+import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
@@ -63,6 +65,35 @@ export function SuppliersDirectoryTab() {
     )
   }
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDeleteClick = (supplierId: string) => {
+    setDeleteTarget(supplierId)
+    setDeleteDialogOpen(true)
+  }
+
+  const { toast } = useToast()
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    try {
+      // Soft-delete: marcar como inactivo para evitar violaciones de FK
+      await updateSupplier(deleteTarget, { isActive: false })
+      mutate()
+      setDeleteDialogOpen(false)
+      setDeleteTarget(null)
+      toast({ title: "Proveedor eliminado", description: "El proveedor fue desactivado correctamente." })
+    } catch (error) {
+      console.error("Error eliminando proveedor:", error)
+      toast({ title: "Error", description: "No se pudo eliminar el proveedor. Revisa la consola para más detalles.", action: { label: 'Ver consola' } })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <>
       {/* Search */}
@@ -79,6 +110,23 @@ export function SuppliersDirectoryTab() {
           </div>
         </CardContent>
       </Card>
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="w-full max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>¿Seguro que deseas eliminar este proveedor? Esta acción no se puede deshacer.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+              {isDeleting ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Suppliers Table */}
       <Card>
@@ -209,7 +257,7 @@ export function SuppliersDirectoryTab() {
                         </Button>
                       </ProtectedUpdate>
                       <ProtectedDelete module="suppliers">
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(supplier.id)} title="Eliminar proveedor">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </ProtectedDelete>
