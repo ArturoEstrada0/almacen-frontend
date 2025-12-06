@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,6 +21,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import * as XLSX from 'xlsx'
+import { useToast } from "@/hooks/use-toast"
 
 interface StockTabProps {
   warehouseId?: string
@@ -53,6 +55,8 @@ export function StockTab({ warehouseId }: StockTabProps) {
   const [editMin, setEditMin] = useState<string>("")
   const [editMax, setEditMax] = useState<string>("")
   const [editReorder, setEditReorder] = useState<string>("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { toast } = useToast()
 
   // Build a map of latest lot numbers by product from recent movements
   const latestLotByProduct = useMemo(() => {
@@ -104,6 +108,191 @@ export function StockTab({ warehouseId }: StockTabProps) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
   }
 
+  // Función para exportar a Excel
+  const handleExport = () => {
+    try {
+      // Preparar los datos para exportar
+      const exportData = filteredStock.map((stock) => {
+        const product = products.find((p) => p.id === stock.productId)
+        const status = getStockStatus(stock)
+        
+        return {
+          SKU: product?.sku || '',
+          Producto: product?.name || '',
+          'Unidad de Medida': product?.unitOfMeasure || stock.unitOfMeasure || '',
+          Ubicación: stock.location || 'Sin asignar',
+          Lote: stock.lotNumber || latestLotByProduct[stock.productId] || '',
+          Vencimiento: stock.expirationDate ? new Date(stock.expirationDate).toLocaleDateString('es-MX') : '',
+          Disponible: Number(stock.currentStock || 0),
+          Reservado: Number(stock.reservedQuantity || 0),
+          'Stock Mínimo': Number(product?.minStock || stock.minStock || 0),
+          'Stock Máximo': Number(product?.maxStock || stock.maxStock || 0),
+          'Punto de Reorden': Number(product?.reorderPoint || stock.reorderPoint || 0),
+          Estado: status === 'low' ? 'Bajo' : status === 'high' ? 'Alto' : 'Normal',
+          'ID Producto': stock.productId,
+          'ID Almacén': stock.warehouseId,
+        }
+      })
+
+      // Crear el libro de trabajo
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventario')
+
+      // Configurar anchos de columna
+      ws['!cols'] = [
+        { wch: 15 }, // SKU
+        { wch: 30 }, // Producto
+        { wch: 15 }, // Unidad
+        { wch: 15 }, // Ubicación
+        { wch: 15 }, // Lote
+        { wch: 15 }, // Vencimiento
+        { wch: 12 }, // Disponible
+        { wch: 12 }, // Reservado
+        { wch: 12 }, // Min
+        { wch: 12 }, // Max
+        { wch: 15 }, // Reorden
+        { wch: 10 }, // Estado
+        { wch: 36 }, // ID Producto
+        { wch: 36 }, // ID Almacén
+      ]
+
+      // Generar el archivo
+      const fileName = `inventario_${new Date().toISOString().split('T')[0]}.xlsx`
+      XLSX.writeFile(wb, fileName)
+
+      toast({
+        title: "Exportación exitosa",
+        description: `Se exportaron ${exportData.length} registros a ${fileName}`,
+      })
+    } catch (error) {
+      console.error('Error exporting:', error)
+      toast({
+        title: "Error al exportar",
+        description: "Hubo un problema al exportar el inventario",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Función para importar desde Excel
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[]
+
+        let successCount = 0
+        let errorCount = 0
+        const errors: string[] = []
+
+        for (const row of jsonData) {
+          try {
+            // Validar que tenga los campos requeridos
+            if (!row['ID Producto'] || !row['ID Almacén']) {
+              errors.push(`Fila sin ID Producto o ID Almacén`)
+              errorCount++
+              continue
+            }
+
+            // Validar UUIDs
+            if (!isUUID(row['ID Producto']) || !isUUID(row['ID Almacén'])) {
+              errors.push(`IDs inválidos para producto ${row['SKU'] || row['Producto']}`)
+              errorCount++
+              continue
+            }
+
+            // Preparar datos para actualizar
+            const updateData: any = {
+              productId: row['ID Producto'],
+              warehouseId: row['ID Almacén'],
+            }
+
+            // Solo incluir campos que estén presentes y sean válidos
+            if (row['Disponible'] !== undefined && row['Disponible'] !== null && row['Disponible'] !== '') {
+              updateData.quantity = Number(row['Disponible'])
+            }
+            if (row['Ubicación'] && row['Ubicación'] !== 'Sin asignar') {
+              updateData.locationId = row['Ubicación']
+            }
+            if (row['Lote']) {
+              updateData.lotNumber = row['Lote']
+            }
+            if (row['Vencimiento']) {
+              // Intentar parsear la fecha en diferentes formatos
+              const dateStr = String(row['Vencimiento'])
+              let dateObj: Date | null = null
+              
+              // Intentar formato dd/mm/yyyy
+              if (dateStr.includes('/')) {
+                const [day, month, year] = dateStr.split('/')
+                dateObj = new Date(Number(year), Number(month) - 1, Number(day))
+              } else {
+                dateObj = new Date(dateStr)
+              }
+              
+              if (dateObj && !isNaN(dateObj.getTime())) {
+                updateData.expirationDate = dateObj.toISOString().split('T')[0]
+              }
+            }
+            if (row['Stock Mínimo'] !== undefined && row['Stock Mínimo'] !== null && row['Stock Mínimo'] !== '') {
+              updateData.minStock = Number(row['Stock Mínimo'])
+            }
+            if (row['Stock Máximo'] !== undefined && row['Stock Máximo'] !== null && row['Stock Máximo'] !== '') {
+              updateData.maxStock = Number(row['Stock Máximo'])
+            }
+            if (row['Punto de Reorden'] !== undefined && row['Punto de Reorden'] !== null && row['Punto de Reorden'] !== '') {
+              updateData.reorderPoint = Number(row['Punto de Reorden'])
+            }
+
+            await updateInventoryStock(updateData)
+            successCount++
+          } catch (error) {
+            console.error('Error updating row:', row, error)
+            errors.push(`Error en ${row['SKU'] || row['Producto']}: ${error}`)
+            errorCount++
+          }
+        }
+
+        // Mostrar resultado
+        if (errorCount === 0) {
+          toast({
+            title: "Importación exitosa",
+            description: `Se importaron ${successCount} registros correctamente`,
+          })
+          window.location.reload()
+        } else {
+          toast({
+            title: "Importación completada con errores",
+            description: `${successCount} exitosos, ${errorCount} errores. Revisa la consola para más detalles.`,
+            variant: "destructive",
+          })
+          console.error('Import errors:', errors)
+        }
+      } catch (error) {
+        console.error('Error importing:', error)
+        toast({
+          title: "Error al importar",
+          description: "Hubo un problema al leer el archivo",
+          variant: "destructive",
+        })
+      }
+    }
+    reader.readAsArrayBuffer(file)
+    
+    // Limpiar el input para permitir reimportar el mismo archivo
+    if (event.target) {
+      event.target.value = ''
+    }
+  }
+
   return (
     <>
       <Card className="mb-4">
@@ -124,14 +313,21 @@ export function StockTab({ warehouseId }: StockTabProps) {
           </Button>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
             Exportar
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
             Importar
           </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleImport}
+            style={{ display: 'none' }}
+          />
         </div>
       </div>
 
