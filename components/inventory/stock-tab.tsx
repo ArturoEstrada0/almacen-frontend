@@ -46,6 +46,10 @@ export function StockTab({ warehouseId }: StockTabProps) {
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingStock, setEditingStock] = useState<any | null>(null)
+  const [editAvailable, setEditAvailable] = useState<string>("")
+  const [editLocation, setEditLocation] = useState<string>("")
+  const [editLotNumber, setEditLotNumber] = useState<string>("")
+  const [editExpirationDate, setEditExpirationDate] = useState<string>("")
   const [editMin, setEditMin] = useState<string>("")
   const [editMax, setEditMax] = useState<string>("")
   const [editReorder, setEditReorder] = useState<string>("")
@@ -231,9 +235,14 @@ export function StockTab({ warehouseId }: StockTabProps) {
                         variant="outline"
                         onClick={() => {
                           setEditingStock(stock)
-                          setEditMin(String(stock.minStock || 0))
-                          setEditMax(String(stock.maxStock || 0))
-                          setEditReorder(String(stock.reorderPoint || 0))
+                          const product = products.find((p) => p.id === stock.productId)
+                          setEditAvailable(String(stock.currentStock || 0))
+                          setEditLocation(stock.location || "")
+                          setEditLotNumber(stock.lotNumber || latestLotByProduct[stock.productId] || "")
+                          setEditExpirationDate(stock.expirationDate ? new Date(stock.expirationDate).toISOString().split('T')[0] : "")
+                          setEditMin(String(product?.minStock || stock.minStock || 0))
+                          setEditMax(String(product?.maxStock || stock.maxStock || 0))
+                          setEditReorder(String(product?.reorderPoint || stock.reorderPoint || 0))
                           setEditDialogOpen(true)
                         }}
                       >
@@ -255,24 +264,73 @@ export function StockTab({ warehouseId }: StockTabProps) {
       }}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar parámetros de stock</DialogTitle>
+            <DialogTitle>Editar Inventario</DialogTitle>
             <DialogDescription>
-              Ajusta los valores mínimos, máximos y punto de reorden para el producto seleccionado.
+              Ajusta los valores de cantidad disponible, ubicación, lote, vencimiento y parámetros de stock.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-3 py-2">
             <div className="grid grid-cols-1 gap-1">
-              <label className="text-sm text-muted-foreground">Min Stock</label>
-              <Input value={editMin} onChange={(e) => setEditMin(e.target.value)} />
+              <label className="text-sm font-medium">Cantidad Disponible</label>
+              <Input 
+                type="number"
+                step="0.01"
+                value={editAvailable} 
+                onChange={(e) => setEditAvailable(e.target.value)}
+                placeholder="0"
+              />
             </div>
             <div className="grid grid-cols-1 gap-1">
-              <label className="text-sm text-muted-foreground">Max Stock</label>
-              <Input value={editMax} onChange={(e) => setEditMax(e.target.value)} />
+              <label className="text-sm font-medium">Ubicación</label>
+              <Input 
+                value={editLocation} 
+                onChange={(e) => setEditLocation(e.target.value)}
+                placeholder="Ej: A1-B2"
+              />
             </div>
             <div className="grid grid-cols-1 gap-1">
-              <label className="text-sm text-muted-foreground">Punto de Reorden</label>
-              <Input value={editReorder} onChange={(e) => setEditReorder(e.target.value)} />
+              <label className="text-sm font-medium">Lote</label>
+              <Input 
+                value={editLotNumber} 
+                onChange={(e) => setEditLotNumber(e.target.value)}
+                placeholder="Número de lote"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              <label className="text-sm font-medium">Fecha de Vencimiento</label>
+              <Input 
+                type="date"
+                value={editExpirationDate} 
+                onChange={(e) => setEditExpirationDate(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              <label className="text-sm font-medium">Stock Mínimo</label>
+              <Input 
+                type="number"
+                value={editMin} 
+                onChange={(e) => setEditMin(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              <label className="text-sm font-medium">Stock Máximo</label>
+              <Input 
+                type="number"
+                value={editMax} 
+                onChange={(e) => setEditMax(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              <label className="text-sm font-medium">Punto de Reorden</label>
+              <Input 
+                type="number"
+                value={editReorder} 
+                onChange={(e) => setEditReorder(e.target.value)}
+                placeholder="0"
+              />
             </div>
           </div>
 
@@ -294,6 +352,10 @@ export function StockTab({ warehouseId }: StockTabProps) {
                   await updateInventoryStock({
                     productId: editingStock.productId,
                     warehouseId: warehouseId as string,
+                    quantity: Number(editAvailable || 0),
+                    locationId: editLocation || undefined,
+                    lotNumber: editLotNumber || undefined,
+                    expirationDate: editExpirationDate || undefined,
                     minStock: Number(editMin || 0),
                     maxStock: Number(editMax || 0),
                     reorderPoint: Number(editReorder || 0),

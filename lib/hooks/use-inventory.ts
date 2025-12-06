@@ -29,6 +29,14 @@ export function useInventoryByWarehouse(warehouseId: string | null) {
           if (m) lotNumber = m[1].trim()
         }
 
+        // Parse expiration date
+        let expirationDate: Date | undefined = undefined
+        if (item.expiration_date) {
+          expirationDate = new Date(item.expiration_date)
+        } else if (item.expirationDate) {
+          expirationDate = new Date(item.expirationDate)
+        }
+
         return {
           // keep original payload for any extra fields
           ...item,
@@ -38,7 +46,11 @@ export function useInventoryByWarehouse(warehouseId: string | null) {
           currentStock: item.quantity !== undefined ? Number(item.quantity) : 0,
           location: item.location_code || item.locationCode || item.location || null,
           reservedQuantity: item.reserved_quantity !== undefined ? Number(item.reserved_quantity) : 0,
+          minStock: item.min_stock !== undefined ? Number(item.min_stock) : (item.minStock !== undefined ? Number(item.minStock) : 0),
+          maxStock: item.max_stock !== undefined ? Number(item.max_stock) : (item.maxStock !== undefined ? Number(item.maxStock) : 0),
+          reorderPoint: item.reorder_point !== undefined ? Number(item.reorder_point) : (item.reorderPoint !== undefined ? Number(item.reorderPoint) : 0),
           lotNumber,
+          expirationDate,
         }
       })
     },
@@ -179,7 +191,10 @@ export async function createMovement(data: {
 export async function updateInventoryStock(data: {
   productId: string
   warehouseId: string
+  quantity?: number
   locationId?: string
+  lotNumber?: string
+  expirationDate?: string
   minStock?: number
   maxStock?: number
   reorderPoint?: number
