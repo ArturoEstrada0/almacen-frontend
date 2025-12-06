@@ -94,12 +94,16 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
     unitCost: 0,
     notes: "",
   })
+  // String inputs for decimal handling
+  const [quantityInput, setQuantityInput] = useState<string>("")
+  const [unitCostInput, setUnitCostInput] = useState<string>("")
 
   // Transfer form state (controlled)
   const [transferFrom, setTransferFrom] = useState<string>("")
   const [transferTo, setTransferTo] = useState<string>("")
   const [transferProduct, setTransferProduct] = useState<string>("")
   const [transferQuantity, setTransferQuantity] = useState<number>(0)
+  const [transferQuantityInput, setTransferQuantityInput] = useState<string>("")
   const [transferLot, setTransferLot] = useState<string>("")
   const [transferNotes, setTransferNotes] = useState<string>("")
 
@@ -189,6 +193,8 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
   // reset minimal fields
   setForm((f) => ({ ...f, productId: "", quantity: 0, lotNumber: "", notes: "" }))
+  setQuantityInput("")
+  setUnitCostInput("")
       } catch (err: any) {
         const msg = err?.message || "Error al crear movimiento"
         toast.error("Error creando movimiento", String(msg))
@@ -352,7 +358,21 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="quantity">Cantidad</Label>
-                  <Input id="quantity" type="number" placeholder="0" value={String(form.quantity)} onChange={(e) => setForm((f) => ({ ...f, quantity: Number(e.target.value) }))} />
+                  <Input 
+                    id="quantity" 
+                    type="text" 
+                    inputMode="decimal"
+                    placeholder="0" 
+                    value={quantityInput} 
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Permitir números, punto decimal y entrada vacía
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setQuantityInput(value)
+                        setForm((f) => ({ ...f, quantity: value === '' ? 0 : parseFloat(value) || 0 }))
+                      }
+                    }} 
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -362,7 +382,21 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="unit-cost">Costo Unitario</Label>
-                  <Input id="unit-cost" type="number" step="0.01" placeholder="0.00" value={String(form.unitCost)} onChange={(e) => setForm((f) => ({ ...f, unitCost: Number(e.target.value) }))} />
+                  <Input 
+                    id="unit-cost" 
+                    type="text" 
+                    inputMode="decimal"
+                    placeholder="0.00" 
+                    value={unitCostInput} 
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Permitir números, punto decimal y entrada vacía
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setUnitCostInput(value)
+                        setForm((f) => ({ ...f, unitCost: value === '' ? 0 : parseFloat(value) || 0 }))
+                      }
+                    }} 
+                  />
                 </div>
               </div>
 
@@ -372,7 +406,11 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button variant="outline" type="button" onClick={() => setForm({ type: "entrada", warehouseId: warehouseId || "", productId: "", quantity: 0, lotNumber: "", unitCost: 0, notes: "" })}>Cancelar</Button>
+                <Button variant="outline" type="button" onClick={() => {
+                  setForm({ type: "entrada", warehouseId: warehouseId || "", productId: "", quantity: 0, lotNumber: "", unitCost: 0, notes: "" })
+                  setQuantityInput("")
+                  setUnitCostInput("")
+                }}>Cancelar</Button>
                 <Button type="submit">
                   <Plus className="mr-2 h-4 w-4" />
                   Registrar Movimiento
@@ -443,6 +481,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   setTransferTo(warehouses && warehouses.length > 1 ? warehouses[1].id : "")
                   setTransferProduct("")
                   setTransferQuantity(0)
+                  setTransferQuantityInput("")
                   setTransferLot("")
                   setTransferNotes("")
                 } catch (err: any) {
@@ -502,7 +541,21 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="transfer-quantity">Cantidad a Transferir</Label>
-                  <Input id="transfer-quantity" type="number" placeholder="0" value={String(transferQuantity)} onChange={(e) => setTransferQuantity(Number(e.target.value))} />
+                  <Input 
+                    id="transfer-quantity" 
+                    type="text" 
+                    inputMode="decimal"
+                    placeholder="0" 
+                    value={transferQuantityInput} 
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Permitir números, punto decimal y entrada vacía
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setTransferQuantityInput(value)
+                        setTransferQuantity(value === '' ? 0 : parseFloat(value) || 0)
+                      }
+                    }} 
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -523,6 +576,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   setTransferTo(warehouses && warehouses.length > 1 ? warehouses[1].id : "")
                   setTransferProduct("")
                   setTransferQuantity(0)
+                  setTransferQuantityInput("")
                   setTransferLot("")
                   setTransferNotes("")
                 }}>Cancelar</Button>
