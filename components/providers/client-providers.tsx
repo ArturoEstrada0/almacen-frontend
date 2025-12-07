@@ -2,12 +2,15 @@
 
 import { AuthProvider } from '@/lib/context/auth-context';
 import { ToastProvider } from '@/components/ui/toast-provider';
+import { NotificationProvider } from '@/components/providers/notification-provider';
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      {children}
-      <ToastProvider />
+      <NotificationProvider>
+        {children}
+        <ToastProvider />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

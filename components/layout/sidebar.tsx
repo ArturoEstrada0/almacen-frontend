@@ -14,6 +14,7 @@ import {
   Settings,
   Sprout,
   UserCog,
+  Bell,
 } from "lucide-react"
 import { useAuth } from "@/lib/context/auth-context"
 import { PermissionModule } from "@/lib/types/permissions"
@@ -33,6 +34,7 @@ const navigation: NavigationItem[] = [
   { name: "Proveedores", href: "/suppliers", icon: Users, module: "suppliers" },
   { name: "Órdenes de Compra", href: "/purchase-orders", icon: ShoppingCart, module: "purchaseOrders" },
   { name: "Reportes", href: "/reports", icon: BarChart3, module: "reports" },
+  { name: "Notificaciones", href: "/notifications", icon: Bell },
   { name: "Importar/Exportar", href: "/import-export", icon: FileText },
   { name: "Usuarios", href: "/users", icon: UserCog, module: "users" },
   // { name: "Configuración", href: "/settings", icon: Settings },
