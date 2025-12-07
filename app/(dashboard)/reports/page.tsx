@@ -227,10 +227,10 @@ export default function ReportsPage() {
         filename = `reporte-utilidades-${new Date().toISOString().split('T')[0]}.csv`
         csvContent = "Reporte de Utilidades\n\n"
         csvContent += "Resumen\n"
-        csvContent += `Ingresos Totales,${profitReport.summary?.totalRevenue ?? 0}\n`
-        csvContent += `Costos Totales,${profitReport.summary?.totalCosts ?? 0}\n`
-        csvContent += `Utilidad Bruta,${profitReport.summary?.grossProfit ?? 0}\n`
-        csvContent += `Margen de Utilidad,${profitReport.summary?.profitMargin ?? 0}%\n`
+        csvContent += `Ingresos Totales,${profitReport?.summary?.totalRevenue ?? 0}\n`
+        csvContent += `Costos Totales,${profitReport?.summary?.totalCosts ?? 0}\n`
+        csvContent += `Utilidad Bruta,${profitReport?.summary?.grossProfit ?? 0}\n`
+        csvContent += `Margen de Utilidad,${profitReport?.summary?.profitMargin ?? 0}%\n`
         break
         
       case "low-stock":
@@ -395,7 +395,7 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-green-600">
-                      {formatCurrency(profitReport.summary?.totalRevenue || 0)}
+                      {formatCurrency(profitReport?.summary?.totalRevenue || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       De ventas confirmadas
@@ -410,7 +410,7 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-red-600">
-                      {formatCurrency(profitReport.summary?.totalCosts || 0)}
+                      {formatCurrency(profitReport?.summary?.totalCosts || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Compras e insumos
@@ -424,8 +424,8 @@ export default function ReportsPage() {
                     <TrendingUp className="h-4 w-4 text-blue-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className={`text-2xl font-bold ${(profitReport.summary?.grossProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                      {formatCurrency(profitReport.summary?.grossProfit || 0)}
+                    <div className={`text-2xl font-bold ${(profitReport?.summary?.grossProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      {formatCurrency(profitReport?.summary?.grossProfit || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Ingresos - Costos
@@ -439,8 +439,8 @@ export default function ReportsPage() {
                     <BarChart3 className="h-4 w-4 text-purple-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className={`text-2xl font-bold ${(profitReport.summary?.profitMargin || 0) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
-                      {(profitReport.summary?.profitMargin || 0).toFixed(2)}%
+                    <div className={`text-2xl font-bold ${(profitReport?.summary?.profitMargin || 0) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                      {(profitReport?.summary?.profitMargin || 0).toFixed(2)}%
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Porcentaje de ganancia
@@ -461,12 +461,12 @@ export default function ReportsPage() {
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Costo por Caja</span>
-                      <span className="font-bold">{formatCurrency(profitReport.summary?.costPerBox || 0)}</span>
+                      <span className="font-bold">{formatCurrency(profitReport?.summary?.costPerBox || 0)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Utilidad por Caja</span>
-                      <span className={`font-bold ${(profitReport.summary?.profitPerBox || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(profitReport.summary?.profitPerBox || 0)}
+                      <span className={`font-bold ${(profitReport?.summary?.profitPerBox || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(profitReport?.summary?.profitPerBox || 0)}
                       </span>
                     </div>
                   </CardContent>
@@ -480,11 +480,11 @@ export default function ReportsPage() {
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Total Compras</span>
-                      <span className="font-bold">{formatCurrency(profitReport.costs?.totalPurchaseCosts || 0)}</span>
+                      <span className="font-bold">{formatCurrency(profitReport?.costs?.totalPurchaseCosts || 0)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Insumos Asignados</span>
-                      <span className="font-bold">{formatCurrency(profitReport.costs?.totalInputAssignmentCosts || 0)}</span>
+                      <span className="font-bold">{formatCurrency(profitReport?.costs?.totalInputAssignmentCosts || 0)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -506,7 +506,7 @@ export default function ReportsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {profitReport.costs?.inputAssignmentsByProduct?.map((item: any, index: number) => (
+                      {profitReport?.costs?.inputAssignmentsByProduct?.map((item: any, index: number) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.productName}</TableCell>
                           <TableCell className="text-right">{(item.totalQuantity ?? 0).toFixed(2)}</TableCell>
@@ -536,7 +536,7 @@ export default function ReportsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {profitReport.revenue?.shipments?.map((shipment: any) => (
+                      {profitReport?.revenue?.shipments?.map((shipment: any) => (
                         <TableRow key={shipment.id}>
                           <TableCell className="font-medium">{shipment.trackingFolio || `#${shipment.id}`}</TableCell>
                           <TableCell>{shipment.producerName}</TableCell>
@@ -545,7 +545,7 @@ export default function ReportsPage() {
                           <TableCell className="text-right">{formatCurrency(shipment.totalPrice ?? 0)}</TableCell>
                         </TableRow>
                       ))}
-                      {(!profitReport.revenue?.shipments || profitReport.revenue.shipments.length === 0) && (
+                      {(!profitReport?.revenue?.shipments || profitReport?.revenue?.shipments.length === 0) && (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center text-muted-foreground">
                             No hay embarques vendidos registrados
