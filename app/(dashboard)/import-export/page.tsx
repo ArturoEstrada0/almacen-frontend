@@ -26,12 +26,26 @@ import {
 } from "lucide-react"
 import { motion } from "framer-motion"
 import * as XLSX from "xlsx"
+import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase/client"
 
 export default function ImportExportPage() {
+  const { toast } = useToast()
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importType, setImportType] = useState<string>("products")
   const [mappingStep, setMappingStep] = useState<number>(1)
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
+
+  // Export states
+  const [exportFormat, setExportFormat] = useState<string>("xlsx")
+  const [includeInactive, setIncludeInactive] = useState(true)
+  const [includeImages, setIncludeImages] = useState(false)
+  const [includeZeroStock, setIncludeZeroStock] = useState(false)
+  const [includeLots, setIncludeLots] = useState(true)
+  const [warehouseFilter, setWarehouseFilter] = useState("all")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [movementType, setMovementType] = useState("all")
 
   // Parsed columns / preview rows
   const [sampleColumns, setSampleColumns] = useState<string[]>([])
@@ -41,6 +55,16 @@ export default function ImportExportPage() {
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null)
   const workbookRef = useRef<any>(null)
   const [importResult, setImportResult] = useState<any | null>(null)
+
+  const getAuthToken = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      return session?.access_token || null
+    } catch (error) {
+      console.error('Error getting auth token:', error)
+      return null
+    }
+  }
 
   const parseSheet = (sheetName: string | null) => {
     if (!sheetName || !workbookRef.current) return
@@ -162,31 +186,140 @@ export default function ImportExportPage() {
     reader.readAsArrayBuffer(file)
   }
 
-  const handleExport = (type: string) => {
-    console.log("[v0] Exporting:", type)
-    alert(`Exportando ${type}...`)
+  const handleExport = async (type: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const token = await getAuthToken()
+      
+      if (!token) {
+        toast({
+          title: "Error de autenticación",
+          description: "No se encontró un token de autenticación. Por favor, inicia sesión nuevamente.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      let url = `${apiUrl}/api/imports/export/${type}?format=${exportFormat}`
+      
+      if (type === 'products') {
+        url += `&includeInactive=${includeInactive}&includeImages=${includeImages}`
+      } else if (type === 'inventory') {
+        url += `&warehouseId=${warehouseFilter}&includeZeroStock=${includeZeroStock}&includeLots=${includeLots}`
+      } else if (type === 'movements') {
+        if (startDate) url += `&startDate=${startDate}`
+        if (endDate) url += `&endDate=${endDate}`
+        if (movementType !== 'all') url += `&type=${movementType}`
+      } else if (type === 'suppliers') {
+        url += `&includeInactive=${includeInactive}`
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Export error response:', response.status, errorText)
+        throw new Error(`Error al exportar los datos: ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      const extension = exportFormat === 'csv' ? 'csv' : 'xlsx'
+      a.download = `${type}_${new Date().toISOString().split('T')[0]}.${extension}`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(downloadUrl)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Exportación exitosa",
+        description: `Los datos de ${type} se han exportado correctamente`,
+      })
+    } catch (error) {
+      console.error('Export error:', error)
+      toast({
+        title: "Error al exportar",
+        description: "Ocurrió un error al intentar exportar los datos",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleDownloadTemplate = (type: string) => {
-    console.log("[v0] Downloading template:", type)
-    alert(`Descargando plantilla de ${type}...`)
+  const handleDownloadTemplate = async (type: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const token = await getAuthToken()
+      
+      if (!token) {
+        toast({
+          title: "Error de autenticación",
+          description: "No se encontró un token de autenticación. Por favor, inicia sesión nuevamente.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const response = await fetch(`${apiUrl}/api/imports/templates/${type}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al descargar la plantilla')
+      }
+
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = `plantilla_${type}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(downloadUrl)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Descarga exitosa",
+        description: `La plantilla de ${type} se ha descargado correctamente`,
+      })
+    } catch (error) {
+      console.error('Template download error:', error)
+      toast({
+        title: "Error al descargar",
+        description: "Ocurrió un error al intentar descargar la plantilla",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleImport = () => {
+  const handleImport = async () => {
     // Validate required mappings
     const missingRequired = (requiredFields[importType] || [])
       .filter((f) => f.required)
       .filter((f) => !columnMapping[f.field] || columnMapping[f.field] === "__none__")
 
     if (missingRequired.length > 0) {
-      alert(
-        `Faltan columnas requeridas: ${missingRequired.map((m) => m.label).join(", ")}. Por favor relacionalas antes de importar.`
-      )
+      toast({
+        title: "Campos requeridos faltantes",
+        description: `Faltan columnas requeridas: ${missingRequired.map((m) => m.label).join(", ")}`,
+        variant: "destructive",
+      })
       return
     }
 
     if (!importFile) {
-      alert('No se ha seleccionado un archivo')
+      toast({
+        title: "Error",
+        description: 'No se ha seleccionado un archivo',
+        variant: "destructive",
+      })
       return
     }
 
@@ -200,10 +333,24 @@ export default function ImportExportPage() {
     setMappingStep(3)
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    const token = await getAuthToken()
+    
+    if (!token) {
+      toast({
+        title: "Error de autenticación",
+        description: "No se encontró un token de autenticación. Por favor, inicia sesión nuevamente.",
+        variant: "destructive",
+      })
+      setMappingStep(1)
+      return
+    }
+
     fetch(`${apiUrl}/api/imports`, {
       method: 'POST',
       body: fd,
-      // NOTE: include credentials or Authorization header if your API requires auth
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -216,12 +363,32 @@ export default function ImportExportPage() {
         // Show result in the UI (mappingStep 4)
         setImportResult(json)
         setMappingStep(4)
+        toast({
+          title: "Importación completada",
+          description: `Se importaron ${json.success} de ${json.processed} registros correctamente`,
+        })
       })
       .catch((err) => {
         console.error('Import error', err)
-        alert('Error durante la importación: ' + (err.message || err))
+        toast({
+          title: "Error en la importación",
+          description: err.message || 'Ocurrió un error durante la importación',
+          variant: "destructive",
+        })
         setMappingStep(1)
       })
+  }
+
+  const resetImport = () => {
+    setImportFile(null)
+    setMappingStep(1)
+    setColumnMapping({})
+    setSampleColumns([])
+    setSampleRows([])
+    setSheetNames([])
+    setSelectedSheet(null)
+    workbookRef.current = null
+    setImportResult(null)
   }
 
   return (
@@ -251,7 +418,7 @@ export default function ImportExportPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Formato</Label>
-                  <Select defaultValue="xlsx">
+                  <Select value={exportFormat} onValueChange={setExportFormat}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -265,13 +432,21 @@ export default function ImportExportPage() {
                   <Label>Incluir</Label>
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="include-inactive" defaultChecked />
+                      <Checkbox 
+                        id="include-inactive" 
+                        checked={includeInactive}
+                        onCheckedChange={(checked) => setIncludeInactive(checked as boolean)}
+                      />
                       <label htmlFor="include-inactive" className="text-sm">
                         Productos inactivos
                       </label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="include-images" />
+                      <Checkbox 
+                        id="include-images"
+                        checked={includeImages}
+                        onCheckedChange={(checked) => setIncludeImages(checked as boolean)}
+                      />
                       <label htmlFor="include-images" className="text-sm">
                         URLs de imágenes
                       </label>
@@ -296,7 +471,7 @@ export default function ImportExportPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Almacén</Label>
-                  <Select defaultValue="all">
+                  <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -311,13 +486,21 @@ export default function ImportExportPage() {
                   <Label>Incluir</Label>
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="include-zero" />
+                      <Checkbox 
+                        id="include-zero"
+                        checked={includeZeroStock}
+                        onCheckedChange={(checked) => setIncludeZeroStock(checked as boolean)}
+                      />
                       <label htmlFor="include-zero" className="text-sm">
                         Productos con stock 0
                       </label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="include-lots" defaultChecked />
+                      <Checkbox 
+                        id="include-lots" 
+                        checked={includeLots}
+                        onCheckedChange={(checked) => setIncludeLots(checked as boolean)}
+                      />
                       <label htmlFor="include-lots" className="text-sm">
                         Números de lote
                       </label>
@@ -343,16 +526,24 @@ export default function ImportExportPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Fecha Inicio</Label>
-                    <Input type="date" />
+                    <Input 
+                      type="date" 
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Fecha Fin</Label>
-                    <Input type="date" />
+                    <Input 
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de Movimiento</Label>
-                  <Select defaultValue="all">
+                  <Select value={movementType} onValueChange={setMovementType}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -385,15 +576,13 @@ export default function ImportExportPage() {
                   <Label>Incluir</Label>
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="include-inactive-suppliers" defaultChecked />
+                      <Checkbox 
+                        id="include-inactive-suppliers" 
+                        checked={includeInactive}
+                        onCheckedChange={(checked) => setIncludeInactive(checked as boolean)}
+                      />
                       <label htmlFor="include-inactive-suppliers" className="text-sm">
                         Proveedores inactivos
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox id="include-products" defaultChecked />
-                      <label htmlFor="include-products" className="text-sm">
-                        Productos asociados
                       </label>
                     </div>
                   </div>
@@ -624,8 +813,26 @@ export default function ImportExportPage() {
                           <span className="text-sm">Errores:</span>
                           <span className="font-semibold text-red-600">{importResult?.errors?.length ?? 0}</span>
                         </div>
+                      
+                        {importResult?.errors && importResult.errors.length > 0 && (
+                          <div className="mt-4 p-4 bg-red-50 rounded-lg max-h-60 overflow-y-auto">
+                            <h4 className="font-semibold text-sm mb-2 text-red-800">Detalles de errores:</h4>
+                            <ul className="text-xs space-y-1 text-red-700">
+                              {importResult.errors.slice(0, 10).map((err: any, idx: number) => (
+                                <li key={idx}>
+                                  Fila {err.row}: {err.error}
+                                </li>
+                              ))}
+                              {importResult.errors.length > 10 && (
+                                <li className="font-semibold">
+                                  ... y {importResult.errors.length - 10} errores más
+                                </li>
+                              )}
+                            </ul>
+                          </div>
+                        )}
                     </div>
-                    <Button className="mt-6" onClick={() => setMappingStep(1)}>
+                    <Button className="mt-6" onClick={resetImport}>
                       Importar Otro Archivo
                     </Button>
                   </div>
