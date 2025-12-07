@@ -3,13 +3,16 @@
 import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { revalidatePath } from "next/cache"
 import type { Producer, InputAssignment, FruitReception, Shipment } from "@/lib/types"
+import { extractErrorMessage } from "@/lib/utils/error-handler"
 
 export async function getProducers() {
   try {
     const data = await apiGet("/api/producers?is_active=true&order=name")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getProducers:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -29,7 +32,9 @@ export async function createProducer(producer: Partial<Producer>) {
     revalidatePath("/producers")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en createProducer:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -86,7 +91,9 @@ export async function createInputAssignment(
     revalidatePath("/producers")
     return { data: assignmentData, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en createInputAssignment:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -109,7 +116,9 @@ export async function createFruitReception(reception: Partial<FruitReception>) {
     revalidatePath("/producers")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en createFruitReception:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -148,7 +157,9 @@ export async function createShipment(receptionIds: string[], shipmentData: Parti
     revalidatePath("/producers")
     return { data: shipment, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en createShipment:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -201,7 +212,9 @@ export async function markShipmentAsSold(shipmentId: string, salePrice: number) 
     revalidatePath("/producers")
     return { error: null }
   } catch (error: any) {
-    return { error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en markShipmentAsSold:', errorMessage)
+    return { error: errorMessage }
   }
 }
 
@@ -210,7 +223,9 @@ export async function getProducerAccountMovements(producerId: string) {
     const data = await apiGet(`/api/producer_account_movements?eq=producer_id,${producerId}&order=date.desc`)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getProducerAccountMovements:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -253,6 +268,8 @@ export async function registerProducerPayment(payment: {
     revalidatePath("/producers")
     return { data: paymentData, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en registerProducerPayment:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }

@@ -155,19 +155,27 @@ export class ApiClient {
 
   private static async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      // Try to parse JSON error body, otherwise read text
-      let parsed: any = null
+      // Try to parse JSON error body from backend
+      let errorData: any = null
       try {
-        parsed = await response.json()
+        errorData = await response.json()
       } catch (e) {
         try {
-          parsed = await response.text()
+          errorData = await response.text()
         } catch (e2) {
-          parsed = null
+          errorData = null
         }
       }
 
-      const msg = parsed && typeof parsed === 'object' && parsed.message ? parsed.message : parsed || response.statusText
+      // Crear un objeto de error estructurado que incluya toda la información
+      const error: any = new Error(errorData?.message || response.statusText || 'Error en la solicitud')
+      error.statusCode = response.status
+      error.status = response.status
+      error.message = errorData?.message || response.statusText
+      error.errors = errorData?.errors
+      error.timestamp = errorData?.timestamp
+      error.path = errorData?.path
+      error.technicalDetails = errorData?.technicalDetails
       
       // Si es un error 401, redirigir al login
       if (response.status === 401 && typeof window !== 'undefined') {
@@ -175,7 +183,7 @@ export class ApiClient {
         window.location.href = '/auth/login'
       }
       
-      throw new Error(`Request failed ${response.status} ${response.statusText} - ${msg} (url: ${response.url})`)
+      throw error
     }
 
     // Parse response body (could be empty)

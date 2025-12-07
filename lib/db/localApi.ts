@@ -48,11 +48,20 @@ async function request(path: string, opts: RequestInit = {}) {
     res = await fetch(url, { ...opts, headers })
   } catch (err: any) {
     // Network-level errors (e.g. ECONNREFUSED, DNS issues) end up here
-    throw new Error(`Network request failed for ${url}: ${err?.message || String(err)}`)
+    const error: any = new Error(`No se pudo conectar con el servidor. Verifique su conexión a internet.`)
+    error.statusCode = 0
+    error.originalError = err?.message || String(err)
+    throw error
   }
 
   if (!res.ok) {
-    const text = await res.text()
+    let errorData: any = null
+    try {
+      const text = await res.text()
+      errorData = JSON.parse(text)
+    } catch (e) {
+      errorData = null
+    }
     
     // Si es un error 401, redirigir al login
     if (res.status === 401 && typeof window !== 'undefined') {
@@ -60,8 +69,16 @@ async function request(path: string, opts: RequestInit = {}) {
       window.location.href = '/auth/login'
     }
     
-    // Mejorar el mensaje de error mostrando la URL y el texto del backend
-    throw new Error(`Request failed ${res.status} (${url}): ${text}`)
+    // Crear un objeto de error estructurado
+    const error: any = new Error(errorData?.message || `Error ${res.status}`)
+    error.statusCode = res.status
+    error.status = res.status
+    error.errors = errorData?.errors
+    error.timestamp = errorData?.timestamp
+    error.path = errorData?.path
+    error.technicalDetails = errorData?.technicalDetails
+    
+    throw error
   }
   const contentType = res.headers.get("content-type") || ""
   if (contentType.includes("application/json")) return await res.json()

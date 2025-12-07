@@ -3,6 +3,7 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/db/localApi"
 import { revalidatePath } from "next/cache"
 import type { Product } from "@/lib/types"
+import { extractErrorMessage, ERROR_MESSAGES } from "@/lib/utils/error-handler"
 
 export async function getProducts() {
   try {
@@ -30,7 +31,9 @@ export async function getProducts() {
     }))
     return { data: mapped, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error fetching products:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -60,7 +63,9 @@ export async function getProductById(id: string) {
     }
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error(`Error fetching product ${id}:`, errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -87,7 +92,9 @@ export async function createProduct(product: Partial<Product>) {
     revalidatePath("/products")
     return { data: res, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error creating product:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -109,7 +116,9 @@ export async function updateProduct(id: string, product: Partial<Product>) {
     revalidatePath("/products")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error(`Error updating product ${id}:`, errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -119,7 +128,9 @@ export async function deleteProduct(id: string) {
     revalidatePath("/products")
     return { error: null }
   } catch (error: any) {
-    return { error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error(`Error deleting product ${id}:`, errorMessage)
+    return { error: errorMessage }
   }
 }
 
@@ -128,6 +139,8 @@ export async function getProductsByType(type: "insumo" | "fruta") {
     const data = await apiGet(`/products?type=${type}&is_active=true&order=name&select=*,category:categories(id,name),unit:units(id,name,abbreviation)`)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error(`Error fetching products by type ${type}:`, errorMessage)
+    return { data: null, error: errorMessage }
   }
 }

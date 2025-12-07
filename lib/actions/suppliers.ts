@@ -3,13 +3,16 @@
 import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { revalidatePath } from "next/cache"
 import type { Supplier } from "@/lib/types"
+import { extractErrorMessage } from "@/lib/utils/error-handler"
 
 export async function getSuppliers() {
   try {
     const data = await apiGet(`/suppliers?is_active=true&order=business_name`)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getSuppliers:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -18,7 +21,9 @@ export async function getSupplierById(id: string) {
     const data = await apiGet(`/suppliers/${id}`)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getSupplierById:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -44,7 +49,9 @@ export async function createSupplier(supplier: Partial<Supplier>) {
     revalidatePath("/suppliers")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en createSupplier:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -69,7 +76,9 @@ export async function updateSupplier(id: string, supplier: Partial<Supplier>) {
     revalidatePath("/suppliers")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en updateSupplier:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -78,7 +87,9 @@ export async function getSuppliersByProduct(productId: string) {
     const data = await apiGet(`/product_suppliers?product_id=${productId}&is_active=true&select=*,supplier:suppliers(*)`)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getSuppliersByProduct:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -107,6 +118,8 @@ export async function addProductSupplier(productSupplier: {
     revalidatePath("/suppliers")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en addProductSupplier:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }

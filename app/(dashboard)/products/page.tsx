@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/lib/utils/toast"
 import { deleteProduct } from "@/lib/actions/products"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import { extractErrorMessage } from "@/lib/utils/error-handler"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,13 +56,16 @@ export default function ProductsPage() {
       const result = await deleteProduct(productToDelete)
 
       if (result.error) {
-        toast.error("Error", result.error)
+        toast.dismiss(loadingToast)
+        toast.error(extractErrorMessage(result.error))
       } else {
+        toast.dismiss(loadingToast)
         toast.success("Producto eliminado correctamente")
         mutate() // Revalidate data
       }
     } catch (error) {
-      toast.error("Error al eliminar producto")
+      toast.dismiss(loadingToast)
+      toast.error(extractErrorMessage(error))
     } finally {
       setDeleteDialogOpen(false)
       setProductToDelete(null)

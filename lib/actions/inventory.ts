@@ -2,6 +2,7 @@
 
 import { supabase, handleSupabaseError } from "@/lib/db/supabase"
 import { revalidatePath } from "next/cache"
+import { extractErrorMessage } from "@/lib/utils/error-handler"
 
 export async function getInventoryByWarehouse(warehouseId: string) {
   try {
@@ -19,7 +20,9 @@ export async function getInventoryByWarehouse(warehouseId: string) {
     if (error) handleSupabaseError(error)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getInventoryByWarehouse:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -45,7 +48,9 @@ export async function updateInventoryLevels(
     revalidatePath("/inventory")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en updateInventoryLevels:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -74,7 +79,9 @@ export async function createInventoryEntry(
     revalidatePath("/inventory")
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en createInventoryEntry:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -98,6 +105,8 @@ export async function getLowStockProducts(warehouseId?: string) {
     if (error) handleSupabaseError(error)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getLowStockProducts:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }

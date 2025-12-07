@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -16,9 +16,16 @@ import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useInventoryByWarehouse } from "@/lib/hooks/use-inventory"
 import { useMovements } from "@/lib/hooks/use-inventory"
 import { useLowStockProducts } from "@/lib/hooks/use-inventory"
+import { InventoryValueChart } from "@/components/reports/inventory-value-chart"
+import { ABCAnalysisChart } from "@/components/reports/abc-analysis-chart"
+import { MovementsTrendChart } from "@/components/reports/movements-trend-chart"
+import { TopProductsChart } from "@/components/reports/top-products-chart"
+import { ProfitAnalysisChart } from "@/components/reports/profit-analysis-chart"
+import { CategoryDistributionChart } from "@/components/reports/category-distribution-chart"
 
 export default function ReportsPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
+  const [selectedReport, setSelectedReport] = useState<string | null>(null)
   const { profitReport, isLoading: isProfitLoading } = useProfitReport()
   const { products, isLoading: isLoadingProducts } = useProducts()
   const { warehouses, isLoading: isLoadingWarehouses } = useWarehouses()
@@ -73,6 +80,80 @@ export default function ReportsPage() {
     return { ...item, classification, percentage }
   })
 
+  // Preparar datos para gráficas
+  const chartData = useMemo(() => {
+    // Valor por almacén
+    const inventoryByWarehouse = warehouses.map(warehouse => {
+      const warehouseItems = stockValuation.filter(item => item.warehouseId === warehouse.id)
+      return {
+        warehouseName: warehouse.name,
+        value: warehouseItems.reduce((sum, item) => sum + item.value, 0),
+        quantity: warehouseItems.reduce((sum, item) => sum + (item.currentStock ?? 0), 0),
+      }
+    }).filter(item => item.value > 0)
+
+    // Top productos por valor
+    const topProducts = abcAnalysis.slice(0, 10).map(item => ({
+      name: item.product.name.length > 20 ? item.product.name.substring(0, 20) + '...' : item.product.name,
+      value: item.value,
+      quantity: item.totalQty,
+    }))
+
+    // Distribución por categoría
+    const categoryMap = new Map<string, { value: number; count: number }>()
+    stockValuation.forEach(item => {
+      const categoryName = item.product?.category?.name || 'Sin Categoría'
+      const existing = categoryMap.get(categoryName) || { value: 0, count: 0 }
+      categoryMap.set(categoryName, {
+        value: existing.value + item.value,
+        count: existing.count + 1,
+      })
+    })
+    const categoryDistribution = Array.from(categoryMap.entries()).map(([category, data]) => ({
+      category,
+      ...data,
+    })).sort((a, b) => b.value - a.value)
+
+    // Tendencia de movimientos por fecha
+    const movementsByDate = new Map<string, { entradas: number; salidas: number; ajustes: number }>()
+    movements?.forEach((movement: any) => {
+      const date = new Date(movement.date).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })
+      const existing = movementsByDate.get(date) || { entradas: 0, salidas: 0, ajustes: 0 }
+      
+      if (movement.type === 'in') existing.entradas++
+      else if (movement.type === 'out') existing.salidas++
+      else existing.ajustes++
+      
+      movementsByDate.set(date, existing)
+    })
+    const movementsTrend = Array.from(movementsByDate.entries())
+      .map(([date, data]) => ({ date, ...data }))
+      .slice(-30) // Últimos 30 registros
+
+    // Datos de ABC para gráfica de pie
+    const abcChartData = abcWithClass.map(item => ({
+      name: item.product.name,
+      value: item.value,
+      classification: item.classification,
+    }))
+
+    // Datos de utilidades
+    const profitChartData = {
+      revenue: profitReport?.summary?.totalRevenue ?? 0,
+      costs: profitReport?.summary?.totalCosts ?? 0,
+      profit: profitReport?.summary?.grossProfit ?? 0,
+    }
+
+    return {
+      inventoryByWarehouse,
+      topProducts,
+      categoryDistribution,
+      movementsTrend,
+      abcChartData,
+      profitChartData,
+    }
+  }, [warehouses, stockValuation, abcAnalysis, movements, abcWithClass, profitReport])
+
   const reports = [
     {
       id: "stock-valuation",
@@ -109,9 +190,86 @@ export default function ReportsPage() {
   ]
 
   const handleExport = (reportType: string) => {
-    console.log("[v0] Exporting report:", reportType)
-    // In a real app, this would generate and download an Excel file
-    alert(`Exportando reporte: ${reportType}`)
+    console.log("Exportando reporte:", reportType)
+    
+    let csvContent = ""
+    let filename = ""
+    
+    switch (reportType) {
+      case "stock-valuation":
+      case "inventory-valuation":
+        filename = `valoracion-inventario-${new Date().toISOString().split('T')[0]}.csv`
+        csvContent = "Producto,SKU,Almacén,Cantidad,Costo Unitario,Valor Total\n"
+        stockValuation.forEach(item => {
+          csvContent += `"${item.product?.name || 'N/A'}","${item.product?.sku || 'N/A'}","${item.warehouse?.name || 'N/A'}",${item.currentStock ?? 0},${item.product?.costPrice ?? 0},${item.value ?? 0}\n`
+        })
+        csvContent += `\nValor Total del Inventario,,,,,${totalValue}\n`
+        break
+      
+      case "movements-report":
+        filename = `reporte-movimientos-${new Date().toISOString().split('T')[0]}.csv`
+        csvContent = "Fecha,Tipo,Producto,Almacén,Cantidad,Usuario,Notas\n"
+        if (movements && movements.length > 0) {
+          movements.forEach(movement => {
+            const product = products.find(p => p.id === movement.productId)
+            const warehouse = warehouses.find(w => w.id === movement.warehouseId)
+            const date = new Date(movement.date).toLocaleDateString()
+            const type = movement.type === 'in' ? 'Entrada' : movement.type === 'out' ? 'Salida' : 'Ajuste'
+            csvContent += `"${date}","${type}","${product?.name || 'N/A'}","${warehouse?.name || 'N/A'}",${movement.quantity ?? 0},"${movement.user?.email || 'N/A'}","${movement.notes || ''}"\n`
+          })
+        } else {
+          csvContent += "No hay movimientos registrados\n"
+        }
+        csvContent += `\nTotal de Movimientos,${totalMovements}\n`
+        break
+        
+      case "profit-report":
+        filename = `reporte-utilidades-${new Date().toISOString().split('T')[0]}.csv`
+        csvContent = "Reporte de Utilidades\n\n"
+        csvContent += "Resumen\n"
+        csvContent += `Ingresos Totales,${profitReport.summary?.totalRevenue ?? 0}\n`
+        csvContent += `Costos Totales,${profitReport.summary?.totalCosts ?? 0}\n`
+        csvContent += `Utilidad Bruta,${profitReport.summary?.grossProfit ?? 0}\n`
+        csvContent += `Margen de Utilidad,${profitReport.summary?.profitMargin ?? 0}%\n`
+        break
+        
+      case "low-stock":
+        filename = `productos-stock-bajo-${new Date().toISOString().split('T')[0]}.csv`
+        csvContent = "Producto,SKU,Almacén,Stock Actual,Stock Mínimo,Estado\n"
+        lowStockProducts.forEach(item => {
+          const product = products.find(p => p.id === item.productId)
+          const warehouse = warehouses.find(w => w.id === item.warehouseId)
+          const status = item.currentStock === 0 ? "Sin Stock" : "Stock Bajo"
+          csvContent += `"${product?.name || 'N/A'}","${product?.sku || 'N/A'}","${warehouse?.name || 'N/A'}",${item.currentStock ?? 0},${item.minStock ?? 0},"${status}"\n`
+        })
+        break
+        
+      case "abc-analysis":
+        filename = `analisis-abc-${new Date().toISOString().split('T')[0]}.csv`
+        csvContent = "Producto,SKU,Cantidad,Valor,Porcentaje,Clasificación\n"
+        abcWithClass.forEach(item => {
+          csvContent += `"${item.product.name}","${item.product.sku}",${item.totalQty ?? 0},${item.value ?? 0},${item.percentage ?? 0}%,"${item.classification}"\n`
+        })
+        break
+        
+      default:
+        alert(`Reporte ${reportType} no disponible`)
+        return
+    }
+    
+    // Crear y descargar el archivo
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    
+    link.setAttribute("href", url)
+    link.setAttribute("download", filename)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    console.log(`Reporte ${reportType} exportado exitosamente`)
   }
 
   return (
@@ -153,7 +311,13 @@ export default function ReportsPage() {
                       <CardDescription>{report.description}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button className="w-full" onClick={() => handleExport(report.id)}>
+                      <Button 
+                        className="w-full" 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleExport(report.id)
+                        }}
+                      >
                         <Download className="mr-2 h-4 w-4" />
                         Exportar
                       </Button>
@@ -196,6 +360,22 @@ export default function ReportsPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Gráficas de tendencias y análisis */}
+          {!isLoadingMovements && chartData.movementsTrend.length > 0 && (
+            <MovementsTrendChart data={chartData.movementsTrend} />
+          )}
+
+          {!isLoadingInventory && !isLoadingProducts && (
+            <div className="grid gap-6 md:grid-cols-2">
+              <TopProductsChart 
+                data={chartData.topProducts}
+                title="Top 10 Productos"
+                description="Productos con mayor valor en inventario"
+              />
+              <CategoryDistributionChart data={chartData.categoryDistribution} />
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="profit" className="space-y-4">
@@ -269,6 +449,9 @@ export default function ReportsPage() {
                 </Card>
               </div>
 
+              {/* Gráfica de análisis de rentabilidad */}
+              <ProfitAnalysisChart data={chartData.profitChartData} />
+
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader>
@@ -326,9 +509,9 @@ export default function ReportsPage() {
                       {profitReport.costs?.inputAssignmentsByProduct?.map((item: any, index: number) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.productName}</TableCell>
-                          <TableCell className="text-right">{item.totalQuantity.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.totalCost)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.avgCost)}</TableCell>
+                          <TableCell className="text-right">{(item.totalQuantity ?? 0).toFixed(2)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.totalCost ?? 0)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.avgCost ?? 0)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -358,8 +541,8 @@ export default function ReportsPage() {
                           <TableCell className="font-medium">{shipment.trackingFolio || `#${shipment.id}`}</TableCell>
                           <TableCell>{shipment.producerName}</TableCell>
                           <TableCell>{new Date(shipment.shipmentDate).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">{shipment.totalBoxes}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(shipment.totalPrice)}</TableCell>
+                          <TableCell className="text-right">{shipment.totalBoxes ?? 0}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(shipment.totalPrice ?? 0)}</TableCell>
                         </TableRow>
                       ))}
                       {(!profitReport.revenue?.shipments || profitReport.revenue.shipments.length === 0) && (
@@ -423,7 +606,20 @@ export default function ReportsPage() {
                     <p className="text-sm text-muted-foreground">Valor Total del Inventario</p>
                     <p className="text-3xl font-bold">{formatCurrency(totalValue)}</p>
                   </div>
-                  <div className="rounded-md border">
+
+                  {/* Gráficas de análisis */}
+                  <div className="grid gap-6 mb-6 md:grid-cols-2">
+                    <InventoryValueChart data={chartData.inventoryByWarehouse} />
+                    <CategoryDistributionChart data={chartData.categoryDistribution} />
+                  </div>
+                  
+                  <TopProductsChart 
+                    data={chartData.topProducts}
+                    title="Top 10 Productos por Valor"
+                    description="Productos con mayor valor en inventario"
+                  />
+
+                  <div className="mt-6 rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -448,9 +644,9 @@ export default function ReportsPage() {
                               <TableCell className="font-medium">{item.product?.name || 'N/A'}</TableCell>
                               <TableCell className="text-muted-foreground">{item.product?.sku || 'N/A'}</TableCell>
                               <TableCell>{item.warehouse?.name || 'N/A'}</TableCell>
-                              <TableCell className="text-right">{item.currentStock || 0}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(item.product?.costPrice || 0)}</TableCell>
-                              <TableCell className="text-right font-bold">{formatCurrency(item.value)}</TableCell>
+                              <TableCell className="text-right">{item.currentStock ?? 0}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(item.product?.costPrice ?? 0)}</TableCell>
+                              <TableCell className="text-right font-bold">{formatCurrency(item.value ?? 0)}</TableCell>
                             </TableRow>
                           ))
                         )}
@@ -576,6 +772,9 @@ export default function ReportsPage() {
                     </div>
                   </div>
 
+                  {/* Gráfica de distribución ABC */}
+                  <ABCAnalysisChart data={chartData.abcChartData} />
+
                   <div className="rounded-md border">
                     <Table>
                       <TableHeader>
@@ -600,9 +799,9 @@ export default function ReportsPage() {
                             <TableRow key={item.product.id}>
                               <TableCell className="font-medium">{item.product.name}</TableCell>
                               <TableCell className="text-muted-foreground">{item.product.sku}</TableCell>
-                              <TableCell className="text-right">{item.totalQty.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(item.value)}</TableCell>
-                              <TableCell className="text-right">{item.percentage.toFixed(1)}%</TableCell>
+                              <TableCell className="text-right">{(item.totalQty ?? 0).toFixed(2)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(item.value ?? 0)}</TableCell>
+                              <TableCell className="text-right">{(item.percentage ?? 0).toFixed(1)}%</TableCell>
                               <TableCell>
                                 <Badge
                                   variant={

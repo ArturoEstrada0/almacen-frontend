@@ -3,6 +3,7 @@
 import { supabase, handleSupabaseError } from "@/lib/db/supabase"
 import { revalidatePath } from "next/cache"
 import type { PurchaseOrder, PurchaseOrderItem } from "@/lib/types"
+import { extractErrorMessage } from "@/lib/utils/error-handler"
 
 export async function getPurchaseOrders() {
   try {
@@ -22,7 +23,9 @@ export async function getPurchaseOrders() {
     if (error) handleSupabaseError(error)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getPurchaseOrders:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -45,7 +48,9 @@ export async function getPurchaseOrderById(id: string) {
     if (error) handleSupabaseError(error)
     return { data, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en getPurchaseOrderById:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -103,7 +108,9 @@ export async function createPurchaseOrder(order: Partial<PurchaseOrder>, items: 
     revalidatePath("/purchase-orders")
     return { data: poData, error: null }
   } catch (error: any) {
-    return { data: null, error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en createPurchaseOrder:', errorMessage)
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -153,7 +160,9 @@ export async function receivePurchaseOrder(
     revalidatePath("/purchase-orders")
     return { error: null }
   } catch (error: any) {
-    return { error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en receivePurchaseOrder:', errorMessage)
+    return { error: errorMessage }
   }
 }
 
@@ -204,6 +213,8 @@ export async function registerPayment(
     revalidatePath("/purchase-orders")
     return { error: null }
   } catch (error: any) {
-    return { error: error.message }
+    const errorMessage = extractErrorMessage(error)
+    console.error('Error en registerPayment:', errorMessage)
+    return { error: errorMessage }
   }
 }
