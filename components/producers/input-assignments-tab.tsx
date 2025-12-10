@@ -27,8 +27,8 @@ import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/
 interface AssignmentItem {
   id: number
   productId: string
-  quantity: number
-  unitPrice: number
+  quantity: string
+  unitPrice: string
 }
 
 export function InputAssignmentsTab() {
@@ -80,7 +80,7 @@ export function InputAssignmentsTab() {
   }, [])
 
   const addItem = () =>
-    setSelectedItems((s) => [...s, { id: Date.now(), productId: "", quantity: 0, unitPrice: 0 }])
+    setSelectedItems((s) => [...s, { id: Date.now(), productId: "", quantity: "", unitPrice: "" }])
   const removeItem = (id: number) => setSelectedItems((s) => s.filter((it) => it.id !== id))
   const updateItem = (id: number, patch: Partial<AssignmentItem>) =>
     setSelectedItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch } : it)))
@@ -126,12 +126,12 @@ export function InputAssignmentsTab() {
     setTrackingFolio(assignment.trackingFolio || "")
     setNotes(assignment.notes || "")
     
-    // Cargar items de la asignación
+    // Cargar items de la asignación (como strings para permitir edición decimal)
     const items = (assignment.items || []).map((item: any) => ({
       id: item.id || Date.now() + Math.random(),
       productId: String(item.productId || item.product?.id),
-      quantity: Number(item.quantity || 0),
-      unitPrice: Number(item.price || item.unitPrice || 0),
+      quantity: String(item.quantity || 0),
+      unitPrice: String(item.price || item.unitPrice || 0),
     }))
     setSelectedItems(items)
     setIsDialogOpen(true)
@@ -160,7 +160,11 @@ export function InputAssignmentsTab() {
     }
   }
 
-  const calculateTotal = () => selectedItems.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
+  const calculateTotal = () => selectedItems.reduce((sum, it) => {
+    const qty = parseFloat(it.quantity) || 0
+    const price = parseFloat(it.unitPrice) || 0
+    return sum + qty * price
+  }, 0)
 
   // Estado para mostrar error en pantalla
   const [saveError, setSaveError] = useState("")
@@ -175,7 +179,11 @@ export function InputAssignmentsTab() {
         date: assignmentDate,
         trackingFolio,
         notes,
-        items: selectedItems.map((it) => ({ productId: it.productId, quantity: it.quantity, unitPrice: it.unitPrice })),
+        items: selectedItems.map((it) => ({ 
+          productId: it.productId, 
+          quantity: parseFloat(it.quantity) || 0, 
+          unitPrice: parseFloat(it.unitPrice) || 0 
+        })),
       }
       
       if (isEditMode && editingAssignment) {
@@ -237,7 +245,8 @@ export function InputAssignmentsTab() {
 
   // Validar stock de cada item al cambiar cantidad o producto
   async function checkItemStock(item: AssignmentItem) {
-    if (!item.productId || !selectedWarehouse || !item.quantity) return
+    const qty = parseFloat(item.quantity) || 0
+    if (!item.productId || !selectedWarehouse || !qty) return
     try {
       const inventory = await apiGet(`/inventory/warehouse/${selectedWarehouse}`)
       const invItem = Array.isArray(inventory)
@@ -246,7 +255,7 @@ export function InputAssignmentsTab() {
       const stock = invItem ? Number(invItem.quantity) : 0
       setItemStockErrors(prev => ({
         ...prev,
-        [item.id]: item.quantity > stock ? `No hay suficiente stock para este insumo. Solo hay ${stock} disponibles.` : ""
+        [item.id]: qty > stock ? `No hay suficiente stock para este insumo. Solo hay ${stock} disponibles.` : ""
       }))
     } catch {
       setItemStockErrors(prev => ({ ...prev, [item.id]: "" }))
@@ -377,12 +386,12 @@ export function InputAssignmentsTab() {
                         <Input
                           type="text"
                           inputMode="decimal"
-                          value={it.quantity === 0 ? "" : String(it.quantity)}
+                          value={it.quantity}
                           onChange={e => {
                             const value = e.target.value
                             if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                              updateItem(it.id, { quantity: value === "" ? 0 : Number(value) })
-                              checkItemStock({ ...it, quantity: value === "" ? 0 : Number(value) })
+                              updateItem(it.id, { quantity: value })
+                              checkItemStock({ ...it, quantity: value })
                             }
                           }}
                           placeholder="Cantidad"
@@ -393,11 +402,11 @@ export function InputAssignmentsTab() {
                         <Input
                           type="text"
                           inputMode="decimal"
-                          value={it.unitPrice === 0 ? "" : String(it.unitPrice)}
+                          value={it.unitPrice}
                           onChange={(e) => {
                             const value = e.target.value
                             if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                              updateItem(it.id, { unitPrice: value === "" ? 0 : Number(value) })
+                              updateItem(it.id, { unitPrice: value })
                             }
                           }}
                           placeholder="Precio unitario"
