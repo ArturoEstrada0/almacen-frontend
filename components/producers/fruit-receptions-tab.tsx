@@ -32,8 +32,8 @@ import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/
 interface ReturnedItem {
   id: number
   productId: string
-  quantity: number
-  unitPrice: number
+  quantity: string
+  unitPrice: string
 }
 
 export function FruitReceptionsTab() {
@@ -99,7 +99,7 @@ export function FruitReceptionsTab() {
   const totalWeight = boxes && weightPerBox ? Number(boxes) * Number(weightPerBox) : 0
 
   const addReturnedItem = () =>
-    setReturnedItems((s) => [...s, { id: Date.now(), productId: "", quantity: 0, unitPrice: 0 }])
+    setReturnedItems((s) => [...s, { id: Date.now(), productId: "", quantity: "", unitPrice: "" }])
   
   const removeReturnedItem = (id: number) => setReturnedItems((s) => s.filter((it) => it.id !== id))
   
@@ -107,7 +107,7 @@ export function FruitReceptionsTab() {
     setReturnedItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch } : it)))
 
   const calculateReturnedTotal = () => 
-    returnedItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
+    returnedItems.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)), 0)
 
   const handleSave = async () => {
     try {
@@ -130,8 +130,8 @@ export function FruitReceptionsTab() {
         payload.returnedBoxesValue = returnedTotal
         payload.returnedItems = returnedItems.map(item => ({
           productId: item.productId,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice)
+          quantity: parseFloat(item.quantity) || 0,
+          unitPrice: parseFloat(item.unitPrice) || 0
         }))
       } else {
         // Fallback al sistema viejo para compatibilidad
@@ -188,13 +188,13 @@ export function FruitReceptionsTab() {
     setReturnedBoxes(String(reception.returnedBoxes || ""))
     setReturnedBoxesValue(String(reception.returnedBoxesValue || ""))
     
-    // Cargar items devueltos si existen
+    // Cargar items devueltos si existen (como strings para permitir edición decimal)
     if (reception.returnedItems && Array.isArray(reception.returnedItems)) {
       const items = reception.returnedItems.map((item: any) => ({
         id: item.id || Date.now() + Math.random(),
         productId: String(item.productId),
-        quantity: Number(item.quantity || 0),
-        unitPrice: Number(item.unitPrice || item.price || 0),
+        quantity: String(item.quantity || 0),
+        unitPrice: String(item.unitPrice || item.price || 0),
       }))
       setReturnedItems(items)
     } else {
@@ -398,7 +398,6 @@ export function FruitReceptionsTab() {
                   
                   <div className="space-y-3">
                     {returnedItems.map((item) => {
-                      const itemTotal = item.quantity * item.unitPrice
                       return (
                         <div key={item.id} className="grid grid-cols-12 gap-2 items-start p-3 bg-blue-50 rounded-lg border border-blue-200">
                           <div className="col-span-5">
@@ -421,11 +420,11 @@ export function FruitReceptionsTab() {
                             <Input
                               type="text"
                               inputMode="decimal"
-                              value={item.quantity === 0 ? "" : String(item.quantity)}
+                              value={item.quantity}
                               onChange={(e) => {
                                 const value = e.target.value
                                 if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                                  updateReturnedItem(item.id, { quantity: value === "" ? 0 : Number(value) })
+                                  updateReturnedItem(item.id, { quantity: value })
                                 }
                               }}
                               placeholder="0"
@@ -437,11 +436,11 @@ export function FruitReceptionsTab() {
                             <Input
                               type="text"
                               inputMode="decimal"
-                              value={item.unitPrice === 0 ? "" : String(item.unitPrice)}
+                              value={item.unitPrice}
                               onChange={(e) => {
                                 const value = e.target.value
                                 if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                                  updateReturnedItem(item.id, { unitPrice: value === "" ? 0 : Number(value) })
+                                  updateReturnedItem(item.id, { unitPrice: value })
                                 }
                               }}
                               placeholder="0.00"
@@ -451,7 +450,7 @@ export function FruitReceptionsTab() {
                           <div className="col-span-2">
                             <Label className="text-xs mb-1 block">Total</Label>
                             <Input
-                              value={formatCurrency(itemTotal)}
+                              value={formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0))}
                               disabled
                               className="bg-white text-sm font-semibold"
                             />
