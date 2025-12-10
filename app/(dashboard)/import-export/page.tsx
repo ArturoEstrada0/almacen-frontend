@@ -2,7 +2,8 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -31,10 +32,21 @@ import { supabase } from "@/lib/supabase/client"
 
 export default function ImportExportPage() {
   const { toast } = useToast()
+  const searchParams = useSearchParams()
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importType, setImportType] = useState<string>("products")
   const [mappingStep, setMappingStep] = useState<number>(1)
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
+  const [activeTab, setActiveTab] = useState<string>("export")
+
+  // Leer parámetro type de la URL para pre-seleccionar tipo de importación
+  useEffect(() => {
+    const typeParam = searchParams.get('type')
+    if (typeParam && ['products', 'inventory', 'suppliers', 'input-assignments', 'fruit-receptions', 'initial-stock'].includes(typeParam)) {
+      setImportType(typeParam)
+      setActiveTab("import")
+    }
+  }, [searchParams])
 
   // Export states
   const [exportFormat, setExportFormat] = useState<string>("xlsx")
@@ -128,6 +140,36 @@ export default function ImportExportPage() {
       { field: "address", label: "Dirección", required: false },
       { field: "phone", label: "Teléfono", required: false },
       { field: "email", label: "Email", required: false },
+    ],
+    "input-assignments": [
+      { field: "producer", label: "Productor", required: true },
+      { field: "warehouse", label: "Almacén", required: true },
+      { field: "date", label: "Fecha", required: false },
+      { field: "sku", label: "SKU del Producto", required: true },
+      { field: "quantity", label: "Cantidad", required: true },
+      { field: "unitPrice", label: "Precio Unitario", required: true },
+      { field: "notes", label: "Notas", required: false },
+    ],
+    "fruit-receptions": [
+      { field: "producer", label: "Productor", required: true },
+      { field: "warehouse", label: "Almacén", required: true },
+      { field: "product", label: "Producto (SKU)", required: true },
+      { field: "date", label: "Fecha", required: false },
+      { field: "boxes", label: "Cajas", required: true },
+      { field: "weightPerBox", label: "Peso por Caja", required: false },
+      { field: "totalWeight", label: "Peso Total", required: false },
+      { field: "notes", label: "Notas", required: false },
+    ],
+    "initial-stock": [
+      { field: "sku", label: "SKU del Producto", required: true },
+      { field: "warehouse", label: "Almacén", required: true },
+      { field: "quantity", label: "Cantidad", required: true },
+      { field: "location", label: "Ubicación", required: false },
+      { field: "lotNumber", label: "Número de Lote", required: false },
+      { field: "expirationDate", label: "Fecha de Vencimiento", required: false },
+      { field: "minStock", label: "Stock Mínimo", required: false },
+      { field: "maxStock", label: "Stock Máximo", required: false },
+      { field: "reorderPoint", label: "Punto de Reorden", required: false },
     ],
   }
 
@@ -398,7 +440,7 @@ export default function ImportExportPage() {
         <p className="text-muted-foreground">Gestiona tus datos con archivos Excel</p>
       </div>
 
-      <Tabs defaultValue="export" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="export">Exportar Datos</TabsTrigger>
           <TabsTrigger value="import">Importar Datos</TabsTrigger>
@@ -615,6 +657,9 @@ export default function ImportExportPage() {
                         <SelectItem value="products">Productos</SelectItem>
                         <SelectItem value="inventory">Inventario</SelectItem>
                         <SelectItem value="suppliers">Proveedores</SelectItem>
+                        <SelectItem value="input-assignments">Asignación de Insumos</SelectItem>
+                        <SelectItem value="fruit-receptions">Recepción de Fruta</SelectItem>
+                        <SelectItem value="initial-stock">Carga Inicial por Almacén</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -926,6 +971,66 @@ export default function ImportExportPage() {
                     variant="outline"
                     className="w-full bg-transparent"
                     onClick={() => handleDownloadTemplate("movements")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Descargar Plantilla
+                  </Button>
+                </div>
+
+                <div className="p-4 border rounded-lg space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+                      <FileSpreadsheet className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold">Plantilla de Asignación de Insumos</h4>
+                      <p className="text-xs text-muted-foreground">Asignar insumos a productores</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => handleDownloadTemplate("input-assignments")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Descargar Plantilla
+                  </Button>
+                </div>
+
+                <div className="p-4 border rounded-lg space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-lime-500/10">
+                      <FileSpreadsheet className="h-5 w-5 text-lime-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold">Plantilla de Recepción de Fruta</h4>
+                      <p className="text-xs text-muted-foreground">Registrar recepciones de fruta</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => handleDownloadTemplate("fruit-receptions")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Descargar Plantilla
+                  </Button>
+                </div>
+
+                <div className="p-4 border rounded-lg space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10">
+                      <TableIcon className="h-5 w-5 text-cyan-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold">Plantilla de Carga Inicial</h4>
+                      <p className="text-xs text-muted-foreground">Carga inicial de stock por almacén</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => handleDownloadTemplate("initial-stock")}
                   >
                     <Download className="mr-2 h-4 w-4" />
                     Descargar Plantilla

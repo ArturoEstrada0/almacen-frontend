@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Printer, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, Eye, Printer, Edit, Trash2, Upload } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { 
@@ -36,6 +37,7 @@ interface ReturnedItem {
 }
 
 export function FruitReceptionsTab() {
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -276,6 +278,10 @@ export function FruitReceptionsTab() {
     window.print() // Personaliza si necesitas formato especial
   }
 
+  const handleImport = () => {
+    router.push('/import-export?type=fruit-receptions')
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -284,19 +290,24 @@ export function FruitReceptionsTab() {
             <CardTitle>Recepción de Fruta</CardTitle>
             <CardDescription>Registra la entrega de fruta por parte de productores (sin ajuste de cuenta hasta venta)</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <ProtectedCreate module="producers">
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nueva Recepción
-                </Button>
-              </DialogTrigger>
-            </ProtectedCreate>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{isEditMode ? "Editar Recepción de Fruta" : "Nueva Recepción de Fruta"}</DialogTitle>
-              </DialogHeader>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleImport}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <ProtectedCreate module="producers">
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Nueva Recepción
+                  </Button>
+                </DialogTrigger>
+              </ProtectedCreate>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{isEditMode ? "Editar Recepción de Fruta" : "Nueva Recepción de Fruta"}</DialogTitle>
+                </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -493,6 +504,7 @@ export function FruitReceptionsTab() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
