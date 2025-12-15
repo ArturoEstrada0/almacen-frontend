@@ -103,8 +103,18 @@ export function FruitReceptionsTab() {
   
   const removeReturnedItem = (id: number) => setReturnedItems((s) => s.filter((it) => it.id !== id))
   
-  const updateReturnedItem = (id: number, patch: Partial<ReturnedItem>) =>
+  const updateReturnedItem = (id: number, patch: Partial<ReturnedItem>) => {
+    // Si se está cambiando el producto, obtener el precio de la base de datos
+    if (patch.productId !== undefined) {
+      const selectedProduct = insumoProducts.find(p => String(p.id) === patch.productId)
+      if (selectedProduct) {
+        // Usar el campo 'price' del producto de la BD
+        const productPrice = Number(selectedProduct.price) || 0
+        patch.unitPrice = productPrice.toString()
+      }
+    }
     setReturnedItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+  }
 
   const calculateReturnedTotal = () => 
     returnedItems.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)), 0)
@@ -437,14 +447,10 @@ export function FruitReceptionsTab() {
                               type="text"
                               inputMode="decimal"
                               value={item.unitPrice}
-                              onChange={(e) => {
-                                const value = e.target.value
-                                if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                                  updateReturnedItem(item.id, { unitPrice: value })
-                                }
-                              }}
+                              disabled
                               placeholder="0.00"
-                              className="text-sm"
+                              className="text-sm bg-muted"
+                              title="El precio se obtiene automáticamente de la base de datos"
                             />
                           </div>
                           <div className="col-span-2">

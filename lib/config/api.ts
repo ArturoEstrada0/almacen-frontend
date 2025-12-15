@@ -105,10 +105,19 @@ export const API_ENDPOINTS = {
 
   // Quotations
   quotations: {
-    list: () => `${API_BASE_URL}/quotations`,
-    get: (id: string) => `${API_BASE_URL}/quotations/${id}`,
-    create: () => `${API_BASE_URL}/quotations`,
-    markWinner: (id: string, supplierId: string) => `${API_BASE_URL}/quotations/${id}/winner/${supplierId}`,
+    list: () => `${API_BASE_URL}/api/quotations`,
+    get: (id: string) => `${API_BASE_URL}/api/quotations/${id}`,
+    create: () => `${API_BASE_URL}/api/quotations`,
+    comparison: (id: string) => `${API_BASE_URL}/api/quotations/${id}/comparison`,
+    sendEmails: (id: string) => `${API_BASE_URL}/api/quotations/${id}/send-emails`,
+    sendAllEmails: (id: string) => `${API_BASE_URL}/api/quotations/${id}/send-all-emails`,
+    markWinner: (id: string, supplierId: string) => `${API_BASE_URL}/api/quotations/${id}/winner/${supplierId}`,
+    cancel: (id: string) => `${API_BASE_URL}/api/quotations/${id}/cancel`,
+    // Portal público (sin autenticación)
+    portal: {
+      get: (id: string) => `${API_BASE_URL}/api/quotations/portal/${id}`,
+      respond: (id: string) => `${API_BASE_URL}/api/quotations/portal/${id}/respond`,
+    },
   },
 
   // Users

@@ -30,7 +30,15 @@ export function useQuotation(id: string | null) {
   }
 }
 
-export async function createQuotation(data: { description?: string; validUntil?: string | Date; items: { productId: string; quantity: number }[] }) {
+export interface CreateQuotationData {
+  description?: string
+  validUntil: string
+  notes?: string
+  items: { productId: string; quantity: number; notes?: string }[]
+  supplierIds: string[]
+}
+
+export async function createQuotation(data: CreateQuotationData) {
   return ApiClient.post<Quotation>(API_ENDPOINTS.quotations.create(), data)
 }
 
