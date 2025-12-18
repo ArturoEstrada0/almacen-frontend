@@ -79,11 +79,24 @@ export function InputAssignmentsTab() {
     }
   }, [])
 
+  // Definir insumoProducts antes de los handlers que lo usan
+  const insumoProducts = products.filter((p) => p.type !== "fruta")
+
   const addItem = () =>
     setSelectedItems((s) => [...s, { id: Date.now(), productId: "", quantity: "", unitPrice: "" }])
   const removeItem = (id: number) => setSelectedItems((s) => s.filter((it) => it.id !== id))
-  const updateItem = (id: number, patch: Partial<AssignmentItem>) =>
+  const updateItem = (id: number, patch: Partial<AssignmentItem>) => {
+    // Si se está cambiando el producto, obtener el precio de la base de datos
+    if (patch.productId !== undefined) {
+      const selectedProductItem = products.find(p => String(p.id) === patch.productId && p.type !== "fruta")
+      if (selectedProductItem) {
+        // Usar el campo 'price' del producto de la BD
+        const productPrice = Number(selectedProductItem.price) || Number(selectedProductItem.salePrice) || 0
+        patch.unitPrice = productPrice.toString()
+      }
+    }
     setSelectedItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+  }
 
   const generateFolio = () => {
     const now = new Date()
@@ -237,8 +250,6 @@ export function InputAssignmentsTab() {
     const code = (a.code || a.assignmentNumber || "").toString().toLowerCase()
     return code.includes(q) || (producer?.name || "").toLowerCase().includes(q)
   })
-
-  const insumoProducts = products.filter((p) => p.type !== "fruta")
 
   // Estado para mostrar error por item
   const [itemStockErrors, setItemStockErrors] = useState<Record<number, string>>({})

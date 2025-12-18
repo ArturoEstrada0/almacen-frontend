@@ -63,6 +63,10 @@ export function FruitReceptionsTab() {
   const [selectedReception, setSelectedReception] = useState<any | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
 
+  // Filtrar productos por tipo - definir antes de los handlers
+  const fruitProducts = products.filter((p) => p.type === "fruta")
+  const insumoProducts = products.filter((p) => p.type === "insumo")
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -87,9 +91,6 @@ export function FruitReceptionsTab() {
     }
   }, [])
 
-  const fruitProducts = products.filter((p) => p.type === "fruta")
-  const insumoProducts = products.filter((p) => p.type === "insumo")
-
   const filteredReceptions = receptions.filter((reception) => {
     const q = searchTerm.toLowerCase()
     const producer = producers.find((p) => p.id === reception.producerId)
@@ -106,10 +107,10 @@ export function FruitReceptionsTab() {
   const updateReturnedItem = (id: number, patch: Partial<ReturnedItem>) => {
     // Si se está cambiando el producto, obtener el precio de la base de datos
     if (patch.productId !== undefined) {
-      const selectedProduct = insumoProducts.find(p => String(p.id) === patch.productId)
-      if (selectedProduct) {
+      const selectedProductItem = products.find(p => String(p.id) === patch.productId)
+      if (selectedProductItem) {
         // Usar el campo 'price' del producto de la BD
-        const productPrice = Number(selectedProduct.price) || 0
+        const productPrice = Number(selectedProductItem.price) || Number(selectedProductItem.salePrice) || 0
         patch.unitPrice = productPrice.toString()
       }
     }
