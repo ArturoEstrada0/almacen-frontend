@@ -113,8 +113,10 @@ export default function EditProductPage({ params }: Params) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    const loadingToast = toast.loading("Actualizando producto...")
+    
     try {
-      toast.loading("Actualizando producto...")
       // use resolvedId (unwrapped) to avoid Next.js params Promise warning
       const id = resolvedId
       if (!id) throw new Error("Product id no resuelto")
@@ -152,10 +154,12 @@ export default function EditProductPage({ params }: Params) {
         }
       }
       
+      toast.dismiss(loadingToast)
       toast.success("Producto actualizado")
       mutate()
       router.push("/products")
     } catch (err: any) {
+      toast.dismiss(loadingToast)
       console.error(err)
       toast.error(err?.message || "Error actualizando producto")
     }

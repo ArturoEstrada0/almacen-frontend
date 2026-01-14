@@ -35,6 +35,8 @@ export default function NewProductPage() {
   categoryId: "",
   barcode: "",
     unitOfMeasure: "Pieza",
+    costPrice: "",
+    salePrice: "",
     isActive: true,
   })
 
@@ -69,13 +71,17 @@ export default function NewProductPage() {
       barcode: formData.barcode || undefined,
   // backend expects `unitId` (UUID) if provided. We don't have unitId from free-text input,
   // so omit the free-text `unit` field to avoid validation errors.
-      // Prices are managed in almacén and not set here. Do not include cost/price in product payload.
+      // Backend espera 'cost' y 'price', no 'costPrice' y 'salePrice'
+      cost: formData.costPrice ? Number(formData.costPrice) : undefined,
+      price: formData.salePrice ? Number(formData.salePrice) : undefined,
       active: formData.isActive,
     }
 
     try {
-      toast.loading("Creando producto...")
+      const loadingToast = toast.loading("Creando producto...")
+      console.log("Payload enviado al backend:", payload)
       const created = await apiPost(`/products`, payload)
+      console.log("Producto creado:", created)
 
       // Persist per-warehouse inventory defaults (min/max/reorder) and create 'ajuste' movements for initial stock
       for (const inv of warehouseInventories) {
@@ -128,11 +134,43 @@ export default function NewProductPage() {
         }
       }
 
+      toast.dismiss(loadingToast)
+      toast.dismiss(loadingToast)
       toast.success("Producto creado correctamente")
       router.push("/products")
     } catch (err: any) {
-      console.error("Error creando producto:", err)
-      toast.error(err?.message || "Error creando producto")
+      toast.dismiss(loadingToast)
+      console.error("Error completo:", err)
+      console.error("Error creando producto:", {
+        message: err?.message,
+        statusCode: err?.statusCode,
+        errors: err?.errors,
+        technicalDetails: err?.technicalDetails
+      })
+      
+      // Log detallado de los errores
+      if (err?.errors) {
+        console.error("Detalles de errores de validación:", JSON.stringify(err.errors, null, 2))
+      }
+      
+      let errorMessage = "Error creando producto"
+      if (err?.statusCode === 400 && err?.errors) {
+        // Si es un array, convertirlo a string
+        if (Array.isArray(err.errors)) {
+          errorMessage = err.errors.join("; ")
+        } else if (typeof err.errors === 'object') {
+          // Si es un objeto, mostrar cada campo con sus errores
+          errorMessage = Object.entries(err.errors)
+            .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(", ") : msgs}`)
+            .join("; ")
+        } else {
+          errorMessage = String(err.errors)
+        }
+      } else if (err?.message && err.message !== '. ') {
+        errorMessage = err.message
+      }
+      
+      toast.error(errorMessage)
     }
   }
 
@@ -264,7 +302,38 @@ export default function NewProductPage() {
               </CardContent>
             </Card>
 
-            {/* Precios: removido — los precios se gestionan en almacén */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Precios</CardTitle>
+                <CardDescription>Configuración de precios del producto</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="costPrice">Precio de Costo *</Label>
+                    <Input
+                      id="costPrice"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.costPrice}
+                      onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="salePrice">Precio de Venta *</Label>
+                    <Input
+                      id="salePrice"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.salePrice}
+                      onChange={(e) => setFormData({ ...formData, salePrice: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>

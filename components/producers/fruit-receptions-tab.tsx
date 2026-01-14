@@ -343,7 +343,8 @@ export function FruitReceptionsTab() {
                       onChange={setSelectedWarehouse}
                       options={warehouses.map((warehouse) => ({
                         value: warehouse.id,
-                        label: warehouse.name
+                        label: `${warehouse.code || warehouse.id} - ${warehouse.name}`,
+                        subtitle: warehouse.code || warehouse.id
                       }))}
                       placeholder="Seleccionar almacén"
                       searchPlaceholder="Buscar almacén..."
@@ -701,25 +702,50 @@ export function FruitReceptionsTab() {
                 </div>
 
                 {/* Devolución de Material */}
-                {(selectedReception.returnedBoxes > 0 || selectedReception.returnedBoxesValue > 0) && (
+                {selectedReception.returnedItems && Array.isArray(selectedReception.returnedItems) && selectedReception.returnedItems.length > 0 && (
                   <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50">
                     <Label className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
                       <Badge variant="secondary" className="bg-blue-600 text-white">Devolución</Badge>
                       Material de Empaque Devuelto
                     </Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Cajas Devueltas</Label>
-                        <p className="font-bold text-xl text-blue-700">{selectedReception.returnedBoxes || 0}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Valor del Material</Label>
-                        <p className="font-bold text-xl text-blue-700">
-                          ${Number(selectedReception.returnedBoxesValue || 0).toFixed(2)}
-                        </p>
-                      </div>
+                    <div className="space-y-3">
+                      {selectedReception.returnedItems.map((item: any, index: number) => {
+                        const product = products.find(p => String(p.id) === String(item.productId))
+                        const quantity = Number(item.quantity || 0)
+                        const unitPrice = Number(item.unitPrice || 0)
+                        const total = quantity * unitPrice
+                        
+                        return (
+                          <div key={index} className="grid grid-cols-4 gap-3 p-3 bg-white rounded-lg border border-blue-200">
+                            <div className="col-span-2">
+                              <Label className="text-xs text-muted-foreground">Producto</Label>
+                              <p className="font-semibold text-sm">
+                                {product ? `${product.sku} - ${product.name}` : 'Producto desconocido'}
+                              </p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Cantidad</Label>
+                              <p className="font-bold text-blue-700">{quantity}</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Valor</Label>
+                              <p className="font-bold text-blue-700">{formatCurrency(total)}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                     <div className="mt-3 pt-3 border-t border-blue-200">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-semibold text-blue-800">Total Devolución:</span>
+                        <span className="text-xl font-bold text-blue-700">
+                          {formatCurrency(
+                            selectedReception.returnedItems.reduce((sum: number, item: any) => 
+                              sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0
+                            )
+                          )}
+                        </span>
+                      </div>
                       <p className="text-sm text-green-600 font-medium flex items-center gap-2">
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />

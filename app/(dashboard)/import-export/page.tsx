@@ -254,6 +254,10 @@ export default function ImportExportPage() {
         if (movementType !== 'all') url += `&type=${movementType}`
       } else if (type === 'suppliers') {
         url += `&includeInactive=${includeInactive}`
+      } else if (type === 'fruit-receptions') {
+        if (startDate) url += `&startDate=${startDate}`
+        if (endDate) url += `&endDate=${endDate}`
+        url += `&includeReturnedItems=${includeZeroStock}`
       }
 
       const response = await fetch(url, {
@@ -632,6 +636,55 @@ export default function ImportExportPage() {
                 <Button className="w-full" onClick={() => handleExport("suppliers")}>
                   <Download className="mr-2 h-4 w-4" />
                   Exportar Proveedores
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-5 w-5 text-lime-600" />
+                  Exportar Recepciones de Fruta
+                </CardTitle>
+                <CardDescription>Descarga el historial de recepciones de fruta</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Fecha Inicio</Label>
+                    <Input 
+                      type="date" 
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fecha Fin</Label>
+                    <Input 
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Incluir</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="include-returned-items"
+                        checked={includeZeroStock}
+                        onCheckedChange={(checked) => setIncludeZeroStock(checked as boolean)}
+                      />
+                      <label htmlFor="include-returned-items" className="text-sm">
+                        Material devuelto
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <Button className="w-full" onClick={() => handleExport("fruit-receptions")}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Exportar Recepciones
                 </Button>
               </CardContent>
             </Card>
