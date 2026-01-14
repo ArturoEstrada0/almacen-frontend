@@ -67,6 +67,8 @@ export default function ImportExportPage() {
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null)
   const workbookRef = useRef<any>(null)
   const [importResult, setImportResult] = useState<any | null>(null)
+  // Dynamic fields for fruit-receptions
+  const [dynamicFields, setDynamicFields] = useState<Array<{ field: string; label: string; required: boolean }>>([])
 
   const getAuthToken = async () => {
     try {
@@ -158,6 +160,32 @@ export default function ImportExportPage() {
       { field: "boxes", label: "Cajas", required: true },
       { field: "weightPerBox", label: "Peso por Caja", required: false },
       { field: "totalWeight", label: "Peso Total", required: false },
+      // Material devuelto - Cajas
+      { field: "codigoCaja", label: "Código de Caja 1", required: false },
+      { field: "cantidadCaja", label: "Cantidad de Caja 1", required: false },
+      { field: "precioUnitarioCaja", label: "Precio Unitario Caja 1", required: false },
+      { field: "precioTotalCaja", label: "Precio Total Caja 1", required: false },
+      // Material devuelto - Clams
+      { field: "codigoClam", label: "Código de Clam 1", required: false },
+      { field: "cantidadClam", label: "Cantidad de Clam 1", required: false },
+      { field: "precioUnitarioClam", label: "Precio Unitario Clam 1", required: false },
+      { field: "precioTotalClam", label: "Precio Total Clam 1", required: false },
+      // Material devuelto - Tarimas
+      { field: "codigoTarima", label: "Código de Tarima 1", required: false },
+      { field: "cantidadTarima", label: "Cantidad de Tarima 1", required: false },
+      { field: "precioUnitarioTarima", label: "Precio Unitario Tarima 1", required: false },
+      { field: "precioTotalTarima", label: "Precio Total Tarima 1", required: false },
+      // Material devuelto - Interlocks
+      { field: "codigoInterlock", label: "Código de Interlock 1", required: false },
+      { field: "cantidadInterlock", label: "Cantidad de Interlock 1", required: false },
+      { field: "precioUnitarioInterlock", label: "Precio Unitario Interlock 1", required: false },
+      { field: "precioTotalInterlock", label: "Precio Total Interlock 1", required: false },
+      // Material devuelto - Otros productos
+      { field: "codigoProducto", label: "Código de Producto 1", required: false },
+      { field: "cantidadProducto", label: "Cantidad de Producto 1", required: false },
+      { field: "precioUnitarioProducto", label: "Precio Unitario Producto 1", required: false },
+      { field: "precioTotalProducto", label: "Precio Total Producto 1", required: false },
+      { field: "valorTotalMaterialDevuelto", label: "Valor Total Material Devuelto", required: false },
       { field: "notes", label: "Notas", required: false },
     ],
     "initial-stock": [
@@ -204,9 +232,79 @@ export default function ImportExportPage() {
             setSampleColumns(headers)
             setSampleRows(previews)
 
+            // Para fruit-receptions, detectar dinámicamente columnas de materiales devueltos
+            let dynamicFields = [...requiredFields[importType]]
+            if (importType === 'fruit-receptions') {
+              // Remover los campos estáticos de materiales devueltos
+              dynamicFields = dynamicFields.filter(f => 
+                !f.field.startsWith('codigo') &&
+                !f.field.startsWith('cantidad') &&
+                !f.field.startsWith('precio') &&
+                f.field !== 'valorTotalMaterialDevuelto'
+              )
+
+              // Detectar columnas de materiales devueltos en el orden del Excel
+              const materialPatterns = [
+                { type: 'Caja', codePattern: /código de caja\s*(\d*)/i, qtyPattern: /cantidad de caja\s*(\d*)/i, pricePattern: /precio unitario caja\s*(\d*)/i, totalPattern: /precio total caja\s*(\d*)/i },
+                { type: 'Clam', codePattern: /código de clam\s*(\d*)/i, qtyPattern: /cantidad de clam\s*(\d*)/i, pricePattern: /precio unitario clam\s*(\d*)/i, totalPattern: /precio total clam\s*(\d*)/i },
+                { type: 'Tarima', codePattern: /código de tarima\s*(\d*)/i, qtyPattern: /cantidad de tarima\s*(\d*)/i, pricePattern: /precio unitario tarima\s*(\d*)/i, totalPattern: /precio total tarima\s*(\d*)/i },
+                { type: 'Interlock', codePattern: /código de interlock\s*(\d*)/i, qtyPattern: /cantidad de interlock\s*(\d*)/i, pricePattern: /precio unitario interlock\s*(\d*)/i, totalPattern: /precio total interlock\s*(\d*)/i },
+                { type: 'Producto', codePattern: /código de producto\s*(\d*)/i, qtyPattern: /cantidad de producto\s*(\d*)/i, pricePattern: /precio unitario producto\s*(\d*)/i, totalPattern: /precio total producto\s*(\d*)/i },
+              ]
+
+              const detectedFields: Array<{ field: string; label: string; required: boolean; order: number }> = []
+
+              headers.forEach((header: string, index: number) => {
+                materialPatterns.forEach(pattern => {
+                  const codeMatch = header.match(pattern.codePattern)
+                  const qtyMatch = header.match(pattern.qtyPattern)
+                  const priceMatch = header.match(pattern.pricePattern)
+                  const totalMatch = header.match(pattern.totalPattern)
+
+                  if (codeMatch) {
+                    const num = codeMatch[1] ? parseInt(codeMatch[1]) : 1
+                    const fieldKey = `codigo${pattern.type}${num > 1 ? num : ''}`
+                    detectedFields.push({ field: fieldKey, label: header, required: false, order: index })
+                  } else if (qtyMatch) {
+                    const num = qtyMatch[1] ? parseInt(qtyMatch[1]) : 1
+                    const fieldKey = `cantidad${pattern.type}${num > 1 ? num : ''}`
+                    detectedFields.push({ field: fieldKey, label: header, required: false, order: index })
+                  } else if (priceMatch) {
+                    const num = priceMatch[1] ? parseInt(priceMatch[1]) : 1
+                    const fieldKey = `precioUnitario${pattern.type}${num > 1 ? num : ''}`
+                    detectedFields.push({ field: fieldKey, label: header, required: false, order: index })
+                  } else if (totalMatch) {
+                    const num = totalMatch[1] ? parseInt(totalMatch[1]) : 1
+                    const fieldKey = `precioTotal${pattern.type}${num > 1 ? num : ''}`
+                    detectedFields.push({ field: fieldKey, label: header, required: false, order: index })
+                  }
+                })
+
+                // Detectar Valor Total Material Devuelto (fuera del loop de patterns)
+                const valorTotalMatch = header.match(/valor total material devuelto/i)
+                if (valorTotalMatch) {
+                  detectedFields.push({ field: 'valorTotalMaterialDevuelto', label: header, required: false, order: index })
+                }
+              })
+
+              // Ordenar por el índice de las columnas del Excel
+              detectedFields.sort((a, b) => a.order - b.order)
+
+              // Insertar los campos detectados antes de "Notas"
+              const notesIndex = dynamicFields.findIndex(f => f.field === 'notes')
+              if (notesIndex !== -1) {
+                dynamicFields.splice(notesIndex, 0, ...detectedFields.map(({ field, label, required }) => ({ field, label, required })))
+              } else {
+                dynamicFields.push(...detectedFields.map(({ field, label, required }) => ({ field, label, required })))
+              }
+            }
+
+            // Guardar campos dinámicos en el estado
+            setDynamicFields(dynamicFields)
+
             // Auto-map by exact match on field or label (case-insensitive)
             const newMapping: Record<string, string> = {}
-            requiredFields[importType]?.forEach((f) => {
+            dynamicFields.forEach((f) => {
               const match = headers.find(
                 (h: string) => h && (h.toLowerCase() === f.field.toLowerCase() || h.toLowerCase() === f.label.toLowerCase())
               )
@@ -818,8 +916,8 @@ export default function ImportExportPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {requiredFields[importType]?.map((field) => (
-                          <TableRow key={field.field}>
+                        {(dynamicFields.length > 0 ? dynamicFields : requiredFields[importType])?.map((field, index) => (
+                          <TableRow key={`${field.field}-${index}`}>
                             <TableCell className="font-medium">
                               {field.label}
                               {field.required && <span className="text-red-500 ml-1">*</span>}
