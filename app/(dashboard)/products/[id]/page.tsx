@@ -235,7 +235,7 @@ export default function EditProductPage({ params }: Params) {
               </CardContent>
             </Card>
 
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle>Precios</CardTitle>
                 <CardDescription>Configuración de precios del producto</CardDescription>
@@ -252,7 +252,7 @@ export default function EditProductPage({ params }: Params) {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
 
             <Card>
               <CardHeader>

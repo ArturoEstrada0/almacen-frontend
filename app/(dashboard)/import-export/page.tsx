@@ -163,29 +163,18 @@ export default function ImportExportPage() {
       // Material devuelto - Cajas
       { field: "codigoCaja", label: "Código de Caja 1", required: false },
       { field: "cantidadCaja", label: "Cantidad de Caja 1", required: false },
-      { field: "precioUnitarioCaja", label: "Precio Unitario Caja 1", required: false },
-      { field: "precioTotalCaja", label: "Precio Total Caja 1", required: false },
       // Material devuelto - Clams
       { field: "codigoClam", label: "Código de Clam 1", required: false },
       { field: "cantidadClam", label: "Cantidad de Clam 1", required: false },
-      { field: "precioUnitarioClam", label: "Precio Unitario Clam 1", required: false },
-      { field: "precioTotalClam", label: "Precio Total Clam 1", required: false },
       // Material devuelto - Tarimas
       { field: "codigoTarima", label: "Código de Tarima 1", required: false },
       { field: "cantidadTarima", label: "Cantidad de Tarima 1", required: false },
-      { field: "precioUnitarioTarima", label: "Precio Unitario Tarima 1", required: false },
-      { field: "precioTotalTarima", label: "Precio Total Tarima 1", required: false },
       // Material devuelto - Interlocks
       { field: "codigoInterlock", label: "Código de Interlock 1", required: false },
       { field: "cantidadInterlock", label: "Cantidad de Interlock 1", required: false },
-      { field: "precioUnitarioInterlock", label: "Precio Unitario Interlock 1", required: false },
-      { field: "precioTotalInterlock", label: "Precio Total Interlock 1", required: false },
       // Material devuelto - Otros productos
       { field: "codigoProducto", label: "Código de Producto 1", required: false },
       { field: "cantidadProducto", label: "Cantidad de Producto 1", required: false },
-      { field: "precioUnitarioProducto", label: "Precio Unitario Producto 1", required: false },
-      { field: "precioTotalProducto", label: "Precio Total Producto 1", required: false },
-      { field: "valorTotalMaterialDevuelto", label: "Valor Total Material Devuelto", required: false },
       { field: "notes", label: "Notas", required: false },
     ],
     "initial-stock": [
@@ -245,11 +234,11 @@ export default function ImportExportPage() {
 
               // Detectar columnas de materiales devueltos en el orden del Excel
               const materialPatterns = [
-                { type: 'Caja', codePattern: /código de caja\s*(\d*)/i, qtyPattern: /cantidad de caja\s*(\d*)/i, pricePattern: /precio unitario caja\s*(\d*)/i, totalPattern: /precio total caja\s*(\d*)/i },
-                { type: 'Clam', codePattern: /código de clam\s*(\d*)/i, qtyPattern: /cantidad de clam\s*(\d*)/i, pricePattern: /precio unitario clam\s*(\d*)/i, totalPattern: /precio total clam\s*(\d*)/i },
-                { type: 'Tarima', codePattern: /código de tarima\s*(\d*)/i, qtyPattern: /cantidad de tarima\s*(\d*)/i, pricePattern: /precio unitario tarima\s*(\d*)/i, totalPattern: /precio total tarima\s*(\d*)/i },
-                { type: 'Interlock', codePattern: /código de interlock\s*(\d*)/i, qtyPattern: /cantidad de interlock\s*(\d*)/i, pricePattern: /precio unitario interlock\s*(\d*)/i, totalPattern: /precio total interlock\s*(\d*)/i },
-                { type: 'Producto', codePattern: /código de producto\s*(\d*)/i, qtyPattern: /cantidad de producto\s*(\d*)/i, pricePattern: /precio unitario producto\s*(\d*)/i, totalPattern: /precio total producto\s*(\d*)/i },
+                { type: 'Caja', codePattern: /código de caja\s*(\d*)/i, qtyPattern: /cantidad de caja\s*(\d*)/i },
+                { type: 'Clam', codePattern: /código de clam\s*(\d*)/i, qtyPattern: /cantidad de clam\s*(\d*)/i },
+                { type: 'Tarima', codePattern: /código de tarima\s*(\d*)/i, qtyPattern: /cantidad de tarima\s*(\d*)/i },
+                { type: 'Interlock', codePattern: /código de interlock\s*(\d*)/i, qtyPattern: /cantidad de interlock\s*(\d*)/i },
+                { type: 'Producto', codePattern: /código de producto\s*(\d*)/i, qtyPattern: /cantidad de producto\s*(\d*)/i },
               ]
 
               const detectedFields: Array<{ field: string; label: string; required: boolean; order: number }> = []
@@ -258,8 +247,6 @@ export default function ImportExportPage() {
                 materialPatterns.forEach(pattern => {
                   const codeMatch = header.match(pattern.codePattern)
                   const qtyMatch = header.match(pattern.qtyPattern)
-                  const priceMatch = header.match(pattern.pricePattern)
-                  const totalMatch = header.match(pattern.totalPattern)
 
                   if (codeMatch) {
                     const num = codeMatch[1] ? parseInt(codeMatch[1]) : 1
@@ -269,22 +256,8 @@ export default function ImportExportPage() {
                     const num = qtyMatch[1] ? parseInt(qtyMatch[1]) : 1
                     const fieldKey = `cantidad${pattern.type}${num > 1 ? num : ''}`
                     detectedFields.push({ field: fieldKey, label: header, required: false, order: index })
-                  } else if (priceMatch) {
-                    const num = priceMatch[1] ? parseInt(priceMatch[1]) : 1
-                    const fieldKey = `precioUnitario${pattern.type}${num > 1 ? num : ''}`
-                    detectedFields.push({ field: fieldKey, label: header, required: false, order: index })
-                  } else if (totalMatch) {
-                    const num = totalMatch[1] ? parseInt(totalMatch[1]) : 1
-                    const fieldKey = `precioTotal${pattern.type}${num > 1 ? num : ''}`
-                    detectedFields.push({ field: fieldKey, label: header, required: false, order: index })
                   }
                 })
-
-                // Detectar Valor Total Material Devuelto (fuera del loop de patterns)
-                const valorTotalMatch = header.match(/valor total material devuelto/i)
-                if (valorTotalMatch) {
-                  detectedFields.push({ field: 'valorTotalMaterialDevuelto', label: header, required: false, order: index })
-                }
               })
 
               // Ordenar por el índice de las columnas del Excel

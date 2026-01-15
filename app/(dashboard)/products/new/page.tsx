@@ -302,7 +302,7 @@ export default function NewProductPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle>Precios</CardTitle>
                 <CardDescription>Configuración de precios del producto</CardDescription>
@@ -333,7 +333,7 @@ export default function NewProductPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
 
             <Card>
               <CardHeader>
