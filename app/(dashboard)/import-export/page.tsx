@@ -126,6 +126,8 @@ export default function ImportExportPage() {
       { field: "location", label: "Ubicación", required: false },
       { field: "lotNumber", label: "Número de Lote", required: false },
       { field: "expirationDate", label: "Fecha de Vencimiento", required: false },
+      { field: "costPrice", label: "Precio de Costo", required: false },
+      { field: "price", label: "Precio de Venta", required: false },
     ],
     suppliers: [
       { field: "code", label: "Código", required: true },
@@ -149,7 +151,6 @@ export default function ImportExportPage() {
       { field: "date", label: "Fecha", required: false },
       { field: "sku", label: "SKU del Producto", required: true },
       { field: "quantity", label: "Cantidad", required: true },
-      { field: "unitPrice", label: "Precio Unitario", required: true },
       { field: "notes", label: "Notas", required: false },
     ],
     "fruit-receptions": [

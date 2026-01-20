@@ -309,10 +309,10 @@ export function StockTab({ warehouseId }: StockTabProps) {
       </Card>
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
-          <Button>
+          {/* <Button>
             <ArrowLeftRight className="mr-2 h-4 w-4" />
             Nuevo Movimiento
-          </Button>
+          </Button> */}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport}>
