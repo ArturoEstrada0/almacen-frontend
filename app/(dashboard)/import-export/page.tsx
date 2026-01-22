@@ -127,7 +127,6 @@ export default function ImportExportPage() {
       { field: "lotNumber", label: "Número de Lote", required: false },
       { field: "expirationDate", label: "Fecha de Vencimiento", required: false },
       { field: "costPrice", label: "Precio de Costo", required: false },
-      { field: "price", label: "Precio de Venta", required: false },
     ],
     suppliers: [
       { field: "code", label: "Código", required: true },
@@ -181,10 +180,12 @@ export default function ImportExportPage() {
     "initial-stock": [
       { field: "sku", label: "SKU del Producto", required: true },
       { field: "warehouse", label: "Almacén", required: true },
+      { field: "warehouseId", label: "ID Almacén", required: false },
       { field: "quantity", label: "Cantidad", required: true },
       { field: "location", label: "Ubicación", required: false },
       { field: "lotNumber", label: "Número de Lote", required: false },
       { field: "expirationDate", label: "Fecha de Vencimiento", required: false },
+      { field: "costPrice", label: "Precio de Costo", required: false },
       { field: "minStock", label: "Stock Mínimo", required: false },
       { field: "maxStock", label: "Stock Máximo", required: false },
       { field: "reorderPoint", label: "Punto de Reorden", required: false },

@@ -56,7 +56,6 @@ export function StockTab({ warehouseId }: StockTabProps) {
   const [editMax, setEditMax] = useState<string>("")
   const [editReorder, setEditReorder] = useState<string>("")
   const [editCostPrice, setEditCostPrice] = useState<string>("")
-  const [editSalePrice, setEditSalePrice] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
@@ -380,7 +379,6 @@ export function StockTab({ warehouseId }: StockTabProps) {
                 <TableHead>Disponible</TableHead>
                 <TableHead>Reservado</TableHead>
                 <TableHead>Precio Costo</TableHead>
-                <TableHead>Precio Venta</TableHead>
                 <TableHead>Stock Min/Max</TableHead>
                 <TableHead>Punto Reorden</TableHead>
                 <TableHead>Estado</TableHead>
@@ -411,9 +409,6 @@ export function StockTab({ warehouseId }: StockTabProps) {
                     <TableCell className="text-muted-foreground">{formatNumber(stock.reservedQuantity || 0)}</TableCell>
                     <TableCell className="text-sm">
                       ${formatNumber((product as any)?.cost || (product as any)?.costPrice || 0)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      ${formatNumber((product as any)?.price || (product as any)?.salePrice || 0)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">
@@ -447,7 +442,6 @@ export function StockTab({ warehouseId }: StockTabProps) {
                           setEditLotNumber(stock.lotNumber || latestLotByProduct[stock.productId] || "")
                           setEditExpirationDate(stock.expirationDate ? new Date(stock.expirationDate).toISOString().split('T')[0] : "")
                           setEditCostPrice(String((product as any)?.cost || (product as any)?.costPrice || ""))
-                          setEditSalePrice(String((product as any)?.price || (product as any)?.salePrice || ""))
                           setEditMin(String(product?.minStock || stock.minStock || 0))
                           setEditMax(String(product?.maxStock || stock.maxStock || 0))
                           setEditReorder(String(product?.reorderPoint || stock.reorderPoint || 0))
@@ -524,16 +518,6 @@ export function StockTab({ warehouseId }: StockTabProps) {
               />
             </div>
             <div className="grid grid-cols-1 gap-1">
-              <label className="text-sm font-medium">Precio de Venta</label>
-              <Input 
-                type="number"
-                step="0.01"
-                value={editSalePrice} 
-                onChange={(e) => setEditSalePrice(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-1">
               <label className="text-sm font-medium">Stock Mínimo</label>
               <Input 
                 type="number"
@@ -590,11 +574,10 @@ export function StockTab({ warehouseId }: StockTabProps) {
                     reorderPoint: Number(editReorder || 0),
                   })
 
-                  // Actualizar los precios del producto si se modificaron
-                  if (editCostPrice || editSalePrice) {
+                  // Actualizar el precio de costo del producto si se modificó
+                  if (editCostPrice) {
                     await updateProduct(editingStock.productId, {
                       costPrice: editCostPrice ? Number(editCostPrice) : undefined,
-                      salePrice: editSalePrice ? Number(editSalePrice) : undefined,
                     })
                   }
 
