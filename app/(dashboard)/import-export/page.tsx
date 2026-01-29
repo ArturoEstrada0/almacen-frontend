@@ -16,6 +16,16 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
   Upload,
   Download,
   FileSpreadsheet,
@@ -24,11 +34,35 @@ import {
   ArrowRight,
   FileText,
   TableIcon,
+  AlertTriangle,
+  UserX,
+  Package,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import * as XLSX from "xlsx"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase/client"
+
+// Tipos para errores resolubles
+interface ResolvableError {
+  row: number
+  type: 'producer_not_found' | 'insufficient_stock'
+  originalValue?: string
+  message: string
+  rowData: any
+}
+
+interface Producer {
+  id: string
+  code: string
+  name: string
+}
+
+interface ErrorResolution {
+  rowData: any
+  action: 'import_without_movement' | 'skip' | 'use_producer'
+  newProducerId?: string
+}
 
 export default function ImportExportPage() {
   const { toast } = useToast()
@@ -38,6 +72,13 @@ export default function ImportExportPage() {
   const [mappingStep, setMappingStep] = useState<number>(1)
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState<string>("export")
+
+  // Estados para resolución de errores
+  const [showErrorDialog, setShowErrorDialog] = useState(false)
+  const [resolvableErrors, setResolvableErrors] = useState<ResolvableError[]>([])
+  const [availableProducers, setAvailableProducers] = useState<Producer[]>([])
+  const [errorResolutions, setErrorResolutions] = useState<Record<number, ErrorResolution>>({})
+  const [isResolvingErrors, setIsResolvingErrors] = useState(false)
 
   // Leer parámetro type de la URL para pre-seleccionar tipo de importación
   useEffect(() => {
@@ -479,6 +520,22 @@ export default function ImportExportPage() {
         return res.json()
       })
       .then((json) => {
+        // Verificar si hay errores resolubles
+        if (json.resolvableErrors && json.resolvableErrors.length > 0) {
+          setResolvableErrors(json.resolvableErrors)
+          setAvailableProducers(json.availableProducers || [])
+          // Inicializar resoluciones con "skip" por defecto
+          const initialResolutions: Record<number, ErrorResolution> = {}
+          json.resolvableErrors.forEach((err: ResolvableError) => {
+            initialResolutions[err.row] = {
+              rowData: err.rowData,
+              action: 'skip'
+            }
+          })
+          setErrorResolutions(initialResolutions)
+          setShowErrorDialog(true)
+        }
+        
         // Show result in the UI (mappingStep 4)
         setImportResult(json)
         setMappingStep(4)
@@ -498,6 +555,77 @@ export default function ImportExportPage() {
       })
   }
 
+  // Función para resolver errores
+  const handleResolveErrors = async () => {
+    setIsResolvingErrors(true)
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    const token = await getAuthToken()
+    
+    if (!token) {
+      toast({
+        title: "Error de autenticación",
+        description: "No se encontró un token de autenticación.",
+        variant: "destructive",
+      })
+      setIsResolvingErrors(false)
+      return
+    }
+
+    // Filtrar solo las resoluciones que no son "skip"
+    const resolutionsToProcess = Object.values(errorResolutions).filter(r => r.action !== 'skip')
+
+    if (resolutionsToProcess.length === 0) {
+      toast({
+        title: "Sin acciones pendientes",
+        description: "Todos los errores fueron marcados para omitir.",
+      })
+      setShowErrorDialog(false)
+      setIsResolvingErrors(false)
+      return
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/imports/resolve-errors`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ resolutions: resolutionsToProcess }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al resolver errores')
+      }
+
+      const result = await response.json()
+      
+      // Actualizar el resultado de importación
+      setImportResult((prev: any) => ({
+        ...prev,
+        success: (prev?.success || 0) + result.success,
+        resolvableErrors: [],
+      }))
+
+      toast({
+        title: "Errores resueltos",
+        description: `Se importaron ${result.success} registros adicionales.${result.errors?.length > 0 ? ` ${result.errors.length} errores persistentes.` : ''}`,
+      })
+
+      setShowErrorDialog(false)
+      setResolvableErrors([])
+      setErrorResolutions({})
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || 'Ocurrió un error al resolver los errores',
+        variant: "destructive",
+      })
+    } finally {
+      setIsResolvingErrors(false)
+    }
+  }
+
   const resetImport = () => {
     setImportFile(null)
     setMappingStep(1)
@@ -508,6 +636,9 @@ export default function ImportExportPage() {
     setSelectedSheet(null)
     workbookRef.current = null
     setImportResult(null)
+    setResolvableErrors([])
+    setAvailableProducers([])
+    setErrorResolutions({})
   }
 
   return (
@@ -984,6 +1115,37 @@ export default function ImportExportPage() {
                           <span className="text-sm">Errores:</span>
                           <span className="font-semibold text-red-600">{importResult?.errors?.length ?? 0}</span>
                         </div>
+
+                        {/* Errores resolubles */}
+                        {importResult?.resolvableErrors && importResult.resolvableErrors.length > 0 && (
+                          <div className="mt-4 p-4 bg-amber-50 rounded-lg">
+                            <div className="flex items-center gap-2 mb-3">
+                              <AlertTriangle className="h-5 w-5 text-amber-600" />
+                              <h4 className="font-semibold text-sm text-amber-800">
+                                {importResult.resolvableErrors.length} errores que puedes resolver
+                              </h4>
+                            </div>
+                            <p className="text-xs text-amber-700 mb-3">
+                              Hay registros que no se pudieron importar pero puedes resolver manualmente:
+                            </p>
+                            <ul className="text-xs space-y-1 text-amber-700 mb-3">
+                              {importResult.resolvableErrors.filter((e: any) => e.type === 'producer_not_found').length > 0 && (
+                                <li>• {importResult.resolvableErrors.filter((e: any) => e.type === 'producer_not_found').length} productores no encontrados</li>
+                              )}
+                              {importResult.resolvableErrors.filter((e: any) => e.type === 'insufficient_stock').length > 0 && (
+                                <li>• {importResult.resolvableErrors.filter((e: any) => e.type === 'insufficient_stock').length} con stock insuficiente</li>
+                              )}
+                            </ul>
+                            <Button
+                              variant="outline"
+                              className="w-full border-amber-300 text-amber-700 hover:bg-amber-100"
+                              onClick={() => setShowErrorDialog(true)}
+                            >
+                              <AlertTriangle className="mr-2 h-4 w-4" />
+                              Resolver Errores
+                            </Button>
+                          </div>
+                        )}
                       
                         {importResult?.errors && importResult.errors.length > 0 && (
                           <div className="mt-4 p-4 bg-red-50 rounded-lg max-h-60 overflow-y-auto">
@@ -1175,6 +1337,193 @@ export default function ImportExportPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Diálogo para resolver errores de importación */}
+      <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Resolver Errores de Importación
+            </DialogTitle>
+            <DialogDescription>
+              Se encontraron {resolvableErrors.length} registros con errores que puedes resolver manualmente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-4">
+              {/* Errores de productor no encontrado */}
+              {resolvableErrors.filter(e => e.type === 'producer_not_found').length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <UserX className="h-4 w-4 text-red-500" />
+                    <span>Productores no encontrados ({resolvableErrors.filter(e => e.type === 'producer_not_found').length})</span>
+                  </div>
+                  
+                  {resolvableErrors.filter(e => e.type === 'producer_not_found').map((error, idx) => (
+                    <Card key={`producer-${error.row}`} className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">Fila {error.row}: Productor "{error.originalValue}" no encontrado</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              SKU: {error.rowData.sku} | Cantidad: {error.rowData.quantity} | Almacén: {error.rowData.warehouseCode}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-red-500 border-red-200">
+                            Productor desconocido
+                          </Badge>
+                        </div>
+                        
+                        <RadioGroup
+                          value={errorResolutions[error.row]?.action || 'skip'}
+                          onValueChange={(value) => {
+                            setErrorResolutions(prev => ({
+                              ...prev,
+                              [error.row]: {
+                                ...prev[error.row],
+                                rowData: error.rowData,
+                                action: value as any,
+                              }
+                            }))
+                          }}
+                          className="space-y-2"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="skip" id={`skip-${error.row}`} />
+                            <Label htmlFor={`skip-${error.row}`} className="text-sm cursor-pointer">
+                              Omitir este registro
+                            </Label>
+                          </div>
+                          <div className="flex items-start space-x-2">
+                            <RadioGroupItem value="use_producer" id={`use_producer-${error.row}`} className="mt-1" />
+                            <div className="flex-1 space-y-2">
+                              <Label htmlFor={`use_producer-${error.row}`} className="text-sm cursor-pointer">
+                                Asignar a otro productor:
+                              </Label>
+                              {errorResolutions[error.row]?.action === 'use_producer' && (
+                                <Select
+                                  value={errorResolutions[error.row]?.newProducerId || ''}
+                                  onValueChange={(value) => {
+                                    setErrorResolutions(prev => ({
+                                      ...prev,
+                                      [error.row]: {
+                                        ...prev[error.row],
+                                        newProducerId: value,
+                                      }
+                                    }))
+                                  }}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Seleccionar productor..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableProducers.map((producer) => (
+                                      <SelectItem key={producer.id} value={producer.id}>
+                                        {producer.code} - {producer.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* Errores de stock insuficiente */}
+              {resolvableErrors.filter(e => e.type === 'insufficient_stock').length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Package className="h-4 w-4 text-amber-500" />
+                    <span>Stock insuficiente ({resolvableErrors.filter(e => e.type === 'insufficient_stock').length})</span>
+                  </div>
+                  
+                  {resolvableErrors.filter(e => e.type === 'insufficient_stock').map((error, idx) => (
+                    <Card key={`stock-${error.row}`} className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">Fila {error.row}: {error.message}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Productor: {error.rowData.producerName} | SKU: {error.rowData.sku} | Cantidad: {error.rowData.quantity}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-amber-500 border-amber-200">
+                            Sin stock
+                          </Badge>
+                        </div>
+                        
+                        <RadioGroup
+                          value={errorResolutions[error.row]?.action || 'skip'}
+                          onValueChange={(value) => {
+                            setErrorResolutions(prev => ({
+                              ...prev,
+                              [error.row]: {
+                                ...prev[error.row],
+                                rowData: error.rowData,
+                                action: value as any,
+                              }
+                            }))
+                          }}
+                          className="space-y-2"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="skip" id={`skip-stock-${error.row}`} />
+                            <Label htmlFor={`skip-stock-${error.row}`} className="text-sm cursor-pointer">
+                              Omitir este registro
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="import_without_movement" id={`no_movement-${error.row}`} />
+                            <Label htmlFor={`no_movement-${error.row}`} className="text-sm cursor-pointer">
+                              <span className="font-medium">Importar sin afectar inventario</span>
+                              <span className="text-muted-foreground ml-1">(Solo registrar la asignación, no crear movimiento de salida)</span>
+                            </Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowErrorDialog(false)
+                setResolvableErrors([])
+                setErrorResolutions({})
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleResolveErrors}
+              disabled={isResolvingErrors}
+            >
+              {isResolvingErrors ? (
+                <>
+                  <span className="animate-spin mr-2">⏳</span>
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  Aplicar Resoluciones
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
