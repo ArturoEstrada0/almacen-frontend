@@ -80,6 +80,12 @@ export default function ImportExportPage() {
   const [errorResolutions, setErrorResolutions] = useState<Record<number, ErrorResolution>>({})
   const [isResolvingErrors, setIsResolvingErrors] = useState(false)
 
+  // Estados para el loader de progreso de importación
+  const [totalRecords, setTotalRecords] = useState<number>(0)
+  const [processedRecords, setProcessedRecords] = useState<number>(0)
+  const [importProgress, setImportProgress] = useState<number>(0)
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
   // Leer parámetro type de la URL para pre-seleccionar tipo de importación
   useEffect(() => {
     const typeParam = searchParams.get('type')
@@ -131,6 +137,10 @@ export default function ImportExportPage() {
         const previews = rows.slice(1, 6).map((r) => r.map((c: any) => (c ?? "").toString()))
         setSampleColumns(headers)
         setSampleRows(previews)
+
+        // Actualizar el total de registros para la nueva hoja
+        const dataRows = rows.filter((row, idx) => idx > 0 && row.some((cell: any) => cell !== undefined && cell !== ''))
+        setTotalRecords(dataRows.length)
 
         // Auto-map (only for fields not already mapped)
         const newMapping = { ...columnMapping }
@@ -263,6 +273,10 @@ export default function ImportExportPage() {
             const previews = rows.slice(1, 6).map((r) => r.map((c: any) => (c ?? "").toString()))
             setSampleColumns(headers)
             setSampleRows(previews)
+            
+            // Guardar el total de registros (excluyendo la fila de headers)
+            const dataRows = rows.filter((row, idx) => idx > 0 && row.some((cell: any) => cell !== undefined && cell !== ''))
+            setTotalRecords(dataRows.length)
 
             // Para fruit-receptions, detectar dinámicamente columnas de materiales devueltos
             let dynamicFields = [...requiredFields[importType]]
@@ -505,6 +519,33 @@ export default function ImportExportPage() {
       return
     }
 
+    // Inicializar el progreso
+    setProcessedRecords(0)
+    setImportProgress(0)
+
+    // Iniciar el intervalo de progreso simulado
+    // Calculamos un tiempo estimado basado en el número de registros
+    const estimatedTimePerRecord = 100 // ms por registro (aproximado)
+    const totalTime = totalRecords * estimatedTimePerRecord
+    const intervalTime = 100 // Actualizar cada 100ms
+    const incrementPerInterval = (100 / (totalTime / intervalTime)) * 0.85 // Solo llegar al 85% máximo
+
+    progressIntervalRef.current = setInterval(() => {
+      setImportProgress((prev) => {
+        if (prev >= 85) {
+          return prev // Parar en 85% y esperar respuesta real
+        }
+        return Math.min(prev + incrementPerInterval, 85)
+      })
+      setProcessedRecords((prev) => {
+        const maxSimulated = Math.floor(totalRecords * 0.85)
+        if (prev >= maxSimulated) {
+          return prev
+        }
+        return Math.min(prev + 1, maxSimulated)
+      })
+    }, intervalTime)
+
     fetch(`${apiUrl}/api/imports`, {
       method: 'POST',
       body: fd,
@@ -520,6 +561,16 @@ export default function ImportExportPage() {
         return res.json()
       })
       .then((json) => {
+        // Limpiar el intervalo de progreso
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
+
+        // Actualizar al 100% con los valores reales
+        setProcessedRecords(json.processed || totalRecords)
+        setImportProgress(100)
+
         // Verificar si hay errores resolubles
         if (json.resolvableErrors && json.resolvableErrors.length > 0) {
           setResolvableErrors(json.resolvableErrors)
@@ -545,6 +596,12 @@ export default function ImportExportPage() {
         })
       })
       .catch((err) => {
+        // Limpiar el intervalo de progreso
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
+
         console.error('Import error', err)
         toast({
           title: "Error en la importación",
@@ -552,6 +609,8 @@ export default function ImportExportPage() {
           variant: "destructive",
         })
         setMappingStep(1)
+        setProcessedRecords(0)
+        setImportProgress(0)
       })
   }
 
@@ -627,6 +686,11 @@ export default function ImportExportPage() {
   }
 
   const resetImport = () => {
+    // Limpiar el intervalo de progreso si existe
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current)
+      progressIntervalRef.current = null
+    }
     setImportFile(null)
     setMappingStep(1)
     setColumnMapping({})
@@ -639,6 +703,9 @@ export default function ImportExportPage() {
     setResolvableErrors([])
     setAvailableProducers([])
     setErrorResolutions({})
+    setTotalRecords(0)
+    setProcessedRecords(0)
+    setImportProgress(0)
   }
 
   return (
@@ -953,7 +1020,13 @@ export default function ImportExportPage() {
                         Relaciona las columnas de tu archivo con los campos del sistema
                       </p>
                     </div>
-                    <Badge variant="outline">{importFile?.name}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <FileSpreadsheet className="h-3 w-3" />
+                        {totalRecords} registros
+                      </Badge>
+                      <Badge variant="outline">{importFile?.name}</Badge>
+                    </div>
                   </div>
 
                   <div className="rounded-md border">
@@ -1082,10 +1155,36 @@ export default function ImportExportPage() {
                       <Upload className="h-8 w-8 text-primary animate-pulse" />
                     </div>
                     <h3 className="font-semibold text-lg mb-2">Importando Datos...</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <p className="text-sm text-muted-foreground mb-2">
                       Por favor espera mientras procesamos tu archivo
                     </p>
-                    <Progress value={66} className="max-w-md mx-auto" />
+                    
+                    {/* Indicador de progreso con registros */}
+                    <div className="max-w-md mx-auto space-y-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/20 text-primary font-bold text-sm animate-pulse">
+                          {processedRecords}
+                        </div>
+                        <span className="text-muted-foreground">/</span>
+                        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-muted text-muted-foreground font-bold text-sm">
+                          {totalRecords}
+                        </div>
+                      </div>
+                      
+                      <p className="text-sm font-medium text-primary">
+                        {processedRecords} de {totalRecords} registros procesados
+                      </p>
+                      
+                      <Progress value={importProgress} className="h-3" />
+                      
+                      <p className="text-xs text-muted-foreground">
+                        {importProgress < 85 
+                          ? "Procesando registros..." 
+                          : importProgress < 100 
+                            ? "Finalizando importación..." 
+                            : "¡Completado!"}
+                      </p>
+                    </div>
                   </div>
                 </motion.div>
               )}

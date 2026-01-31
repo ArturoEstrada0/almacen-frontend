@@ -10,7 +10,7 @@ import { useInventoryByWarehouse, useMovements, updateInventoryStock } from "@/l
 import { useMemo } from "react"
 import { useProducts, updateProduct } from "@/lib/hooks/use-products"
 import { formatNumber } from "@/lib/utils/format"
-import { Search, AlertTriangle, Download, Upload, ArrowLeftRight } from "lucide-react"
+import { Search, AlertTriangle, Download, Upload, ArrowLeftRight, Loader2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
@@ -21,6 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Progress } from "@/components/ui/progress"
 import * as XLSX from 'xlsx'
 import { useToast } from "@/hooks/use-toast"
 
@@ -58,6 +59,12 @@ export function StockTab({ warehouseId }: StockTabProps) {
   const [editCostPrice, setEditCostPrice] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+
+  // Estados para el loader de importación
+  const [isImporting, setIsImporting] = useState(false)
+  const [importTotalRecords, setImportTotalRecords] = useState(0)
+  const [importProcessedRecords, setImportProcessedRecords] = useState(0)
+  const [importProgress, setImportProgress] = useState(0)
 
   // Build a map of latest lot numbers by product from recent movements
   const latestLotByProduct = useMemo(() => {
@@ -190,16 +197,26 @@ export function StockTab({ warehouseId }: StockTabProps) {
         const worksheet = workbook.Sheets[sheetName]
         const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[]
 
+        // Inicializar el loader de progreso
+        setIsImporting(true)
+        setImportTotalRecords(jsonData.length)
+        setImportProcessedRecords(0)
+        setImportProgress(0)
+
         let successCount = 0
         let errorCount = 0
         const errors: string[] = []
 
-        for (const row of jsonData) {
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i]
           try {
             // Validar que tenga los campos requeridos
             if (!row['ID Producto'] || !row['ID Almacén']) {
               errors.push(`Fila sin ID Producto o ID Almacén`)
               errorCount++
+              // Actualizar progreso incluso en errores
+              setImportProcessedRecords(i + 1)
+              setImportProgress(Math.round(((i + 1) / jsonData.length) * 100))
               continue
             }
 
@@ -207,6 +224,9 @@ export function StockTab({ warehouseId }: StockTabProps) {
             if (!isUUID(row['ID Producto']) || !isUUID(row['ID Almacén'])) {
               errors.push(`IDs inválidos para producto ${row['SKU'] || row['Producto']}`)
               errorCount++
+              // Actualizar progreso incluso en errores
+              setImportProcessedRecords(i + 1)
+              setImportProgress(Math.round(((i + 1) / jsonData.length) * 100))
               continue
             }
 
@@ -255,12 +275,22 @@ export function StockTab({ warehouseId }: StockTabProps) {
 
             await updateInventoryStock(updateData)
             successCount++
+            
+            // Actualizar progreso
+            setImportProcessedRecords(i + 1)
+            setImportProgress(Math.round(((i + 1) / jsonData.length) * 100))
           } catch (error) {
             console.error('Error updating row:', row, error)
             errors.push(`Error en ${row['SKU'] || row['Producto']}: ${error}`)
             errorCount++
+            // Actualizar progreso incluso en errores
+            setImportProcessedRecords(i + 1)
+            setImportProgress(Math.round(((i + 1) / jsonData.length) * 100))
           }
         }
+
+        // Finalizar el loader
+        setIsImporting(false)
 
         // Mostrar resultado
         if (errorCount === 0) {
@@ -279,6 +309,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
         }
       } catch (error) {
         console.error('Error importing:', error)
+        setIsImporting(false)
         toast({
           title: "Error al importar",
           description: "Hubo un problema al leer el archivo",
@@ -592,6 +623,51 @@ export function StockTab({ warehouseId }: StockTabProps) {
               Guardar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de progreso de importación */}
+      <Dialog open={isImporting} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              Importando Inventario
+            </DialogTitle>
+            <DialogDescription>
+              Por favor espera mientras se procesan los registros
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Contador de registros */}
+            <div className="flex items-center justify-center gap-3">
+              <div className="flex flex-col items-center">
+                <span className="text-3xl font-bold text-primary">{importProcessedRecords}</span>
+                <span className="text-xs text-muted-foreground">Procesados</span>
+              </div>
+              <span className="text-2xl text-muted-foreground">/</span>
+              <div className="flex flex-col items-center">
+                <span className="text-3xl font-bold text-muted-foreground">{importTotalRecords}</span>
+                <span className="text-xs text-muted-foreground">Total</span>
+              </div>
+            </div>
+
+            {/* Barra de progreso */}
+            <div className="space-y-2">
+              <Progress value={importProgress} className="h-3" />
+              <p className="text-center text-sm font-medium text-primary">
+                {importProgress}% completado
+              </p>
+            </div>
+
+            {/* Mensaje de estado */}
+            <p className="text-center text-xs text-muted-foreground">
+              {importProgress < 100 
+                ? "Procesando registros del archivo Excel..." 
+                : "¡Importación completada!"}
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
     </>
