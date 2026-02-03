@@ -37,6 +37,7 @@ import {
   AlertTriangle,
   UserX,
   Package,
+  Truck,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import * as XLSX from "xlsx"
@@ -240,6 +241,18 @@ export default function ImportExportPage() {
       { field: "minStock", label: "Stock Mínimo", required: false },
       { field: "maxStock", label: "Stock Máximo", required: false },
       { field: "reorderPoint", label: "Punto de Reorden", required: false },
+    ],
+    shipments: [
+      { field: "code", label: "Código de Embarque", required: true },
+      { field: "date", label: "Fecha de Embarque", required: true },
+      { field: "trackingFolio", label: "Folio de Seguimiento", required: false },
+      { field: "status", label: "Estado", required: false },
+      { field: "carrier", label: "Transportista", required: false },
+      { field: "carrierContact", label: "Contacto Transportista", required: false },
+      { field: "totalBoxes", label: "Total de Cajas", required: false },
+      { field: "salePricePerBox", label: "Precio por Caja", required: false },
+      { field: "totalSale", label: "Venta Total", required: false },
+      { field: "notes", label: "Notas", required: false },
     ],
   }
 
@@ -983,6 +996,7 @@ export default function ImportExportPage() {
                         <SelectItem value="suppliers">Proveedores</SelectItem>
                         <SelectItem value="input-assignments">Asignación de Insumos</SelectItem>
                         <SelectItem value="fruit-receptions">Recepción de Fruta</SelectItem>
+                        <SelectItem value="shipments">Embarques</SelectItem>
                         <SelectItem value="initial-stock">Carga Inicial por Almacén</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1418,6 +1432,26 @@ export default function ImportExportPage() {
                     variant="outline"
                     className="w-full bg-transparent"
                     onClick={() => handleDownloadTemplate("initial-stock")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Descargar Plantilla
+                  </Button>
+                </div>
+
+                <div className="p-4 border rounded-lg space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                      <Truck className="h-5 w-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold">Plantilla de Embarques</h4>
+                      <p className="text-xs text-muted-foreground">Importar embarques de forma masiva</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => handleDownloadTemplate("shipments")}
                   >
                     <Download className="mr-2 h-4 w-4" />
                     Descargar Plantilla
