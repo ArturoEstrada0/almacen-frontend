@@ -245,6 +245,7 @@ export default function ImportExportPage() {
     shipments: [
       { field: "code", label: "Código de Embarque", required: true },
       { field: "date", label: "Fecha de Embarque", required: true },
+      { field: "receptionCodes", label: "Recepciones", required: false },
       { field: "trackingFolio", label: "Folio de Seguimiento", required: false },
       { field: "status", label: "Estado", required: false },
       { field: "carrier", label: "Transportista", required: false },
