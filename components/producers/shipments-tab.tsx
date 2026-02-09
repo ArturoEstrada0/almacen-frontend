@@ -459,6 +459,7 @@ export function ShipmentsTab() {
           </div>
         </div>
 
+        <TablePagination {...paginationProps} />
         <div className="rounded-md border">
           <Table>
             <TableHeader>

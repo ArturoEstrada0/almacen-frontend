@@ -132,6 +132,7 @@ export function PaymentReportsTab() {
             />
           </div>
 
+          <TablePagination {...paginationProps} />
           <Table>
             <TableHeader>
               <TableRow>

@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Eye, Trash2, Printer, Pencil, Upload } from "lucide-react"
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/db/localApi"
+import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
@@ -288,6 +289,10 @@ export function InputAssignmentsTab() {
   const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
 
+  // Estado para el modal de impresión
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
+  const [assignmentToPrint, setAssignmentToPrint] = useState<any | null>(null)
+
   // Handler para ver detalles
   const handleViewAssignment = (assignment: any) => {
     setSelectedAssignment(assignment)
@@ -296,8 +301,105 @@ export function InputAssignmentsTab() {
 
   // Handler para imprimir
   const handlePrintAssignment = (assignment: any) => {
-    // Aquí puedes implementar la lógica de impresión real
-    window.print() // Esto imprime la página actual, puedes personalizarlo
+    setAssignmentToPrint(assignment)
+    setIsPrintDialogOpen(true)
+  }
+
+  // Función para generar e imprimir la asignación
+  const doPrintAssignment = (assignment: any, format: PrintFormat) => {
+    if (!assignment) return
+    
+    const producer = producers.find(p => String(p.id) === String(assignment.producerId))
+    const warehouse = warehouses.find(w => String(w.id) === String(assignment.warehouseId))
+    const items = assignment.items || []
+    
+    const itemsHtml = items.map((item: any) => {
+      const product = products.find(p => String(p.id) === String(item.productId))
+      return `
+        <tr>
+          <td>${product?.name || '-'}</td>
+          <td style="text-align: center">${item.quantity || 0}</td>
+          <td style="text-align: right">${formatCurrency(Number(item.unitPrice) || 0)}</td>
+          <td style="text-align: right">${formatCurrency((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}</td>
+        </tr>
+      `
+    }).join('')
+    
+    const total = items.reduce((sum: number, item: any) => 
+      sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0
+    )
+    
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Asignación de Insumos - ${assignment.code || assignment.assignmentNumber}</title>
+  <style>${getPrintStyles(format)}</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Asignación de Insumos</h1>
+    <div class="divider"></div>
+    
+    <div class="row">
+      <span class="label">Código:</span>
+      <span class="value">${assignment.code || assignment.assignmentNumber || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Folio:</span>
+      <span class="value">${assignment.trackingFolio || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Fecha:</span>
+      <span class="value">${formatDate(assignment.date || assignment.assignmentDate)}</span>
+    </div>
+    
+    <div class="divider"></div>
+    <h2>Productor</h2>
+    <div class="row">
+      <span class="label">Nombre:</span>
+      <span class="value">${producer?.name || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Código:</span>
+      <span class="value">${producer?.code || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Almacén:</span>
+      <span class="value">${warehouse?.name || '-'}</span>
+    </div>
+    
+    <div class="divider"></div>
+    <h2>Productos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>Cantidad</th>
+          <th>Precio Unit.</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsHtml}
+      </tbody>
+    </table>
+    
+    <div class="total-row">
+      <span>TOTAL: ${formatCurrency(total)}</span>
+    </div>
+    
+    ${assignment.notes ? `<div class="divider"></div><h2>Notas</h2><p>${assignment.notes}</p>` : ''}
+    
+    <div class="footer">
+      <p>Generado desde Padre-Almacén</p>
+      <p>${new Date().toLocaleString()}</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+    openPrintWindow(html, format)
   }
 
   const handleImport = () => {
@@ -477,6 +579,7 @@ export function InputAssignmentsTab() {
           </div>
         </div>
 
+        <TablePagination {...paginationProps} />
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -697,6 +800,15 @@ export function InputAssignmentsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal para elegir formato de impresión */}
+      <PrintFormatDialog
+        open={isPrintDialogOpen}
+        onOpenChange={setIsPrintDialogOpen}
+        onPrint={(format) => doPrintAssignment(assignmentToPrint, format)}
+        title="Imprimir asignación"
+        description="Elige el formato para imprimir la asignación de insumos"
+      />
     </Card>
   )
 }

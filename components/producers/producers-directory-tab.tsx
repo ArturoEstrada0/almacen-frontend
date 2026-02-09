@@ -16,8 +16,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Edit, Eye, DollarSign } from "lucide-react"
+import { Plus, Search, Edit, Eye, DollarSign, Printer } from "lucide-react"
 import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
+import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
 import { formatCurrency } from "@/lib/utils/format"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
@@ -110,6 +111,85 @@ export function ProducersDirectoryTab() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   // Estado para el modal de detalles
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  // Estado para impresión por productor
+  const [isProducerPrintDialogOpen, setIsProducerPrintDialogOpen] = useState(false)
+  const [producerToPrint, setProducerToPrint] = useState<any | null>(null)
+
+  const handlePrintProducer = (producer: any) => {
+    setProducerToPrint(producer)
+    setIsProducerPrintDialogOpen(true)
+  }
+
+  const doPrintProducer = (producer: any, format: PrintFormat) => {
+    if (!producer) return
+    
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Información Productor - ${producer.name}</title>
+  <style>${getPrintStyles(format)}</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Información del Productor</h1>
+    <div class="divider"></div>
+    
+    <div class="row">
+      <span class="label">Código:</span>
+      <span class="value">${producer.code || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Nombre:</span>
+      <span class="value">${producer.name || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">RFC:</span>
+      <span class="value">${producer.rfc || producer.taxId || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Teléfono:</span>
+      <span class="value">${producer.phone || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Email:</span>
+      <span class="value">${producer.email || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Dirección:</span>
+      <span class="value">${producer.address || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Ciudad:</span>
+      <span class="value">${producer.city || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Estado:</span>
+      <span class="value">${producer.state || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Contacto:</span>
+      <span class="value">${producer.contactName || '-'}</span>
+    </div>
+    <div class="row total-row">
+      <span class="label">Saldo en Cuenta:</span>
+      <span class="value">${formatCurrency(producer.accountBalance || 0)}</span>
+    </div>
+    <div class="row">
+      <span class="label">Estatus:</span>
+      <span class="value">${producer.isActive ? 'Activo' : 'Inactivo'}</span>
+    </div>
+    
+    <div class="footer">
+      <p>Generado desde Padre-Almacén</p>
+      <p>${new Date().toLocaleString()}</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+    openPrintWindow(html, format)
+  }
 
   // Handler para ver detalles
   const handleViewProducer = (producer: any) => {
@@ -214,6 +294,7 @@ export function ProducersDirectoryTab() {
           </div>
         </div>
 
+        <TablePagination {...paginationProps} />
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -293,6 +374,9 @@ export function ProducersDirectoryTab() {
                           <TooltipContent>Ver detalles del productor</TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
+                      <Button variant="ghost" size="sm" onClick={() => handlePrintProducer(producer)} title="Imprimir">
+                        <Printer className="h-4 w-4" />
+                      </Button>
                       <ProtectedUpdate module="producers">
                         <Button variant="ghost" size="sm" onClick={() => handleEditProducer(producer)}>
                           <Edit className="h-4 w-4" />
@@ -429,9 +513,22 @@ export function ProducersDirectoryTab() {
             <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
               Cerrar
             </Button>
+            <Button variant="default" onClick={() => { setProducerToPrint(selectedProducer); setIsProducerPrintDialogOpen(true); }}>
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal para elegir formato de impresión del productor */}
+      <PrintFormatDialog
+        open={isProducerPrintDialogOpen}
+        onOpenChange={setIsProducerPrintDialogOpen}
+        onPrint={(format) => doPrintProducer(producerToPrint, format)}
+        title="Imprimir productor"
+        description="Elige el formato para imprimir la información del productor"
+      />
     </Card>
   )
 }

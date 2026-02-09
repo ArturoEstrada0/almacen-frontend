@@ -22,6 +22,7 @@ import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Printer, Edit, Trash2, Upload } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
+import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { 
   updateFruitReception as apiUpdateFruitReception, 
@@ -63,6 +64,10 @@ export function FruitReceptionsTab() {
   // Estado para el modal de detalles
   const [selectedReception, setSelectedReception] = useState<any | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+
+  // Estado para el modal de impresión
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false)
+  const [receptionToPrint, setReceptionToPrint] = useState<any | null>(null)
 
   // Filtrar productos por tipo - definir antes de los handlers
   const fruitProducts = products.filter((p) => p.type === "fruta")
@@ -290,7 +295,91 @@ export function FruitReceptionsTab() {
 
   // Handler para imprimir
   const handlePrintReception = (reception: any) => {
-    window.print() // Personaliza si necesitas formato especial
+    setReceptionToPrint(reception)
+    setIsPrintDialogOpen(true)
+  }
+
+  // Función para generar e imprimir la recepción
+  const doPrintReception = (reception: any, format: PrintFormat) => {
+    if (!reception) return
+    
+    const producer = producers.find(p => String(p.id) === String(reception.producerId))
+    const warehouse = warehouses.find(w => String(w.id) === String(reception.warehouseId))
+    const product = products.find(p => String(p.id) === String(reception.productId))
+    const totalWeight = Number(reception.totalWeight || 0)
+    const boxes = Number(reception.boxes || 0)
+    const weightPerBox = boxes > 0 ? (totalWeight / boxes).toFixed(2) : '0.00'
+    
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Recepción de Fruta - ${reception.code || reception.receptionNumber}</title>
+  <style>${getPrintStyles(format)}</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Recepción de Fruta</h1>
+    <div class="divider"></div>
+    
+    <div class="row">
+      <span class="label">Código:</span>
+      <span class="value">${reception.code || reception.receptionNumber || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Folio:</span>
+      <span class="value">${reception.trackingFolio || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Fecha:</span>
+      <span class="value">${formatDate(reception.date || reception.receptionDate)}</span>
+    </div>
+    
+    <div class="divider"></div>
+    <h2>Productor</h2>
+    <div class="row">
+      <span class="label">Nombre:</span>
+      <span class="value">${producer?.name || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Código:</span>
+      <span class="value">${producer?.code || '-'}</span>
+    </div>
+    
+    <div class="divider"></div>
+    <h2>Detalles</h2>
+    <div class="row">
+      <span class="label">Producto:</span>
+      <span class="value">${product?.name || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Almacén:</span>
+      <span class="value">${warehouse?.name || '-'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Cajas:</span>
+      <span class="value">${boxes}</span>
+    </div>
+    <div class="row">
+      <span class="label">Peso por caja:</span>
+      <span class="value">${weightPerBox} kg</span>
+    </div>
+    <div class="row total-row">
+      <span class="label">Peso Total:</span>
+      <span class="value">${totalWeight.toFixed(2)} kg</span>
+    </div>
+    
+    ${reception.notes ? `<div class="divider"></div><h2>Notas</h2><p>${reception.notes}</p>` : ''}
+    
+    <div class="footer">
+      <p>Generado desde Padre-Almacén</p>
+      <p>${new Date().toLocaleString()}</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+    openPrintWindow(html, format)
   }
 
   const handleImport = () => {
@@ -526,6 +615,7 @@ export function FruitReceptionsTab() {
           </div>
         </div>
 
+        <TablePagination {...paginationProps} />
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -787,13 +877,26 @@ export function FruitReceptionsTab() {
             <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
               Cerrar
             </Button>
-            <Button variant="default">
+            <Button variant="default" onClick={() => {
+              if (selectedReception) {
+                handlePrintReception(selectedReception)
+              }
+            }}>
               <Printer className="h-4 w-4 mr-2" />
               Imprimir
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal para elegir formato de impresión */}
+      <PrintFormatDialog
+        open={isPrintDialogOpen}
+        onOpenChange={setIsPrintDialogOpen}
+        onPrint={(format) => doPrintReception(receptionToPrint, format)}
+        title="Imprimir recepción"
+        description="Elige el formato para imprimir la recepción de fruta"
+      />
     </Card>
   )
 }
