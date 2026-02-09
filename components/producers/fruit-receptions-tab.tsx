@@ -28,6 +28,7 @@ import {
   deleteFruitReception as apiDeleteFruitReception 
 } from "@/lib/hooks/use-producers"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 interface ReturnedItem {
   id: number
@@ -96,6 +97,9 @@ export function FruitReceptionsTab() {
     const producer = producers.find((p) => p.id === reception.producerId)
     return (reception.code || reception.receptionNumber || "").toLowerCase().includes(q) || (producer?.name || "").toLowerCase().includes(q)
   })
+
+  // Pagination
+  const { pagedItems: pagedReceptions, paginationProps } = usePagination(filteredReceptions, 20)
 
   const totalWeight = boxes && weightPerBox ? Number(boxes) * Number(weightPerBox) : 0
 
@@ -538,7 +542,7 @@ export function FruitReceptionsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredReceptions.map((reception) => {
+              {pagedReceptions.map((reception) => {
                 const producer = producers.find((p) => p.id === reception.producerId)
                 const product = products.find((p) => p.id === reception.productId)
                 return (
@@ -598,6 +602,7 @@ export function FruitReceptionsTab() {
             </TableBody>
           </Table>
         </div>
+        <TablePagination {...paginationProps} />
       </CardContent>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>

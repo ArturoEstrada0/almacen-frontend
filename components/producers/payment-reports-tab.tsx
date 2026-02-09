@@ -18,6 +18,7 @@ import { Search, Eye, CheckCircle } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentReport, PaymentReportStatus } from "@/lib/types"
 import { usePaymentReports } from "@/lib/hooks/use-producers"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { useToast } from "@/hooks/use-toast"
 
@@ -52,6 +53,9 @@ export function PaymentReportsTab() {
   const filteredReports = (paymentReports || []).filter((report) =>
     report.code.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  // Pagination
+  const { pagedItems: pagedReports, paginationProps } = usePagination(filteredReports, 20)
 
   const openViewDialog = (report: PaymentReport) => {
     setViewReport(report)
@@ -150,7 +154,7 @@ export function PaymentReportsTab() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredReports.map((report) => {
+                pagedReports.map((report) => {
                   const statusInfo = statusConfig[report.status]
                   return (
                     <TableRow key={report.id}>
@@ -186,6 +190,7 @@ export function PaymentReportsTab() {
             </TableBody>
           </Table>
         </div>
+        <TablePagination {...paginationProps} />
       </CardContent>
 
       {/* View Dialog */}

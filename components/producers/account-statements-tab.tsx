@@ -23,6 +23,7 @@ import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText } from "
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentMethod } from "@/lib/types"
 import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment, getProducerReport } from "@/lib/hooks/use-producers"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 function safeCurrency(val: any) {
   // Si el valor es string y tiene el mismo número repetido, lo corregimos
@@ -145,6 +146,9 @@ export function AccountStatementsTab() {
       balance: Number(m.balance),
     }
   }).sort((a, b) => b.date.getTime() - a.date.getTime()) // Orden descendente: más recientes primero
+
+  // Pagination for movements
+  const { pagedItems: pagedMovements, paginationProps: movementsPaginationProps } = usePagination(mappedMovements, 20)
 
   const totalAssigned = mappedMovements
     .filter((m) => m.type === "asignacion")
@@ -906,8 +910,9 @@ export function AccountStatementsTab() {
             </CardHeader>
             <CardContent>
               {mappedMovements.length > 0 ? (
-                <div className="rounded-md border">
-                  <Table>
+                <>
+                  <div className="rounded-md border">
+                    <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Fecha</TableHead>
@@ -919,7 +924,7 @@ export function AccountStatementsTab() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mappedMovements.map((movement) => (
+                      {pagedMovements.map((movement) => (
                         <TableRow key={movement.id}>
                           <TableCell className="text-sm">{formatDate(movement.date)}</TableCell>
                           <TableCell>
@@ -981,6 +986,8 @@ export function AccountStatementsTab() {
                     </TableBody>
                   </Table>
                 </div>
+                <TablePagination {...movementsPaginationProps} />
+                </>
               ) : (
                 <div className="text-center py-12 text-muted-foreground">
                   <p>No hay movimientos registrados para este productor</p>

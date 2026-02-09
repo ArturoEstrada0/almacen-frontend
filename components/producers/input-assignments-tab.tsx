@@ -23,6 +23,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/db/localApi"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 interface AssignmentItem {
   id: number
@@ -250,6 +251,9 @@ export function InputAssignmentsTab() {
     const code = (a.code || a.assignmentNumber || "").toString().toLowerCase()
     return code.includes(q) || (producer?.name || "").toLowerCase().includes(q)
   })
+
+  // Pagination
+  const { pagedItems: pagedAssignments, paginationProps } = usePagination(filteredAssignments, 20)
 
   // Estado para mostrar error por item
   const [itemStockErrors, setItemStockErrors] = useState<Record<number, string>>({})
@@ -487,7 +491,7 @@ export function InputAssignmentsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAssignments.map((assignment) => {
+              {pagedAssignments.map((assignment) => {
                 const producer = producers.find((p) => String(p.id) === String(assignment.producerId))
                 const warehouse = warehouses.find((w) => String(w.id) === String(assignment.warehouseId))
                 const assignmentProducts = (assignment.items || [])
@@ -545,6 +549,7 @@ export function InputAssignmentsTab() {
             </TableBody>
           </Table>
         </div>
+        <TablePagination {...paginationProps} />
       </CardContent>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>

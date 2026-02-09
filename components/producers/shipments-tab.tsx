@@ -35,6 +35,7 @@ import {
 import { mutate as globalMutate } from "swr"
 import { products } from "@/lib/mock-data"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 const statusConfig: Record<
   ShipmentStatus,
@@ -87,6 +88,9 @@ export function ShipmentsTab() {
     const number = (shipment as any).shipmentNumber || (shipment as any).code || ""
     return number.toLowerCase().includes(searchTerm.toLowerCase())
   })
+
+  // Pagination
+  const { pagedItems: pagedShipments, paginationProps } = usePagination(filteredShipments, 20)
 
   const selectedReceptionsData = pendingReceptions.filter((r) => selectedReceptions.includes(r.id))
   const totalBoxes = selectedReceptionsData.reduce((sum, r) => sum + Number(r.boxes || 0), 0)
@@ -472,7 +476,7 @@ export function ShipmentsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredShipments.map((shipment) => {
+              {pagedShipments.map((shipment) => {
                 const config = statusConfig[(shipment as any).status as ShipmentStatus]
                 const receptionIds: string[] = (shipment as any).receptionIds || []
                 const receptions = (fruitReceptions || []).filter((r) => receptionIds.includes(r.id))
@@ -609,6 +613,7 @@ export function ShipmentsTab() {
             </TableBody>
           </Table>
         </div>
+        <TablePagination {...paginationProps} />
 
         {/* Edit Shipment Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

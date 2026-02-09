@@ -21,6 +21,7 @@ import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { formatCurrency } from "@/lib/utils/format"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 export function ProducersDirectoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -100,6 +101,9 @@ export function ProducersDirectoryTab() {
       (producer.code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (producer.city || "").toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  // Pagination
+  const { pagedItems: pagedProducers, paginationProps } = usePagination(filteredProducers, 20)
 
   // Estado y handler para ver detalles de productor
   const [selectedProducer, setSelectedProducer] = useState<any | null>(null)
@@ -224,7 +228,7 @@ export function ProducersDirectoryTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducers.map((producer) => (
+              {pagedProducers.map((producer) => (
                 <TableRow key={producer.id}>
                   <TableCell className="font-medium">{producer.code}</TableCell>
                   <TableCell>
@@ -301,6 +305,7 @@ export function ProducersDirectoryTab() {
             </TableBody>
           </Table>
         </div>
+        <TablePagination {...paginationProps} />
       </CardContent>
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
