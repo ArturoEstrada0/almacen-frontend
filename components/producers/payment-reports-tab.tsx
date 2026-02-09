@@ -14,7 +14,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Search, Eye, CheckCircle } from "lucide-react"
+import { Search, Eye, CheckCircle, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentReport, PaymentReportStatus } from "@/lib/types"
 import { usePaymentReports } from "@/lib/hooks/use-producers"
@@ -33,6 +34,8 @@ const statusConfig: Record<
 
 export function PaymentReportsTab() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [sortBy, setSortBy] = useState<"producer" | "code" | "date" | "total">("producer")
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -50,8 +53,34 @@ export function PaymentReportsTab() {
   const { paymentReports, mutate } = usePaymentReports()
   const { toast } = useToast()
 
-  const filteredReports = (paymentReports || []).filter((report) =>
-    report.code.toLowerCase().includes(searchTerm.toLowerCase())
+  const sortedReports = [...(paymentReports || [])].sort((a, b) => {
+    switch (sortBy) {
+      case 'code': {
+        const av = String(a.code || "").toLowerCase()
+        const bv = String(b.code || "").toLowerCase()
+        return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case 'date': {
+        const aTime = new Date(a.date || 0).getTime() || 0
+        const bTime = new Date(b.date || 0).getTime() || 0
+        return sortOrder === 'asc' ? aTime - bTime : bTime - aTime
+      }
+      case 'total': {
+        const an = Number(a.totalToPay || a.total || 0)
+        const bn = Number(b.totalToPay || b.total || 0)
+        return sortOrder === 'asc' ? an - bn : bn - an
+      }
+      case 'producer':
+      default: {
+        const an = (a.producer?.name || "").toLowerCase()
+        const bn = (b.producer?.name || "").toLowerCase()
+        return sortOrder === 'asc' ? an.localeCompare(bn) : bn.localeCompare(an)
+      }
+    }
+  })
+
+  const filteredReports = (sortedReports || []).filter((report) =>
+    (report.code || "").toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   // Pagination
@@ -117,6 +146,23 @@ export function PaymentReportsTab() {
           <div>
             <CardTitle>Reportes de Pago</CardTitle>
             <CardDescription>Histórico de reportes de pago a productores (generados automáticamente)</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Ordenar por..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="producer">Productor (A–Z)</SelectItem>
+                <SelectItem value="code">Código</SelectItem>
+                <SelectItem value="date">Fecha</SelectItem>
+                <SelectItem value="total">Total a pagar</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={() => setSortOrder(s => s === 'asc' ? 'desc' : 'asc')} title="Ordenar A–Z / Z–A">
+              <ChevronsUpDown className="mr-2 h-4 w-4" />
+              {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
       </CardHeader>

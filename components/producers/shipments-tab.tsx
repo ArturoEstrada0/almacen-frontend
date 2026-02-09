@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2 } from "lucide-react"
+import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { ShipmentStatus } from "@/lib/types"
 import {
@@ -49,6 +49,8 @@ const statusConfig: Record<
 
 export function ShipmentsTab() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [sortBy, setSortBy] = useState<"producer" | "code" | "date">("producer")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -84,7 +86,47 @@ export function ShipmentsTab() {
 
   const pendingReceptions = (fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente")
 
-  const filteredShipments = (shipments || []).filter((shipment) => {
+  const getProducerNameForShipment = (shipment: any) => {
+    if (shipment?.producer?.name) return String(shipment.producer.name).toLowerCase()
+    // Try embedded receptions
+    const embedded = Array.isArray(shipment.receptions) && shipment.receptions.length > 0
+      ? shipment.receptions
+      : Array.isArray(shipment.receptionIds) && Array.isArray(fruitReceptions)
+        ? (fruitReceptions || []).filter((r: any) => shipment.receptionIds.includes(r.id))
+        : []
+
+    if (embedded && embedded.length > 0) {
+      const prodId = embedded[0].producerId
+      const prod = (producers || []).find((p: any) => String(p.id) === String(prodId))
+      if (prod?.name) return String(prod.name).toLowerCase()
+    }
+
+    // Fallback to code/number
+    return String(shipment.code || shipment.shipmentNumber || "").toLowerCase()
+  }
+
+  const sortedShipments = [...(shipments || [])].sort((a, b) => {
+    switch (sortBy) {
+      case 'code': {
+        const av = String(a.code || a.shipmentNumber || "").toLowerCase()
+        const bv = String(b.code || b.shipmentNumber || "").toLowerCase()
+        return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case 'date': {
+        const aTime = new Date(a.date || a.shipmentDate || 0).getTime() || 0
+        const bTime = new Date(b.date || b.shipmentDate || 0).getTime() || 0
+        return sortOrder === 'asc' ? aTime - bTime : bTime - aTime
+      }
+      case 'producer':
+      default: {
+        const aName = getProducerNameForShipment(a)
+        const bName = getProducerNameForShipment(b)
+        return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName)
+      }
+    }
+  })
+
+  const filteredShipments = (sortedShipments || []).filter((shipment) => {
     const number = (shipment as any).shipmentNumber || (shipment as any).code || ""
     return number.toLowerCase().includes(searchTerm.toLowerCase())
   })
@@ -247,27 +289,42 @@ export function ShipmentsTab() {
             <CardTitle>Embarques</CardTitle>
             <CardDescription>Agrupa recepciones de múltiples productores y gestiona ventas</CardDescription>
           </div>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <ProtectedCreate module="producers">
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Crear Embarque
-                </Button>
-              </DialogTrigger>
-            </ProtectedCreate>
-            <DialogContent 
-              className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0"
-            >
-              <div className="flex flex-col h-full p-6">
-                <DialogHeader className="shrink-0 space-y-2 pb-4">
-                  <DialogTitle className="text-xl">Crear Nuevo Embarque</DialogTitle>
-                  <DialogDescription className="text-sm">
-                    Selecciona múltiples recepciones de diferentes productores para agrupar en un embarque
-                  </DialogDescription>
-                </DialogHeader>
-              
-              <div className="flex-1 overflow-y-auto px-6 pb-4">
+          <div className="flex items-center gap-2">
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Ordenar por..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="producer">Productor (A–Z)</SelectItem>
+                <SelectItem value="code">Folio / Código</SelectItem>
+                <SelectItem value="date">Fecha</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={() => setSortOrder(s => s === 'asc' ? 'desc' : 'asc')} title="Ordenar por productor">
+              <ChevronsUpDown className="mr-2 h-4 w-4" />
+              {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+            </Button>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <ProtectedCreate module="producers">
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Crear Embarque
+                  </Button>
+                </DialogTrigger>
+              </ProtectedCreate>
+              <DialogContent 
+                className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0"
+              >
+                <div className="flex flex-col h-full p-6">
+                  <DialogHeader className="shrink-0 space-y-2 pb-4">
+                    <DialogTitle className="text-xl">Crear Nuevo Embarque</DialogTitle>
+                    <DialogDescription className="text-sm">
+                      Selecciona múltiples recepciones de diferentes productores para agrupar en un embarque
+                    </DialogDescription>
+                  </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto px-6 pb-4">
                 <div className="grid gap-6 py-4">
                   {selectedReceptions.length > 0 && (
                     <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 shadow-sm">
@@ -445,6 +502,7 @@ export function ShipmentsTab() {
             </DialogContent>
           </Dialog>
         </div>
+      </div>
       </CardHeader>
       <CardContent>
         <div className="mb-4">

@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Printer, Edit, Trash2, Upload } from "lucide-react"
+import { Plus, Search, Eye, Printer, Edit, Trash2, Upload, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
 import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
@@ -60,6 +60,8 @@ export function FruitReceptionsTab() {
   const [warehouses, setWarehouses] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [receptions, setReceptions] = useState<any[]>([])
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [sortBy, setSortBy] = useState<"producer" | "folio" | "date" | "boxes" | "weight">("producer")
 
   // Estado para el modal de detalles
   const [selectedReception, setSelectedReception] = useState<any | null>(null)
@@ -97,7 +99,39 @@ export function FruitReceptionsTab() {
     }
   }, [])
 
-  const filteredReceptions = receptions.filter((reception) => {
+  const sortedReceptions = [...receptions].sort((a, b) => {
+    const getProducerName = (r: any) => (producers.find((p) => p.id === r.producerId)?.name || "").toLowerCase()
+    switch (sortBy) {
+      case "producer": {
+        const an = getProducerName(a)
+        const bn = getProducerName(b)
+        return sortOrder === "asc" ? an.localeCompare(bn) : bn.localeCompare(an)
+      }
+      case "folio": {
+        const av = String(a.trackingFolio || a.code || a.receptionNumber || "").toLowerCase()
+        const bv = String(b.trackingFolio || b.code || b.receptionNumber || "").toLowerCase()
+        return sortOrder === "asc" ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case "boxes": {
+        const an = Number(a.boxes || 0)
+        const bn = Number(b.boxes || 0)
+        return sortOrder === "asc" ? an - bn : bn - an
+      }
+      case "weight": {
+        const an = Number(a.totalWeight || 0)
+        const bn = Number(b.totalWeight || 0)
+        return sortOrder === "asc" ? an - bn : bn - an
+      }
+      case "date":
+      default: {
+        const aTime = new Date(a.date || a.receptionDate || 0).getTime() || 0
+        const bTime = new Date(b.date || b.receptionDate || 0).getTime() || 0
+        return sortOrder === "asc" ? aTime - bTime : bTime - aTime
+      }
+    }
+  })
+
+  const filteredReceptions = sortedReceptions.filter((reception) => {
     const q = searchTerm.toLowerCase()
     const producer = producers.find((p) => p.id === reception.producerId)
     return (reception.code || reception.receptionNumber || "").toLowerCase().includes(q) || (producer?.name || "").toLowerCase().includes(q)
@@ -398,6 +432,22 @@ export function FruitReceptionsTab() {
             <Button variant="outline" onClick={handleImport}>
               <Upload className="mr-2 h-4 w-4" />
               Importar
+            </Button>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Ordenar por..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="producer">Productor (A–Z)</SelectItem>
+                <SelectItem value="folio">Folio Seguimiento</SelectItem>
+                <SelectItem value="date">Fecha</SelectItem>
+                <SelectItem value="boxes">Cajas</SelectItem>
+                <SelectItem value="weight">Peso Total</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={() => setSortOrder(s => s === 'asc' ? 'desc' : 'asc')} title="Ordenar A–Z / Z–A">
+              <ChevronsUpDown className="mr-2 h-4 w-4" />
+              {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
             </Button>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <ProtectedCreate module="producers">

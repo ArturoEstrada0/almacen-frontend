@@ -16,17 +16,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Edit, Eye, DollarSign, Printer } from "lucide-react"
+import { Plus, Search, Edit, Eye, DollarSign, Printer, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
 import { formatCurrency } from "@/lib/utils/format"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function ProducersDirectoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [sortBy, setSortBy] = useState<"name" | "code" | "city">("name")
   const [producers, setProducers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -96,7 +99,28 @@ export function ProducersDirectoryTab() {
     }
   }
 
-  const filteredProducers = producers.filter(
+  const sortedProducers = [...producers].sort((a, b) => {
+    switch (sortBy) {
+      case 'code': {
+        const av = (a.code || "").toString().toLowerCase()
+        const bv = (b.code || "").toString().toLowerCase()
+        return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case 'city': {
+        const av = (a.city || "").toString().toLowerCase()
+        const bv = (b.city || "").toString().toLowerCase()
+        return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case 'name':
+      default: {
+        const aName = (a.name || "").toLowerCase()
+        const bName = (b.name || "").toLowerCase()
+        return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName)
+      }
+    }
+  })
+
+  const filteredProducers = sortedProducers.filter(
     (producer) =>
       (producer.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (producer.code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -211,74 +235,90 @@ export function ProducersDirectoryTab() {
             <CardTitle>Directorio de Productores</CardTitle>
             <CardDescription>Gestiona la información de tus productores</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <ProtectedCreate module="producers">
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nuevo Productor
-                </Button>
-              </DialogTrigger>
-            </ProtectedCreate>
-              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Nuevo Productor</DialogTitle>
-                <DialogDescription>Registra un nuevo productor en el sistema</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="code">Código</Label>
-                    <Input id="code" placeholder="PROD-004" value={formCode} onChange={(e) => setFormCode(e.target.value)} />
+          <div className="flex items-center gap-2">
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Ordenar por..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Nombre (A–Z)</SelectItem>
+                <SelectItem value="code">Código</SelectItem>
+                <SelectItem value="city">Ciudad</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={() => setSortOrder(s => s === 'asc' ? 'desc' : 'asc')} title="Ordenar A–Z / Z–A">
+              <ChevronsUpDown className="mr-2 h-4 w-4" />
+              {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <ProtectedCreate module="producers">
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Nuevo Productor
+                  </Button>
+                </DialogTrigger>
+              </ProtectedCreate>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Nuevo Productor</DialogTitle>
+                  <DialogDescription>Registra un nuevo productor en el sistema</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="code">Código</Label>
+                      <Input id="code" placeholder="PROD-004" value={formCode} onChange={(e) => setFormCode(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nombre Completo</Label>
+                      <Input id="name" placeholder="Nombre del productor" value={formName} onChange={(e) => setFormName(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="rfc">RFC</Label>
+                      <Input id="rfc" placeholder="ABCD123456XYZ" value={formRfc} onChange={(e) => setFormRfc(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Teléfono</Label>
+                      <Input id="phone" placeholder="+52 123 456 7890" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nombre Completo</Label>
-                    <Input id="name" placeholder="Nombre del productor" value={formName} onChange={(e) => setFormName(e.target.value)} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="rfc">RFC</Label>
-                    <Input id="rfc" placeholder="ABCD123456XYZ" value={formRfc} onChange={(e) => setFormRfc(e.target.value)} />
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" placeholder="productor@email.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Teléfono</Label>
-                    <Input id="phone" placeholder="+52 123 456 7890" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+                    <Label htmlFor="address">Dirección</Label>
+                    <Input id="address" placeholder="Rancho, Parcela, etc." value={formAddress} onChange={(e) => setFormAddress(e.target.value)} />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="productor@email.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Dirección</Label>
-                  <Input id="address" placeholder="Rancho, Parcela, etc." value={formAddress} onChange={(e) => setFormAddress(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">Ciudad</Label>
-                    <Input id="city" placeholder="Ciudad" value={formCity} onChange={(e) => setFormCity(e.target.value)} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="city">Ciudad</Label>
+                      <Input id="city" placeholder="Ciudad" value={formCity} onChange={(e) => setFormCity(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="state">Estado</Label>
+                      <Input id="state" placeholder="Estado" value={formState} onChange={(e) => setFormState(e.target.value)} />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="state">Estado</Label>
-                    <Input id="state" placeholder="Estado" value={formState} onChange={(e) => setFormState(e.target.value)} />
+                    <Label htmlFor="contact">Nombre de Contacto</Label>
+                    <Input id="contact" placeholder="Persona de contacto" value={formContactName} onChange={(e) => setFormContactName(e.target.value)} />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact">Nombre de Contacto</Label>
-                  <Input id="contact" placeholder="Persona de contacto" value={formContactName} onChange={(e) => setFormContactName(e.target.value)} />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleCreateProducer} disabled={saving || !formName}>
-                  {saving ? "Guardando..." : "Guardar Productor"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleCreateProducer} disabled={saving || !formName}>
+                    {saving ? "Guardando..." : "Guardar Productor"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

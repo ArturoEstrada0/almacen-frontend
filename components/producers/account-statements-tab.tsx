@@ -19,7 +19,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText } from "lucide-react"
+import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentMethod } from "@/lib/types"
 import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment, getProducerReport } from "@/lib/hooks/use-producers"
@@ -76,6 +76,8 @@ function parseAmountToNumber(val: any) {
 
 export function AccountStatementsTab() {
   const [selectedProducer, setSelectedProducer] = useState<string>("")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [sortBy, setSortBy] = useState<"date" | "type" | "amount" | "reference">("date")
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [selectedAction, setSelectedAction] = useState<"pago" | "abono" | "devolucion" | null>(null)
 
@@ -145,7 +147,28 @@ export function AccountStatementsTab() {
       amount: amount,
       balance: Number(m.balance),
     }
-  }).sort((a, b) => b.date.getTime() - a.date.getTime()) // Orden descendente: más recientes primero
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'type': {
+        const av = (a.type || "").toString().toLowerCase()
+        const bv = (b.type || "").toString().toLowerCase()
+        return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case 'amount': {
+        const an = Number(a.amount || 0)
+        const bn = Number(b.amount || 0)
+        return sortOrder === 'asc' ? an - bn : bn - an
+      }
+      case 'reference': {
+        const av = (a.referenceNumber || "").toString().toLowerCase()
+        const bv = (b.referenceNumber || "").toString().toLowerCase()
+        return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case 'date':
+      default:
+        return sortOrder === 'asc' ? a.date.getTime() - b.date.getTime() : b.date.getTime() - a.date.getTime()
+    }
+  }) // Orden dinámico según selección
 
   // Pagination for movements
   const { pagedItems: pagedMovements, paginationProps: movementsPaginationProps } = usePagination(mappedMovements, 20)
@@ -508,6 +531,21 @@ export function AccountStatementsTab() {
               </div>
               {selectedProducer && (
                 <div className="flex items-end gap-2">
+                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                      <SelectTrigger className="w-44">
+                        <SelectValue placeholder="Ordenar por..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">Fecha</SelectItem>
+                        <SelectItem value="type">Tipo</SelectItem>
+                        <SelectItem value="amount">Monto</SelectItem>
+                        <SelectItem value="reference">Referencia</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" onClick={() => setSortOrder(s => s === 'asc' ? 'desc' : 'asc')} title="Ordenar A–Z / Z–A">
+                      <ChevronsUpDown className="mr-2 h-4 w-4" />
+                      {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                    </Button>
                   <Button variant="outline" onClick={handleGenerateReport}>
                     <FileText className="mr-2 h-4 w-4" />
                     Generar Reporte

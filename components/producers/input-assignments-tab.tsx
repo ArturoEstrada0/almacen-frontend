@@ -18,7 +18,8 @@ import {
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Search, Eye, Trash2, Printer, Pencil, Upload } from "lucide-react"
+import { Plus, Search, Eye, Trash2, Printer, Pencil, Upload, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/db/localApi"
 import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -36,6 +37,8 @@ interface AssignmentItem {
 export function InputAssignmentsTab() {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [sortBy, setSortBy] = useState<"producer" | "folio" | "date" | "total">("producer")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editingAssignment, setEditingAssignment] = useState<any>(null)
@@ -246,7 +249,33 @@ export function InputAssignmentsTab() {
     }
   }
 
-  const filteredAssignments = assignments.filter((a) => {
+  const sortedAssignments = [...assignments].sort((x, y) => {
+    switch (sortBy) {
+      case 'folio': {
+        const av = String(x.trackingFolio || x.code || x.assignmentNumber || "").toLowerCase()
+        const bv = String(y.trackingFolio || y.code || y.assignmentNumber || "").toLowerCase()
+        return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      case 'total': {
+        const an = Number(x.total || 0)
+        const bn = Number(y.total || 0)
+        return sortOrder === 'asc' ? an - bn : bn - an
+      }
+      case 'producer': {
+        const aName = (producers.find(p => String(p.id) === String(x.producerId))?.name || "").toLowerCase()
+        const bName = (producers.find(p => String(p.id) === String(y.producerId))?.name || "").toLowerCase()
+        return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName)
+      }
+      case 'date':
+      default: {
+        const aTime = new Date(x.date || x.assignmentDate || 0).getTime() || 0
+        const bTime = new Date(y.date || y.assignmentDate || 0).getTime() || 0
+        return sortOrder === 'asc' ? aTime - bTime : bTime - aTime
+      }
+    }
+  })
+
+  const filteredAssignments = sortedAssignments.filter((a) => {
     const q = searchTerm.toLowerCase()
     const producer = producers.find((p) => String(p.id) === String(a.producerId))
     const code = (a.code || a.assignmentNumber || "").toString().toLowerCase()
@@ -419,6 +448,21 @@ export function InputAssignmentsTab() {
             <Button variant="outline" onClick={handleImport}>
               <Upload className="mr-2 h-4 w-4" />
               Importar
+            </Button>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Ordenar por..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="producer">Productor (A–Z)</SelectItem>
+                <SelectItem value="folio">Folio</SelectItem>
+                <SelectItem value="date">Fecha</SelectItem>
+                <SelectItem value="total">Total</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={() => setSortOrder(s => s === 'asc' ? 'desc' : 'asc')} title="Ordenar A–Z / Z–A">
+              <ChevronsUpDown className="mr-2 h-4 w-4" />
+              {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
             </Button>
             <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
               <ProtectedCreate module="producers">
