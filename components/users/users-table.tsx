@@ -25,6 +25,7 @@ import { EditUserDialog } from "./edit-user-dialog"
 import { UpdatePasswordDialog } from "./update-password-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/lib/context/auth-context"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +66,9 @@ export function UsersTable({ users, isLoading, onUpdate }: UsersTableProps) {
 
   const hasUpdatePermission = canUpdate("users")
   const hasDeletePermission = canDelete("users")
+
+  // Pagination
+  const { pagedItems: pagedUsers, paginationProps } = usePagination(users, 20)
 
   const handleToggleActive = async (user: User) => {
     try {
@@ -154,7 +158,7 @@ export function UsersTable({ users, isLoading, onUpdate }: UsersTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => (
+            {pagedUsers.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium">{user.fullName}</TableCell>
                 <TableCell>{user.email}</TableCell>
@@ -221,6 +225,7 @@ export function UsersTable({ users, isLoading, onUpdate }: UsersTableProps) {
             ))}
           </TableBody>
         </Table>
+        <TablePagination {...paginationProps} />
       </div>
 
       <EditUserDialog

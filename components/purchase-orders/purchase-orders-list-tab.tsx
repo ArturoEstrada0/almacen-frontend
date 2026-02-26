@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 interface PurchaseOrdersListTabProps {
   onCreateNew: () => void
@@ -48,6 +49,9 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     const matchesPayment = filterPaymentStatus === "all" || order.paymentStatus === filterPaymentStatus
     return matchesSearch && matchesStatus && matchesPayment
   })
+
+  // Pagination
+  const { pagedItems: pagedOrders, paginationProps } = usePagination(filteredOrders, 20)
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -195,7 +199,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </TableRow>
             </TableHeader>
                 <TableBody>
-              {filteredOrders.map((order) => {
+              {pagedOrders.map((order) => {
                 const supplier = suppliers.find((s) => s.id === order.supplierId)
                 const warehouse = warehouses.find((w) => w.id === order.warehouseId)
                 const dueDate = order.dueDate ? new Date(order.dueDate) : null
@@ -328,6 +332,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               })}
             </TableBody>
           </Table>
+          <TablePagination {...paginationProps} />
         </CardContent>
       </Card>
 

@@ -17,6 +17,7 @@ import { toast } from "@/lib/utils/toast"
 import { deleteProduct } from "@/lib/actions/products"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 import { extractErrorMessage } from "@/lib/utils/error-handler"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,6 +47,9 @@ export default function ProductsPage() {
     const matchesCategory = filterCategory === "all" || product.categoryId === filterCategory
     return matchesSearch && matchesType && matchesCategory
   })
+
+  // Pagination
+  const { pagedItems: pagedProducts, paginationProps } = usePagination(filteredProducts, 20)
 
   const handleDelete = async () => {
     if (!productToDelete) return
@@ -172,14 +176,14 @@ export default function ProductsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.length === 0 ? (
+              {pagedProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-muted-foreground">
                     No se encontraron productos
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => (
+                pagedProducts.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>
                       <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted">
@@ -245,6 +249,7 @@ export default function ProductsPage() {
               )}
             </TableBody>
           </Table>
+          <TablePagination {...paginationProps} />
         </CardContent>
       </Card>
 
