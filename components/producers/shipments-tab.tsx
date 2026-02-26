@@ -538,7 +538,11 @@ export function ShipmentsTab() {
               {pagedShipments.map((shipment) => {
                 const config = statusConfig[(shipment as any).status as ShipmentStatus]
                 const receptionIds: string[] = (shipment as any).receptionIds || []
-                const receptions = (fruitReceptions || []).filter((r) => receptionIds.includes(r.id))
+                // Prefer embedded receptions from ship object (same as detail modal)
+                const receptions: any[] =
+                  Array.isArray((shipment as any).receptions) && (shipment as any).receptions.length > 0
+                    ? (shipment as any).receptions
+                    : (fruitReceptions || []).filter((r) => receptionIds.includes(r.id))
                 const producersList = [...new Set(receptions.map((r) => r.producerId))]
                   .map((id) => producers.find((p) => p.id === id))
                   .filter(Boolean)
@@ -581,16 +585,19 @@ export function ShipmentsTab() {
                     </TableCell>
                     <TableCell>{(shipment as any).totalBoxes}</TableCell>
                     <TableCell>
-                      {typeof (shipment as any).totalWeight === "number"
-                        ? `${(shipment as any).totalWeight.toFixed(2)} kg`
-                        : (() => {
-                            const computed = receptions.reduce((s, r) => {
-                              if (typeof r.totalWeight === "number") return s + r.totalWeight
-                              if (typeof r.boxes === "number" && typeof r.weightPerBox === "number") return s + r.boxes * r.weightPerBox
-                              return s
-                            }, 0)
-                            return computed > 0 ? `${computed.toFixed(2)} kg` : "-"
-                          })()}
+                      {(() => {
+                        const sw = parseFloat((shipment as any).totalWeight)
+                        if (!isNaN(sw) && sw > 0) return `${sw.toFixed(2)} kg`
+                        const computed = receptions.reduce((s, r) => {
+                          const tw = parseFloat(r.totalWeight)
+                          if (!isNaN(tw) && tw > 0) return s + tw
+                          const boxes = parseFloat(r.boxes)
+                          const wpb = parseFloat(r.weightPerBox)
+                          if (!isNaN(boxes) && !isNaN(wpb)) return s + boxes * wpb
+                          return s
+                        }, 0)
+                        return computed > 0 ? `${computed.toFixed(2)} kg` : "-"
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
@@ -1031,11 +1038,12 @@ export function ShipmentsTab() {
 
         {/* View Shipment Details Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="shrink-0 pb-2 border-b">
               <DialogTitle className="text-2xl font-bold">Detalles del Embarque</DialogTitle>
               <DialogDescription>Información completa del embarque y sus recepciones</DialogDescription>
             </DialogHeader>
+            <div className="overflow-y-auto flex-1 py-2">
             {viewShipment && (() => {
               // Prefer shipments.receptions when available (server may embed them), otherwise fall back to global fruitReceptions
               const shipmentReceptions: any[] =
@@ -1051,15 +1059,16 @@ export function ShipmentsTab() {
 
               // Weight: prefer server-provided shipment.totalWeight, otherwise sum reception.totalWeight or boxes * weightPerBox
               const totalWeightComputed = shipmentReceptions.reduce((s, r) => {
-                if (typeof r.totalWeight === "number") return s + r.totalWeight
-                if (typeof r.boxes === "number" && typeof r.weightPerBox === "number") return s + r.boxes * r.weightPerBox
+                const tw = parseFloat(r.totalWeight)
+                if (!isNaN(tw) && tw > 0) return s + tw
+                const boxes = parseFloat(r.boxes)
+                const wpb = parseFloat(r.weightPerBox)
+                if (!isNaN(boxes) && !isNaN(wpb)) return s + boxes * wpb
                 return s
               }, 0)
 
-              const serverWeight = typeof viewShipment.totalWeight === "number" && !Number.isNaN(viewShipment.totalWeight)
-                ? Number(viewShipment.totalWeight)
-                : undefined
-              const weightToShow = serverWeight !== undefined ? serverWeight : totalWeightComputed
+              const serverWeight = viewShipment.totalWeight != null ? parseFloat(viewShipment.totalWeight) : NaN
+              const weightToShow = (!isNaN(serverWeight) && serverWeight > 0) ? serverWeight : totalWeightComputed
               const weightPerBox = boxesComputed > 0 && weightToShow > 0 ? (weightToShow / boxesComputed).toFixed(2) : "0.00"
 
               const estado = viewShipment.status ? String(viewShipment.status).toLowerCase() : "-"
@@ -1291,7 +1300,8 @@ export function ShipmentsTab() {
                 </div>
               )
             })()}
-            <DialogFooter>
+            </div>
+            <DialogFooter className="shrink-0 pt-2 border-t">
               <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
                 Cerrar
               </Button>
