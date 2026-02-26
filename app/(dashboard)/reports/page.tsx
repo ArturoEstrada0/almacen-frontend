@@ -22,6 +22,7 @@ import { MovementsTrendChart } from "@/components/reports/movements-trend-chart"
 import { TopProductsChart } from "@/components/reports/top-products-chart"
 import { ProfitAnalysisChart } from "@/components/reports/profit-analysis-chart"
 import { CategoryDistributionChart } from "@/components/reports/category-distribution-chart"
+import Spinner2 from "@/components/ui/spinner2"
 
 export default function ReportsPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
@@ -335,8 +336,8 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent>
               {isLoadingProducts || isLoadingInventory || isLoadingMovements || isLoadingLowStock ? (
-                <div className="text-center py-4">
-                  <p className="text-muted-foreground">Cargando métricas...</p>
+                <div className="flex items-center justify-center py-16">
+                  <Spinner2 />
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-4">
@@ -382,7 +383,9 @@ export default function ReportsPage() {
           {isProfitLoading ? (
             <Card>
               <CardContent className="p-6">
-                <p className="text-center text-muted-foreground">Cargando reporte de utilidades...</p>
+                <div className="flex items-center justify-center py-16">
+                  <Spinner2 />
+                </div>
               </CardContent>
             </Card>
           ) : profitReport ? (
@@ -536,8 +539,8 @@ export default function ReportsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {profitReport?.revenue?.shipments?.map((shipment: any) => (
-                        <TableRow key={shipment.id}>
+                      {profitReport?.revenue?.shipments?.map((shipment: any, index: number) => (
+                        <TableRow key={shipment.id ?? index}>
                           <TableCell className="font-medium">{shipment.trackingFolio || `#${shipment.id}`}</TableCell>
                           <TableCell>{shipment.producerName}</TableCell>
                           <TableCell>{new Date(shipment.shipmentDate).toLocaleDateString()}</TableCell>
@@ -597,8 +600,8 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent>
               {isLoadingInventory || isLoadingProducts || isLoadingWarehouses ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">Cargando valorización...</p>
+                <div className="flex items-center justify-center py-16">
+                  <Spinner2 />
                 </div>
               ) : (
                 <>
@@ -675,8 +678,8 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent>
               {isLoadingLowStock || isLoadingProducts || isLoadingWarehouses ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">Cargando productos con stock bajo...</p>
+                <div className="flex items-center justify-center py-16">
+                  <Spinner2 />
                 </div>
               ) : (
                 <div className="rounded-md border">
@@ -743,8 +746,8 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoadingProducts || isLoadingInventory ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">Cargando análisis ABC...</p>
+                <div className="flex items-center justify-center py-16">
+                  <Spinner2 />
                 </div>
               ) : (
                 <>

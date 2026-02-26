@@ -34,6 +34,7 @@ import {
 import { formatDistanceToNow, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
+import Spinner2 from '@/components/ui/spinner2';
 
 const notificationTypeIcons = {
   info: Info,
@@ -178,8 +179,8 @@ export function NotificationCenter() {
             <TabsContent value={filter} className="mt-0">
               <div className="space-y-3">
                 {loading ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">Cargando notificaciones...</p>
+                  <div className="flex items-center justify-center py-16">
+                    <Spinner2 />
                   </div>
                 ) : filteredNotifications.length === 0 ? (
                   <div className="text-center py-8">

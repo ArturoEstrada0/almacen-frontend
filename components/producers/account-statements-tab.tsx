@@ -24,6 +24,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentMethod } from "@/lib/types"
 import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment, getProducerReport } from "@/lib/hooks/use-producers"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
+import Spinner2 from "@/components/ui/spinner2"
 
 function safeCurrency(val: any) {
   // Si el valor es string y tiene el mismo número repetido, lo corregimos
@@ -95,7 +96,7 @@ export function AccountStatementsTab() {
   const [retentionPaymentFile, setRetentionPaymentFile] = useState<File | null>(null)
 
   const { producers } = useProducers()
-  const { accountStatement, mutate: mutateAccount } = useProducerAccountStatement(selectedProducer)
+  const { accountStatement, mutate: mutateAccount, isLoading: accountLoading } = useProducerAccountStatement(selectedProducer)
   const producer = (producers || []).find((p) => p.id === selectedProducer)
 
   const movementsRaw: any[] = (accountStatement && (accountStatement as any).movements) || []
@@ -947,7 +948,11 @@ export function AccountStatementsTab() {
               <CardDescription>Historial completo de movimientos del productor</CardDescription>
             </CardHeader>
             <CardContent>
-              {mappedMovements.length > 0 ? (
+              {accountLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Spinner2 />
+                </div>
+              ) : mappedMovements.length > 0 ? (
                 <>
                   <div className="rounded-md border">
                     <Table>

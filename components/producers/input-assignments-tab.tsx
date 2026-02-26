@@ -25,6 +25,7 @@ import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from 
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 interface AssignmentItem {
@@ -624,6 +625,11 @@ export function InputAssignmentsTab() {
         </div>
 
         <TablePagination {...paginationProps} />
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Spinner2 />
+          </div>
+        ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -696,6 +702,7 @@ export function InputAssignmentsTab() {
             </TableBody>
           </Table>
         </div>
+        )}
         <TablePagination {...paginationProps} />
       </CardContent>
 

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/lib/context/auth-context"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
+import Spinner2 from "@/components/ui/spinner2"
 
 export default function DashboardLayout({
   children,
@@ -29,9 +30,9 @@ export default function DashboardLayout({
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-          <p className="mt-4 text-muted-foreground">Verificando sesión...</p>
+        <div className="flex flex-col items-center gap-4">
+          <Spinner2 />
+          <p className="text-muted-foreground">Verificando sesión...</p>
         </div>
       </div>
     )

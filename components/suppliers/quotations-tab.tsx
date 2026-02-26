@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ProtectedCreate, ProtectedDelete } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 import {
   Dialog,
   DialogContent,
@@ -188,7 +189,9 @@ export function QuotationsTab() {
           </CardHeader>
           <CardContent>
             {quotationsLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Cargando cotizaciones...</div>
+              <div className="flex items-center justify-center py-16">
+                <Spinner2 />
+              </div>
             ) : quotations.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No hay cotizaciones. Crea una nueva en la pestaña "Nueva Cotización".

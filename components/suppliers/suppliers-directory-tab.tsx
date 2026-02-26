@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 import {
   Dialog,
   DialogContent,
@@ -137,6 +138,11 @@ export function SuppliersDirectoryTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Spinner2 />
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -151,11 +157,7 @@ export function SuppliersDirectoryTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">Cargando...</TableCell>
-                </TableRow>
-              ) : isError ? (
+              {isError ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-sm text-destructive">Error al cargar proveedores</TableCell>
                 </TableRow>
@@ -268,6 +270,7 @@ export function SuppliersDirectoryTab() {
               )}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </>
