@@ -117,12 +117,16 @@ export default function ReportsPage() {
 
     // Tendencia de movimientos por fecha
     const movementsByDate = new Map<string, { entradas: number; salidas: number; ajustes: number }>()
-    movements?.forEach((movement: any) => {
-      const date = new Date(movement.date).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })
+    const sortedMovements = [...(movements || [])].sort((a: any, b: any) => {
+      return new Date(a.createdAt || a.date).getTime() - new Date(b.createdAt || b.date).getTime()
+    })
+    sortedMovements.forEach((movement: any) => {
+      const rawDate = movement.createdAt || movement.date
+      const date = new Date(rawDate).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })
       const existing = movementsByDate.get(date) || { entradas: 0, salidas: 0, ajustes: 0 }
       
-      if (movement.type === 'in') existing.entradas++
-      else if (movement.type === 'out') existing.salidas++
+      if (movement.type === 'entrada' || movement.type === 'in') existing.entradas++
+      else if (movement.type === 'salida' || movement.type === 'out') existing.salidas++
       else existing.ajustes++
       
       movementsByDate.set(date, existing)
