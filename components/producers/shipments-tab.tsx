@@ -70,6 +70,10 @@ export function ShipmentsTab() {
   const [editShipmentDate, setEditShipmentDate] = useState("")
   const [editNotes, setEditNotes] = useState("")
 
+  // Search terms for reception tables inside dialogs
+  const [createSearchTerm, setCreateSearchTerm] = useState("")
+  const [editSearchTerm, setEditSearchTerm] = useState("")
+
   // For update dialog (status)
   const [selectedShipment, setSelectedShipment] = useState<string | null>(null)
   const [updateStatus, setUpdateStatus] = useState<ShipmentStatus>("embarcada")
@@ -132,8 +136,42 @@ export function ShipmentsTab() {
     return number.toLowerCase().includes(searchTerm.toLowerCase())
   })
 
-  // Pagination
+  // Pagination (main list)
   const { pagedItems: pagedShipments, paginationProps } = usePagination(filteredShipments, 20)
+
+  // Create dialog: filter pending receptions by search
+  const filteredCreateReceptions = pendingReceptions.filter((r) => {
+    const producer = producers?.find((p) => p.id === r.producerId)
+    const search = createSearchTerm.toLowerCase()
+    return (
+      !search ||
+      (producer?.name?.toLowerCase().includes(search)) ||
+      ((r as any).product?.name?.toLowerCase().includes(search)) ||
+      ((r as any).trackingFolio?.toLowerCase().includes(search))
+    )
+  })
+  const { pagedItems: pagedCreateReceptions, paginationProps: createPaginationProps } = usePagination(filteredCreateReceptions, 10)
+
+  // Edit dialog: build unique available receptions (pending + already in current shipment)
+  const editAvailableReceptions = Array.from(
+    new Map(
+      [
+        ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
+        ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id)),
+      ].map((r) => [r.id, r])
+    ).values()
+  )
+  const filteredEditReceptions = editAvailableReceptions.filter((r) => {
+    const producer = producers?.find((p) => p.id === r.producerId)
+    const search = editSearchTerm.toLowerCase()
+    return (
+      !search ||
+      (producer?.name?.toLowerCase().includes(search)) ||
+      ((r as any).product?.name?.toLowerCase().includes(search)) ||
+      ((r as any).trackingFolio?.toLowerCase().includes(search))
+    )
+  })
+  const { pagedItems: pagedEditReceptions, paginationProps: editPaginationProps } = usePagination(filteredEditReceptions, 10)
 
   const selectedReceptionsData = pendingReceptions.filter((r) => selectedReceptions.includes(r.id))
   const totalBoxes = selectedReceptionsData.reduce((sum, r) => sum + Number(r.boxes || 0), 0)
@@ -276,6 +314,7 @@ export function ShipmentsTab() {
       await globalMutate("fruit-receptions")
       setIsEditDialogOpen(false)
       setEditingShipmentId(null)
+      setEditSearchTerm("")
     } catch (err) {
       console.error("Error updating shipment:", err)
       alert("Error al actualizar: " + (err as any)?.message || String(err))
@@ -305,7 +344,7 @@ export function ShipmentsTab() {
               <ChevronsUpDown className="mr-2 h-4 w-4" />
               {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
             </Button>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <Dialog open={isCreateDialogOpen} onOpenChange={(open) => { setIsCreateDialogOpen(open); if (!open) setCreateSearchTerm("") }}>
               <ProtectedCreate module="producers">
                 <DialogTrigger asChild>
                   <Button>
@@ -354,19 +393,27 @@ export function ShipmentsTab() {
 
                   <div className="space-y-3">
                     <Label className="text-base font-semibold">Seleccionar Recepciones Pendientes</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por productor, producto o folio..."
+                        value={createSearchTerm}
+                        onChange={(e) => setCreateSearchTerm(e.target.value)}
+                        className="pl-10 h-9 text-sm"
+                      />
+                    </div>
                     <div className="rounded-lg border-2 shadow-sm">
-                      <div className="max-h-[350px] overflow-y-auto">
                         <Table>
                           <TableHeader className="sticky top-0 bg-muted z-10">
                             <TableRow className="hover:bg-muted">
                               <TableHead className="w-16 text-center h-12">
                                 <Checkbox
-                                  checked={selectedReceptions.length === pendingReceptions.length && pendingReceptions.length > 0}
+                                  checked={filteredCreateReceptions.length > 0 && filteredCreateReceptions.every(r => selectedReceptions.includes(r.id))}
                                   onCheckedChange={(checked) => {
                                     if (checked) {
-                                      setSelectedReceptions(pendingReceptions.map(r => r.id))
+                                      setSelectedReceptions((prev) => Array.from(new Set([...prev, ...filteredCreateReceptions.map(r => r.id)])))
                                     } else {
-                                      setSelectedReceptions([])
+                                      setSelectedReceptions((prev) => prev.filter(id => !filteredCreateReceptions.some(r => r.id === id)))
                                     }
                                   }}
                                 />
@@ -382,17 +429,16 @@ export function ShipmentsTab() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {pendingReceptions.length === 0 ? (
+                            {pagedCreateReceptions.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
-                                  No hay recepciones pendientes de embarque
+                                <TableCell colSpan={9} className="text-center text-muted-foreground py-12 text-sm">
+                                  {createSearchTerm ? "No se encontraron recepciones con ese criterio" : "No hay recepciones pendientes de embarque"}
                                 </TableCell>
                               </TableRow>
                             ) : (
-                              pendingReceptions.map((reception) => {
+                              pagedCreateReceptions.map((reception) => {
                                 const producer = producers?.find((p) => p.id === reception.producerId)
                                 const isSelected = selectedReceptions.includes(reception.id)
-                                const receptionNumber = (reception as any).receptionNumber || (reception as any).code || ""
                                 const receptionDate = (reception as any).receptionDate || (reception as any).date || reception.createdAt
                                 return (
                                   <TableRow 
@@ -425,8 +471,8 @@ export function ShipmentsTab() {
                             )}
                           </TableBody>
                         </Table>
-                      </div>
                     </div>
+                    <TablePagination {...createPaginationProps} pageSizeOptions={[10, 20, 50]} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
@@ -689,7 +735,7 @@ export function ShipmentsTab() {
         <TablePagination {...paginationProps} />
 
         {/* Edit Shipment Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if (!open) setEditSearchTerm("") }}>
           <DialogContent className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0">
             <div className="flex flex-col h-full p-6">
               <DialogHeader className="shrink-0 space-y-2 pb-4">
@@ -749,29 +795,27 @@ export function ShipmentsTab() {
                     <p className="text-sm text-muted-foreground">
                       Puedes agregar recepciones pendientes o mantener/quitar las actuales del embarque
                     </p>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por productor, producto o folio..."
+                        value={editSearchTerm}
+                        onChange={(e) => setEditSearchTerm(e.target.value)}
+                        className="pl-10 h-9 text-sm"
+                      />
+                    </div>
                     <div className="rounded-lg border-2 shadow-sm">
-                      <div className="max-h-[300px] overflow-y-auto">
                         <Table>
                           <TableHeader className="sticky top-0 bg-muted z-10">
                             <TableRow className="hover:bg-muted">
                               <TableHead className="w-16 text-center h-12">
                                 <Checkbox
-                                  checked={(() => {
-                                    const available = [
-                                      ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
-                                      ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
-                                    ]
-                                    return editSelectedReceptions.length === available.length && available.length > 0
-                                  })()}
+                                  checked={filteredEditReceptions.length > 0 && filteredEditReceptions.every(r => editSelectedReceptions.includes(r.id))}
                                   onCheckedChange={(checked) => {
                                     if (checked) {
-                                      const available = [
-                                        ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
-                                        ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
-                                      ]
-                                      setEditSelectedReceptions(available.map(r => r.id))
+                                      setEditSelectedReceptions((prev) => Array.from(new Set([...prev, ...filteredEditReceptions.map(r => r.id)])))
                                     } else {
-                                      setEditSelectedReceptions([])
+                                      setEditSelectedReceptions((prev) => prev.filter(id => !filteredEditReceptions.some(r => r.id === id)))
                                     }
                                   }}
                                 />
@@ -787,32 +831,18 @@ export function ShipmentsTab() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {(() => {
-                              // Mostrar recepciones pendientes + las que están en el embarque actual
-                              const availableReceptions = [
-                                ...(fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente"),
-                                ...(fruitReceptions || []).filter((r) => editSelectedReceptions.includes(r.id))
-                              ]
-                              // Eliminar duplicados
-                              const uniqueReceptions = Array.from(new Map(availableReceptions.map(r => [r.id, r])).values())
-                              
-                              if (uniqueReceptions.length === 0) {
-                                return (
-                                  <TableRow>
-                                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
-                                      No hay recepciones disponibles
-                                    </TableCell>
-                                  </TableRow>
-                                )
-                              }
-                              
-                              return uniqueReceptions.map((reception) => {
+                            {pagedEditReceptions.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={9} className="text-center text-muted-foreground py-12 text-sm">
+                                  {editSearchTerm ? "No se encontraron recepciones con ese criterio" : "No hay recepciones disponibles"}
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              pagedEditReceptions.map((reception) => {
                                 const producer = producers?.find((p) => p.id === reception.producerId)
                                 const isSelected = editSelectedReceptions.includes(reception.id)
-                                const receptionNumber = (reception as any).receptionNumber || (reception as any).code || ""
                                 const receptionDate = (reception as any).receptionDate || (reception as any).date || reception.createdAt
                                 const isInCurrentShipment = editSelectedReceptions.includes(reception.id) && reception.shipmentStatus !== "pendiente"
-                                
                                 return (
                                   <TableRow 
                                     key={reception.id} 
@@ -849,11 +879,11 @@ export function ShipmentsTab() {
                                   </TableRow>
                                 )
                               })
-                            })()}
+                            )}
                           </TableBody>
                         </Table>
-                      </div>
                     </div>
+                    <TablePagination {...editPaginationProps} pageSizeOptions={[10, 20, 50]} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
