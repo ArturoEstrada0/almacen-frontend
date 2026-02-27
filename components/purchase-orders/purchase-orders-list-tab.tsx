@@ -190,155 +190,157 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               <Spinner2 />
             </div>
           ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Número</TableHead>
-                <TableHead>Proveedor</TableHead>
-                <TableHead>Almacén</TableHead>
-                <TableHead>Fecha Orden</TableHead>
-                <TableHead>Entrega Esperada</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Pago</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-                <TableBody>
-              {pagedOrders.map((order) => {
-                const supplier = suppliers.find((s) => s.id === order.supplierId)
-                const warehouse = warehouses.find((w) => w.id === order.warehouseId)
-                const dueDate = order.dueDate ? new Date(order.dueDate) : null
-                const orderDate = order.orderDate ? new Date(order.orderDate) : null
-                const expectedDate = order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : null
-                const isOverdue = order.paymentStatus === "pendiente" && dueDate && new Date() > dueDate
-
-                return (
-                  <TableRow key={order.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-mono font-medium">{order.orderNumber}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{supplier?.name}</p>
-                        <p className="text-xs text-muted-foreground">{supplier?.code}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{warehouse?.name}</TableCell>
-                    <TableCell className="text-sm">{orderDate ? orderDate.toLocaleDateString() : "-"}</TableCell>
-                    <TableCell className="text-sm">{expectedDate ? expectedDate.toLocaleDateString() : "-"}</TableCell>
-                    <TableCell className="font-medium">{formatCurrency(order.total)}</TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusColor(order.status)}>{order.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <Badge variant={isOverdue ? "destructive" : getPaymentStatusColor(order.paymentStatus)}>
-                          {isOverdue ? "vencido" : order.paymentStatus}
-                        </Badge>
-                        {order.paymentStatus !== "pagado" && (
-                          <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {order.status !== "completada" && order.status !== "cancelada" && (
-                          <ProtectedUpdate module="purchaseOrders">
-                            <Button variant="outline" size="sm" onClick={() => handleReceiveOrder(order.id)}>
-                              <Package className="mr-2 h-4 w-4" />
-                              Recibir
-                            </Button>
-                          </ProtectedUpdate>
-                        )}
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>Orden de Compra {order.orderNumber}</DialogTitle>
-                              <DialogDescription>Detalles de la orden de compra</DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Proveedor</Label>
-                                  <p className="font-medium">{supplier?.businessName}</p>
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Almacén</Label>
-                                  <p className="font-medium">{warehouse?.name}</p>
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Fecha de Orden</Label>
-                                  <p className="font-medium">{orderDate ? orderDate.toLocaleDateString() : "-"}</p>
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Entrega Esperada</Label>
-                                  <p className="font-medium">{expectedDate ? expectedDate.toLocaleDateString() : "-"}</p>
-                                </div>
-                              </div>
-
-                              <div>
-                                <Label className="text-xs text-muted-foreground">Productos</Label>
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Producto</TableHead>
-                                      <TableHead>Cantidad</TableHead>
-                                      <TableHead>Recibido</TableHead>
-                                      <TableHead>Precio</TableHead>
-                                      <TableHead>Total</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {order.items.map((item) => {
-                                          const product = products.find((p) => p.id === item.productId)
-                                      return (
-                                        <TableRow key={item.id}>
-                                              <TableCell>{product?.name}</TableCell>
-                                          <TableCell>{item.quantity}</TableCell>
-                                          <TableCell>{item.receivedQuantity}</TableCell>
-                                          <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                                          <TableCell>{formatCurrency(item.total)}</TableCell>
-                                        </TableRow>
-                                      )
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              </div>
-
-                              <div className="flex justify-end gap-4 border-t pt-4">
-                                <div className="text-right">
-                                  <p className="text-sm text-muted-foreground">Subtotal</p>
-                                  <p className="font-medium">{formatCurrency(order.subtotal)}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-sm text-muted-foreground">IVA</p>
-                                  <p className="font-medium">{formatCurrency(order.tax)}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-sm text-muted-foreground">Total</p>
-                                  <p className="text-lg font-bold">{formatCurrency(order.total)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    </TableCell>
+            <div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número</TableHead>
+                    <TableHead>Proveedor</TableHead>
+                    <TableHead>Almacén</TableHead>
+                    <TableHead>Fecha Orden</TableHead>
+                    <TableHead>Entrega Esperada</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Pago</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-          <TablePagination {...paginationProps} />
+                </TableHeader>
+                <TableBody>
+                  {pagedOrders.map((order) => {
+                    const supplier = suppliers.find((s) => s.id === order.supplierId)
+                    const warehouse = warehouses.find((w) => w.id === order.warehouseId)
+                    const dueDate = order.dueDate ? new Date(order.dueDate) : null
+                    const orderDate = order.orderDate ? new Date(order.orderDate) : null
+                    const expectedDate = order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : null
+                    const isOverdue = order.paymentStatus === "pendiente" && dueDate && new Date() > dueDate
+
+                    return (
+                      <TableRow key={order.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-mono font-medium">{order.orderNumber}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{supplier?.name}</p>
+                            <p className="text-xs text-muted-foreground">{supplier?.code}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{warehouse?.name}</TableCell>
+                        <TableCell className="text-sm">{orderDate ? orderDate.toLocaleDateString() : "-"}</TableCell>
+                        <TableCell className="text-sm">{expectedDate ? expectedDate.toLocaleDateString() : "-"}</TableCell>
+                        <TableCell className="font-medium">{formatCurrency(order.total)}</TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusColor(order.status)}>{order.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge variant={isOverdue ? "destructive" : getPaymentStatusColor(order.paymentStatus)}>
+                              {isOverdue ? "vencido" : order.paymentStatus}
+                            </Badge>
+                            {order.paymentStatus !== "pagado" && (
+                              <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {order.status !== "completada" && order.status !== "cancelada" && (
+                              <ProtectedUpdate module="purchaseOrders">
+                                <Button variant="outline" size="sm" onClick={() => handleReceiveOrder(order.id)}>
+                                  <Package className="mr-2 h-4 w-4" />
+                                  Recibir
+                                </Button>
+                              </ProtectedUpdate>
+                            )}
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                                <DialogHeader>
+                                  <DialogTitle>Orden de Compra {order.orderNumber}</DialogTitle>
+                                  <DialogDescription>Detalles de la orden de compra</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Proveedor</Label>
+                                      <p className="font-medium">{supplier?.businessName}</p>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Almacén</Label>
+                                      <p className="font-medium">{warehouse?.name}</p>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Fecha de Orden</Label>
+                                      <p className="font-medium">{orderDate ? orderDate.toLocaleDateString() : "-"}</p>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Entrega Esperada</Label>
+                                      <p className="font-medium">{expectedDate ? expectedDate.toLocaleDateString() : "-"}</p>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Productos</Label>
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Producto</TableHead>
+                                          <TableHead>Cantidad</TableHead>
+                                          <TableHead>Recibido</TableHead>
+                                          <TableHead>Precio</TableHead>
+                                          <TableHead>Total</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {order.items.map((item) => {
+                                          const product = products.find((p) => p.id === item.productId)
+                                          return (
+                                            <TableRow key={item.id}>
+                                              <TableCell>{product?.name}</TableCell>
+                                              <TableCell>{item.quantity}</TableCell>
+                                              <TableCell>{item.receivedQuantity}</TableCell>
+                                              <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                                              <TableCell>{formatCurrency(item.total)}</TableCell>
+                                            </TableRow>
+                                          )
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+
+                                  <div className="flex justify-end gap-4 border-t pt-4">
+                                    <div className="text-right">
+                                      <p className="text-sm text-muted-foreground">Subtotal</p>
+                                      <p className="font-medium">{formatCurrency(order.subtotal)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm text-muted-foreground">IVA</p>
+                                      <p className="font-medium">{formatCurrency(order.tax)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm text-muted-foreground">Total</p>
+                                      <p className="text-lg font-bold">{formatCurrency(order.total)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+              <TablePagination {...paginationProps} />
+            </div>
           )}
         </CardContent>
       </Card>
@@ -355,11 +357,11 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground">Proveedor</Label>
-                            <p className="font-medium">{suppliers.find((s) => s.id === order.supplierId)?.businessName}</p>
+                  <p className="font-medium">{suppliers.find((s) => s.id === order.supplierId)?.businessName}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Almacén</Label>
-                                  <p className="font-medium">{warehouses.find((w) => w.id === order.warehouseId)?.name}</p>
+                  <p className="font-medium">{warehouses.find((w) => w.id === order.warehouseId)?.name}</p>
                 </div>
               </div>
 
@@ -377,8 +379,8 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                   </TableHeader>
                   <TableBody>
                     {order.items.map((item) => {
-                        const product = products.find((p) => p.id === item.productId)
-                        const pending = item.quantity - item.receivedQuantity
+                      const product = products.find((p) => p.id === item.productId)
+                      const pending = item.quantity - item.receivedQuantity
                       return (
                         <TableRow key={item.id}>
                           <TableCell>{product?.name}</TableCell>
@@ -386,16 +388,16 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                           <TableCell>{item.receivedQuantity}</TableCell>
                           <TableCell className="font-medium text-orange-500">{pending}</TableCell>
                           <TableCell>
-                              <Input
-                                type="number"
-                                value={receiveQuantities[item.id] ?? pending}
-                                min={0}
-                                max={pending}
-                                className="w-24"
-                                onChange={(e) =>
-                                  setReceiveQuantities((prev) => ({ ...prev, [item.id]: Number.parseInt(e.target.value || "0") }))
-                                }
-                              />
+                            <Input
+                              type="number"
+                              value={receiveQuantities[item.id] ?? pending}
+                              min={0}
+                              max={pending}
+                              className="w-24"
+                              onChange={(e) =>
+                                setReceiveQuantities((prev) => ({ ...prev, [item.id]: Number.parseInt(e.target.value || "0") }))
+                              }
+                            />
                           </TableCell>
                         </TableRow>
                       )
