@@ -20,6 +20,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentReport, PaymentReportStatus } from "@/lib/types"
 import { usePaymentReports } from "@/lib/hooks/use-producers"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
+import Spinner2 from "@/components/ui/spinner2"
 import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { useToast } from "@/hooks/use-toast"
 
@@ -50,7 +51,7 @@ export function PaymentReportsTab() {
   const [paymentComplementUrl, setPaymentComplementUrl] = useState("")
   const [isrAmount, setIsrAmount] = useState("")
 
-  const { paymentReports, mutate } = usePaymentReports()
+  const { paymentReports, mutate, isLoading } = usePaymentReports()
   const { toast } = useToast()
 
   const sortedReports = [...(paymentReports || [])].sort((a, b) => {
@@ -179,6 +180,11 @@ export function PaymentReportsTab() {
           </div>
 
           <TablePagination {...paginationProps} />
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Spinner2 />
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -236,6 +242,7 @@ export function PaymentReportsTab() {
               )}
             </TableBody>
           </Table>
+          )}
         </div>
         <TablePagination {...paginationProps} />
       </CardContent>

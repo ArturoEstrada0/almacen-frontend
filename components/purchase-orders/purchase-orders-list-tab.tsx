@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 interface PurchaseOrdersListTabProps {
@@ -38,7 +39,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
 
-  const { purchaseOrders, mutate } = usePurchaseOrders()
+  const { purchaseOrders, isLoading, mutate } = usePurchaseOrders()
   const { suppliers } = useSuppliers()
   const { warehouses } = useWarehouses()
   const { products } = useProducts()
@@ -184,6 +185,11 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Spinner2 />
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -333,6 +339,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
             </TableBody>
           </Table>
           <TablePagination {...paginationProps} />
+          )}
         </CardContent>
       </Card>
 

@@ -35,6 +35,7 @@ import {
 import { mutate as globalMutate } from "swr"
 import { products } from "@/lib/mock-data"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 const statusConfig: Record<
@@ -81,7 +82,7 @@ export function ShipmentsTab() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
 
   const { fruitReceptions } = useFruitReceptions()
-  const { shipments, mutate: mutateShipments } = useShipments()
+  const { shipments, mutate: mutateShipments, isLoading } = useShipments()
   const { producers } = useProducers()
 
   const pendingReceptions = (fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente")
@@ -518,6 +519,11 @@ export function ShipmentsTab() {
         </div>
 
         <TablePagination {...paginationProps} />
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Spinner2 />
+          </div>
+        ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -679,6 +685,7 @@ export function ShipmentsTab() {
             </TableBody>
           </Table>
         </div>
+        )}
         <TablePagination {...paginationProps} />
 
         {/* Edit Shipment Dialog */}

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { ProtectedUpdate } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 
 export function AccountsPayableTab() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -28,7 +29,7 @@ export function AccountsPayableTab() {
   const [paymentNotes, setPaymentNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { purchaseOrders, mutate } = usePurchaseOrders()
+  const { purchaseOrders, isLoading, mutate } = usePurchaseOrders()
   const { suppliers } = useSuppliers()
 
   const payableOrders = (purchaseOrders || []).filter((order) => order.paymentStatus !== "pagado")
@@ -182,6 +183,11 @@ export function AccountsPayableTab() {
           <CardDescription>Órdenes de compra con pagos pendientes</CardDescription>
         </CardHeader>
         <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Spinner2 />
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -248,6 +254,7 @@ export function AccountsPayableTab() {
               })}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 

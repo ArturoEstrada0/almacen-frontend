@@ -29,6 +29,7 @@ import {
   deleteFruitReception as apiDeleteFruitReception 
 } from "@/lib/hooks/use-producers"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 
 interface ReturnedItem {
@@ -60,6 +61,7 @@ export function FruitReceptionsTab() {
   const [warehouses, setWarehouses] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [receptions, setReceptions] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [sortBy, setSortBy] = useState<"producer" | "folio" | "date" | "boxes" | "weight">("producer")
 
@@ -79,6 +81,7 @@ export function FruitReceptionsTab() {
     let mounted = true
     ;(async () => {
       try {
+        setLoading(true)
         const [pRes, wRes, prodRes, recRes] = await Promise.all([
           apiGet("/api/producers"),
           apiGet("/api/warehouses"),
@@ -92,6 +95,8 @@ export function FruitReceptionsTab() {
         setReceptions(Array.isArray(recRes) ? recRes : [])
       } catch (err) {
         console.error("Error loading receptions:", err)
+      } finally {
+        setLoading(false)
       }
     })()
     return () => {
@@ -666,6 +671,11 @@ export function FruitReceptionsTab() {
         </div>
 
         <TablePagination {...paginationProps} />
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Spinner2 />
+          </div>
+        ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -742,6 +752,7 @@ export function FruitReceptionsTab() {
             </TableBody>
           </Table>
         </div>
+        )}
         <TablePagination {...paginationProps} />
       </CardContent>
 

@@ -12,11 +12,20 @@ import { StockTab } from "@/components/inventory/stock-tab"
 import { MovementsTab } from "@/components/inventory/movements-tab"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ProtectedCreate } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 
 export default function InventoryPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null)
   const { warehouses, isLoading: warehousesLoading } = useWarehouses()
   const [activeTab, setActiveTab] = useState("stock")
+
+  if (warehousesLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Spinner2 />
+      </div>
+    )
+  }
 
   if (!selectedWarehouse) {
     return (

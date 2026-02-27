@@ -25,6 +25,7 @@ import { EditUserDialog } from "./edit-user-dialog"
 import { UpdatePasswordDialog } from "./update-password-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/lib/context/auth-context"
+import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import {
   AlertDialog,
@@ -109,28 +110,8 @@ export function UsersTable({ users, isLoading, onUpdate }: UsersTableProps) {
 
   if (isLoading) {
     return (
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Fecha de Creación</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {[1, 2, 3].map((i) => (
-              <TableRow key={i}>
-                <TableCell colSpan={6}>
-                  <div className="h-8 bg-muted animate-pulse rounded" />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div className="flex items-center justify-center py-16">
+        <Spinner2 />
       </div>
     )
   }

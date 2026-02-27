@@ -22,6 +22,7 @@ import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from 
 import { formatCurrency } from "@/lib/utils/format"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
+import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -335,6 +336,11 @@ export function ProducersDirectoryTab() {
         </div>
 
         <TablePagination {...paginationProps} />
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Spinner2 />
+          </div>
+        ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
@@ -429,6 +435,7 @@ export function ProducersDirectoryTab() {
             </TableBody>
           </Table>
         </div>
+        )}
         <TablePagination {...paginationProps} />
       </CardContent>
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

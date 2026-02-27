@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useCategories } from "@/lib/hooks/use-categories"
 import { formatCurrency } from "@/lib/utils/format"
-import { Plus, Search, Edit, Trash2, ImageIcon, Loader2 } from "lucide-react"
+import { Plus, Search, Edit, Trash2, ImageIcon } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -18,6 +18,7 @@ import { deleteProduct } from "@/lib/actions/products"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 import { extractErrorMessage } from "@/lib/utils/error-handler"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
+import Spinner2 from "@/components/ui/spinner2"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,10 +86,7 @@ export default function ProductsPage() {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Cargando productos...</p>
-        </div>
+        <Spinner2 />
       </div>
     )
   }
