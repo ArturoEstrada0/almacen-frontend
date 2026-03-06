@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Edit, Eye, DollarSign, Printer, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Plus, Search, Edit, Eye, Printer, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { apiGet, apiPost, apiPatch } from "@/lib/db/localApi"
 import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
 import { formatCurrency } from "@/lib/utils/format"
@@ -378,7 +378,6 @@ export function ProducersDirectoryTab() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
                       <span
                         className={
                           producer.accountBalance > 0

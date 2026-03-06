@@ -56,6 +56,10 @@ export function InputAssignmentsTab() {
   const [assignments, setAssignments] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Devoluciones
+  const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false)
+  const [isReturnSaving, setIsReturnSaving] = useState(false)
+  const [returnReason, setReturnReason] = useState<string>("Excedente/No utilizado")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -129,11 +133,37 @@ export function InputAssignmentsTab() {
     }
   }
 
+  const handleCloseReturnDialog = (open: boolean) => {
+    setIsReturnDialogOpen(open)
+    if (!open) {
+      setSelectedProducer("")
+      setSelectedWarehouse("")
+      setAssignmentDate(new Date().toISOString().split("T")[0])
+      setTrackingFolio("")
+      setNotes("")
+      setSelectedItems([])
+      setReturnReason("Excedente/No utilizado")
+      setSaveError("")
+    }
+  }
+
   const handleOpenDialog = () => {
     setTrackingFolio(generateFolio())
     setIsEditMode(false)
     setEditingAssignment(null)
     setIsDialogOpen(true)
+  }
+
+  const handleOpenReturnDialog = () => {
+    // Pre-fill similar fields to new assignment
+    setTrackingFolio(generateFolio())
+    setSelectedProducer("")
+    setSelectedWarehouse("")
+    setAssignmentDate(new Date().toISOString().split("T")[0])
+    setNotes("")
+    setSelectedItems([])
+    setReturnReason("Excedente/No utilizado")
+    setIsReturnDialogOpen(true)
   }
 
   const handleEditAssignment = (assignment: any) => {
@@ -247,6 +277,56 @@ export function InputAssignmentsTab() {
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Guardar devolución: intenta un endpoint específico y si falla cae al endpoint de asignaciones con flag
+  const handleSaveReturn = async () => {
+    setSaveError("")
+    try {
+      setIsReturnSaving(true)
+      const payload = {
+        producerId: Number(selectedProducer) || selectedProducer,
+        warehouseId: Number(selectedWarehouse) || selectedWarehouse,
+        date: assignmentDate,
+        trackingFolio,
+        notes,
+        reason: returnReason,
+        items: selectedItems.map((it) => ({ 
+          productId: it.productId, 
+          quantity: parseFloat(it.quantity) || 0, 
+          unitPrice: parseFloat(it.unitPrice) || 0 
+        })),
+      }
+
+      // Primero intentar endpoint específico para devoluciones
+      try {
+        const created = await apiPost('/producers/input-returns', payload)
+        // marcar como tipo 'return' para distinguir en la lista
+        setAssignments((prev) => [{ ...(created || {}), type: 'return' }, ...(prev || [])])
+        toast({ title: 'Éxito', description: 'Devolución registrada correctamente' })
+      } catch (err) {
+        // Si no existe, intentar crear una asignación con flag isReturn
+        const created = await apiPost('/producers/input-assignments', { ...payload, isReturn: true })
+        setAssignments((prev) => [{ ...(created || {}), type: 'return' }, ...(prev || [])])
+        toast({ title: 'Éxito', description: 'Devolución registrada correctamente (fallback)' })
+      }
+
+      // reset
+      setSelectedProducer("")
+      setSelectedWarehouse("")
+      setAssignmentDate(new Date().toISOString().split("T")[0])
+      setTrackingFolio("")
+      setNotes("")
+      setSelectedItems([])
+      setReturnReason("Excedente/No utilizado")
+      setIsReturnDialogOpen(false)
+    } catch (err) {
+      const msg = (err as any)?.message || String(err)
+      setSaveError(msg)
+      toast({ title: 'Error', description: msg, variant: 'destructive' })
+    } finally {
+      setIsReturnSaving(false)
     }
   }
 
@@ -450,6 +530,114 @@ export function InputAssignmentsTab() {
               <Upload className="mr-2 h-4 w-4" />
               Importar
             </Button>
+            <Dialog open={isReturnDialogOpen} onOpenChange={handleCloseReturnDialog}>
+              <ProtectedCreate module="producers">
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="border-gray-200" onClick={handleOpenReturnDialog}>
+                    Nueva Devolución
+                  </Button>
+                </DialogTrigger>
+              </ProtectedCreate>
+              <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Nueva Devolución</DialogTitle>
+                </DialogHeader>
+
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                      <Label>Productor *</Label>
+                      <ComboBox
+                        value={selectedProducer}
+                        onChange={setSelectedProducer}
+                        options={producers.map((p) => ({
+                          value: String(p.id),
+                          label: `${p.code} - ${p.name}`,
+                          subtitle: p.code
+                        }))}
+                        placeholder="Seleccionar productor"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Almacén *</Label>
+                      <ComboBox
+                        value={selectedWarehouse}
+                        onChange={setSelectedWarehouse}
+                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                        placeholder="Seleccionar almacén"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Fecha *</Label>
+                      <Input type="date" value={assignmentDate} onChange={(e) => setAssignmentDate(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Folio de Seguimiento</Label>
+                      <Input type="text" value={trackingFolio} onChange={(e) => setTrackingFolio(e.target.value.toUpperCase())} placeholder="YYMMDD-XXX" maxLength={10} className="font-mono" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>Items</Label>
+                    <div className="space-y-2">
+                      {selectedItems.map((it) => (
+                        <div key={it.id} className="grid grid-cols-6 gap-2 items-end">
+                          <div className="col-span-2">
+                            <ComboBox value={it.productId} onChange={(v) => updateItem(it.id, { productId: v })} options={insumoProducts.map(p => ({ value: String(p.id), label: `${p.sku || ''} - ${p.name}` }))} placeholder="Seleccionar insumo" />
+                          </div>
+                          <div>
+                            <Input value={it.quantity} onChange={(e) => updateItem(it.id, { quantity: e.target.value })} placeholder="Cantidad" />
+                          </div>
+                          <div>
+                            <Input value={it.unitPrice} onChange={(e) => updateItem(it.id, { unitPrice: e.target.value })} placeholder="Precio Unit." />
+                          </div>
+                          <div>
+                            <Button variant="ghost" onClick={() => removeItem(it.id)}>Eliminar</Button>
+                          </div>
+                        </div>
+                      ))}
+                      <Button variant="ghost" onClick={addItem}>Añadir item</Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Motivo</Label>
+                    <Select value={returnReason} onValueChange={(v) => setReturnReason(v as string)}>
+                      <SelectTrigger className="w-64">
+                        <SelectValue placeholder="Seleccionar motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Excedente/No utilizado">Excedente/No utilizado</SelectItem>
+                        <SelectItem value="Producto defectuoso">Producto defectuoso</SelectItem>
+                        <SelectItem value="Empaque dañado">Empaque dañado</SelectItem>
+                        <SelectItem value="Devolución por cliente">Devolución por cliente</SelectItem>
+                        <SelectItem value="Otro">Otro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Notas</Label>
+                    <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <div className="flex justify-between text-lg font-bold">
+                      <span>Total a sumar:</span>
+                      <span className="text-destructive">{formatCurrency(calculateTotal())}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsReturnDialogOpen(false)}>Cancelar</Button>
+                  <Button onClick={handleSaveReturn} disabled={!selectedProducer || !selectedWarehouse || selectedItems.length === 0 || isReturnSaving}>
+                    {isReturnSaving ? 'Guardando...' : 'Guardar Devolución'}
+                  </Button>
+                  {saveError && <div className="text-xs text-destructive font-semibold mt-2">{saveError}</div>}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="Ordenar por..." />
