@@ -16,6 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { ComboBox } from "@/components/ui/combobox"
+import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Eye, Trash2, Printer, Pencil, Upload, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
@@ -67,6 +68,7 @@ export function InputAssignmentsTab() {
     ;(async () => {
       try {
         setLoading(true)
+        // Fetch main lists and assignments first
         const [pRes, wRes, prodRes, assignmentsRes] = await Promise.all([
           apiGet("/producers"),
           apiGet("/warehouses"),
@@ -77,7 +79,29 @@ export function InputAssignmentsTab() {
         setProducers(Array.isArray(pRes) ? pRes : [])
         setWarehouses(Array.isArray(wRes) ? wRes : [])
         setProducts(Array.isArray(prodRes) ? prodRes : [])
-        setAssignments(Array.isArray(assignmentsRes) ? assignmentsRes : [])
+
+        const assigns = Array.isArray(assignmentsRes) ? assignmentsRes : []
+
+        // Try to fetch returns separately — if it fails, don't block showing assignments
+        let returns: any[] = []
+        try {
+          const returnsRes = await apiGet("/producers/input-returns/all")
+          if (Array.isArray(returnsRes)) {
+            returns = returnsRes.map((r: any) => ({ ...r, type: 'return' }))
+          }
+        } catch (err) {
+          // Log but continue — older backends may not expose returns endpoint
+          // eslint-disable-next-line no-console
+          console.warn('Could not load input returns:', err)
+        }
+
+        // combine and sort by date desc
+        const combined = [...returns, ...assigns].sort((a: any, b: any) => {
+          const at = new Date(a.date || a.assignmentDate || 0).getTime() || 0
+          const bt = new Date(b.date || b.assignmentDate || 0).getTime() || 0
+          return bt - at
+        })
+        setAssignments(combined)
       } catch (err) {
         console.error("Error loading input assignments data:", err)
       } finally {
@@ -857,7 +881,26 @@ export function InputAssignmentsTab() {
                     </TableCell>
                     <TableCell>{warehouse?.name}</TableCell>
                     <TableCell>{formatDate(assignment.date || assignment.assignmentDate)}</TableCell>
-                    <TableCell className="font-semibold text-destructive">{formatCurrency(Number(assignment.total) || 0)}</TableCell>
+                      {
+                        // Mostrar devoluciones como abono (verde) y las asignaciones normales como cargo (destructive)
+                      }
+                      {(() => {
+                        const isReturn = (assignment.type === 'return') || assignment.isReturn === true || assignment.isReturn === 'true'
+                        return (
+                          <TableCell className="font-semibold">
+                            {isReturn ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-600">{formatCurrency(Number(assignment.total) || 0)}</span>
+                                <Badge variant="outline" className="text-green-600 border-green-600">Devolución</Badge>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="text-destructive">{formatCurrency(Number(assignment.total) || 0)}</span>
+                              </div>
+                            )}
+                          </TableCell>
+                        )
+                      })()}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" title="Imprimir nota" onClick={() => handlePrintAssignment(assignment)}>
