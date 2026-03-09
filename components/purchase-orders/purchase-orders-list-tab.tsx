@@ -121,11 +121,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Órdenes de Compra</h2>
-          <p className="text-sm text-muted-foreground">Gestiona y recibe órdenes de compra</p>
-        </div>
+      <div className="fixed top-30 right-4">
         <ProtectedCreate module="purchaseOrders">
           <Button onClick={onCreateNew}>
             <Plus className="mr-2 h-4 w-4" />

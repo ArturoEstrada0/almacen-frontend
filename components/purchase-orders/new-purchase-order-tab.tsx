@@ -110,11 +110,6 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Nueva Orden de Compra</h2>
-        <p className="text-sm text-muted-foreground">Crea una nueva orden de compra a proveedor</p>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle>Información General</CardTitle>

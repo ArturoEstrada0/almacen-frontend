@@ -97,11 +97,6 @@ export function AccountsPayableTab() {
 
   return (
     <>
-      <div>
-        <h2 className="text-2xl font-bold">Cuentas por Pagar</h2>
-        <p className="text-sm text-muted-foreground">Gestiona los pagos pendientes a proveedores</p>
-      </div>
-
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

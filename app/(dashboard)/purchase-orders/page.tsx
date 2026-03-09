@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PurchaseOrdersListTab } from "@/components/purchase-orders/purchase-orders-list-tab"
 import { NewPurchaseOrderTab } from "@/components/purchase-orders/new-purchase-order-tab"
@@ -8,13 +9,41 @@ import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payabl
 import { ProtectedCreate } from "@/components/auth/protected-action"
 
 export default function PurchaseOrdersPage() {
-  const [activeTab, setActiveTab] = useState("list")
+  const searchParams = useSearchParams()
+  const initialTab = (searchParams?.get("tab") as string) || "list"
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  useEffect(() => {
+    const t = (searchParams?.get("tab") as string) || "list"
+    setActiveTab(t)
+  }, [searchParams])
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Órdenes de Compra</h1>
-        <p className="text-muted-foreground">Gestión de compras, recepciones y cuentas por pagar</p>
+        {(() => {
+          const map: Record<string, { title: string; description: string }> = {
+            list: {
+              title: "Órdenes de Compra",
+              description: "Gestiona y recibe órdenes de compra",
+            },
+            new: {
+              title: "Nueva Orden de Compra",
+              description: "Crea una nueva orden de compra a proveedor",
+            },
+            payables: {
+              title: "Cuentas por Pagar",
+              description: "Gestiona pagos pendientes a proveedores",
+            },
+          }
+          const header = map[activeTab] || map.list
+          return (
+            <>
+              <h1 className="text-3xl font-bold tracking-tight">{header.title}</h1>
+              <p className="text-muted-foreground">{header.description}</p>
+            </>
+          )
+        })()}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
