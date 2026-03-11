@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Plus } from "lucide-react"
 import { PurchaseOrdersListTab } from "@/components/purchase-orders/purchase-orders-list-tab"
 import { NewPurchaseOrderTab } from "@/components/purchase-orders/new-purchase-order-tab"
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
@@ -20,7 +22,7 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="py-4">
         {(() => {
           const map: Record<string, { title: string; description: string }> = {
             list: {
@@ -38,10 +40,18 @@ export default function PurchaseOrdersPage() {
           }
           const header = map[activeTab] || map.list
           return (
-            <>
-              <h1 className="text-3xl font-bold tracking-tight">{header.title}</h1>
-              <p className="text-muted-foreground">{header.description}</p>
-            </>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">{header.title}</h1>
+                <p className="text-muted-foreground">{header.description}</p>
+              </div>
+              <ProtectedCreate module="purchaseOrders">
+                <Button onClick={() => setActiveTab("new")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva Orden
+                </Button>
+              </ProtectedCreate>
+            </div>
           )
         })()}
       </div>

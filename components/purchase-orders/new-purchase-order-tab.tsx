@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,6 +15,7 @@ import { Plus, Trash2, Save } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import InvoiceImportForm from "@/components/invoice-import/InvoiceImportForm"
 
 interface PurchaseOrderItem {
   productId: string
@@ -33,9 +34,22 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
   const [creditDays, setCreditDays] = useState(0)
   const [items, setItems] = useState<PurchaseOrderItem[]>([])
   const [notes, setNotes] = useState("")
+  const [submitted, setSubmitted] = useState(false)
+  const infoCardRef = useRef<HTMLDivElement>(null)
 
   const addItem = () => {
     setItems([...items, { productId: "", quantity: 1, unitPrice: 0 }])
+  }
+
+  const [showImporter, setShowImporter] = useState(false)
+
+  function handleImportComplete(result: any) {
+    // Map imported items into current items array
+    const importedItems = (result.items || []).map((it: any) => ({ productId: it.productId || "", quantity: Number(it.quantity) || 1, unitPrice: Number(it.unitPrice) || 0 }))
+    setSupplierId(result.supplierId || supplierId)
+    setWarehouseId(result.warehouseId || warehouseId)
+    setItems((cur) => [...cur, ...importedItems])
+    setShowImporter(false)
   }
 
   const removeItem = (index: number) => {
@@ -67,8 +81,11 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
   const { warehouses } = useWarehouses()
 
   const handleSubmit = async () => {
+    setSubmitted(true)
     if (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0) {
       toast.error("Por favor completa todos los campos requeridos")
+      // Scroll hasta el card de información general dentro del contenedor del layout
+      infoCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
       return
     }
 
@@ -110,7 +127,7 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card ref={infoCardRef}>
         <CardHeader>
           <CardTitle>Información General</CardTitle>
           <CardDescription>Datos básicos de la orden de compra</CardDescription>
@@ -120,7 +137,7 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
             <div className="space-y-2">
               <Label>Proveedor *</Label>
               <Select value={supplierId} onValueChange={handleSupplierChange}>
-                <SelectTrigger>
+                <SelectTrigger className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}>
                   <SelectValue placeholder="Selecciona un proveedor" />
                 </SelectTrigger>
                   <SelectContent>
@@ -131,17 +148,16 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
                     ))}
                   </SelectContent>
               </Select>
-              {supplier && (
-                <p className="text-xs text-muted-foreground">
-                  Días de crédito: {supplier.paymentTerms} días • RFC: {supplier.rfc}
-                </p>
-              )}
+              {submitted && !supplierId
+                ? <p className="text-xs text-red-500">Selecciona un proveedor para continuar</p>
+                : supplier && <p className="text-xs text-muted-foreground">Días de crédito: {supplier.paymentTerms} días • RFC: {supplier.rfc}</p>
+              }
             </div>
 
             <div className="space-y-2">
               <Label>Almacén de Destino *</Label>
               <Select value={warehouseId} onValueChange={setWarehouseId}>
-                <SelectTrigger>
+                <SelectTrigger className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}>
                   <SelectValue placeholder="Selecciona un almacén" />
                 </SelectTrigger>
                 <SelectContent>
@@ -152,6 +168,9 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
                   ))}
                 </SelectContent>
               </Select>
+              {submitted && !warehouseId && (
+                <p className="text-xs text-red-500">Selecciona un almacén de destino</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -160,7 +179,11 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
                 type="date"
                 value={expectedDeliveryDate}
                 onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                className={submitted && !expectedDeliveryDate ? 'border-red-500 ring-1 ring-red-500' : ''}
               />
+              {submitted && !expectedDeliveryDate && (
+                <p className="text-xs text-red-500">Indica la fecha de entrega esperada</p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -195,13 +218,23 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
               <CardTitle>Productos</CardTitle>
               <CardDescription>Agrega los productos a la orden de compra</CardDescription>
             </div>
-            <Button onClick={addItem} size="sm">
+            <div className="flex gap-2">
+              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline">
+                Importar XML
+              </Button>
+              <Button onClick={addItem} size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Agregar Producto
             </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {showImporter && (
+            <div className="mb-4">
+              <InvoiceImportForm initialSupplierId={supplierId} initialWarehouseId={warehouseId} onImportComplete={handleImportComplete} />
+            </div>
+          )}
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-sm text-muted-foreground">No hay productos agregados</p>

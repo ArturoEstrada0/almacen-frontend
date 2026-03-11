@@ -121,14 +121,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
   return (
     <>
-      <div className="fixed top-30 right-4">
-        <ProtectedCreate module="purchaseOrders">
-          <Button onClick={onCreateNew}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Orden
-          </Button>
-        </ProtectedCreate>
-      </div>
+      {/* Botón movido dentro del header y hecho sticky */}
 
       {/* Filters */}
       <Card>
