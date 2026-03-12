@@ -181,13 +181,22 @@ export default function InvoiceImportForm({ initialSupplierId = '', initialWareh
     setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
   }
 
+  function sanitizeDesc(val: unknown): string {
+    return String(val ?? '')
+      .replace(/&#x[0-9A-Fa-f]+;/gi, ' ')
+      .replace(/&#[0-9]+;/g, ' ')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  }
+
   // Aplica el mapeo de columnas a las líneas (re-extrae los valores desde rawData)
   function applyColumnMapping() {
     setLines((cur) => cur.map((l) => {
       const raw = l.rawData || {}
       return {
         ...l,
-        description: colMapping.description ? (raw[colMapping.description] ?? l.description) : l.description,
+        description: colMapping.description ? sanitizeDesc(raw[colMapping.description] ?? l.description) : sanitizeDesc(l.description),
         quantity:    colMapping.quantity    ? Number(raw[colMapping.quantity]    ?? l.quantity)    : l.quantity,
         unitPrice:   colMapping.unitPrice   ? Number(raw[colMapping.unitPrice]   ?? l.unitPrice)   : l.unitPrice,
         productCode: colMapping.productCode ? (raw[colMapping.productCode] ?? l.productCode)       : l.productCode,
