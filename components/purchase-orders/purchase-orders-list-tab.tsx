@@ -5,44 +5,63 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { usePurchaseOrders, receivePurchaseOrder } from "@/lib/hooks/use-purchase-orders"
+import { usePurchaseOrder, usePurchaseOrders, receivePurchaseOrder } from "@/lib/hooks/use-purchase-orders"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useProducts } from "@/lib/hooks/use-products"
 import { formatCurrency } from "@/lib/utils/format"
-import { Plus, Search, FileText, Eye, Package, CheckCircle } from "lucide-react"
+import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
 import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
+import type { PurchaseOrder } from "@/lib/types"
 
 interface PurchaseOrdersListTabProps {
   onCreateNew: () => void
+  onEditOrder: (order: PurchaseOrder) => void
 }
 
-export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProps) {
+export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrdersListTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>("all")
+
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
+  const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({})
+
+  const [detailsOrderId, setDetailsOrderId] = useState<string | null>(null)
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
 
   const { purchaseOrders, isLoading, mutate } = usePurchaseOrders()
+  const { purchaseOrder: detailsOrder, isLoading: detailsLoading } = usePurchaseOrder(detailsOrderId || "")
+
   const { suppliers } = useSuppliers()
   const { warehouses } = useWarehouses()
   const { products } = useProducts()
+
+  const formatDateSafely = (value?: string | Date | null) => {
+    if (!value) return "-"
+
+    if (typeof value === "string") {
+      const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (m) {
+        const year = Number(m[1])
+        const month = Number(m[2]) - 1
+        const day = Number(m[3])
+        return new Date(year, month, day).toLocaleDateString()
+      }
+    }
+
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString()
+  }
 
   const filteredOrders = (purchaseOrders || []).filter((order) => {
     const matchesSearch = (order.orderNumber || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -51,7 +70,6 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     return matchesSearch && matchesStatus && matchesPayment
   })
 
-  // Pagination
   const { pagedItems: pagedOrders, paginationProps } = usePagination(filteredOrders, 20)
 
   const getStatusColor = (status: string) => {
@@ -89,8 +107,6 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     setReceiveDialogOpen(true)
   }
 
-  const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({})
-
   const handleCompleteReception = async () => {
     if (!selectedOrder) return
     try {
@@ -112,12 +128,12 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       setSelectedOrder(null)
       setReceiveQuantities({})
     } catch (e: any) {
-      console.error(e)
       toast.error(e?.message || "Error al registrar la recepción")
     }
   }
 
   const order = selectedOrder ? purchaseOrders.find((o) => o.id === selectedOrder) : null
+  const detailsTraceability = ((detailsOrder as any)?.traceability || []) as any[]
 
   return (
     <>
@@ -134,7 +150,6 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
         </ProtectedCreate>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row">
@@ -175,7 +190,6 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
         </CardContent>
       </Card>
 
-      {/* Orders Table */}
       <Card>
         <CardHeader>
           <CardTitle>Órdenes de Compra</CardTitle>
@@ -206,20 +220,19 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedOrders.map((order) => {
-                    const supplier = suppliers.find((s) => s.id === order.supplierId)
-                    const warehouse = warehouses.find((w) => w.id === order.warehouseId)
-                    const dueDate = order.dueDate ? new Date(order.dueDate) : null
-                    const orderDate = order.orderDate ? new Date(order.orderDate) : null
-                    const expectedDate = order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate) : null
-                    const isOverdue = order.paymentStatus === "pendiente" && dueDate && new Date() > dueDate
+                  {pagedOrders.map((rowOrder) => {
+                    const editable = (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
+                    const supplier = suppliers.find((s) => s.id === rowOrder.supplierId)
+                    const warehouse = warehouses.find((w) => w.id === rowOrder.warehouseId)
+                    const dueDate = rowOrder.dueDate ? new Date(rowOrder.dueDate) : null
+                    const isOverdue = rowOrder.paymentStatus === "pendiente" && dueDate && new Date() > dueDate
 
                     return (
-                      <TableRow key={order.id}>
+                      <TableRow key={rowOrder.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-mono font-medium">{order.orderNumber}</span>
+                            <span className="font-mono font-medium">{rowOrder.orderNumber}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -229,109 +242,48 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                           </div>
                         </TableCell>
                         <TableCell>{warehouse?.name}</TableCell>
-                        <TableCell className="text-sm">{orderDate ? orderDate.toLocaleDateString() : "-"}</TableCell>
-                        <TableCell className="text-sm">{expectedDate ? expectedDate.toLocaleDateString() : "-"}</TableCell>
-                        <TableCell className="font-medium">{formatCurrency(order.total)}</TableCell>
+                        <TableCell className="text-sm">{formatDateSafely(rowOrder.orderDate as any)}</TableCell>
+                        <TableCell className="text-sm">{formatDateSafely(rowOrder.expectedDeliveryDate as any)}</TableCell>
+                        <TableCell className="font-medium">{formatCurrency(rowOrder.total)}</TableCell>
                         <TableCell>
-                          <Badge variant={getStatusColor(order.status)}>{order.status}</Badge>
+                          <Badge variant={getStatusColor(rowOrder.status)}>{rowOrder.status}</Badge>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <Badge variant={isOverdue ? "destructive" : getPaymentStatusColor(order.paymentStatus)}>
-                              {isOverdue ? "vencido" : order.paymentStatus}
+                            <Badge variant={isOverdue ? "destructive" : getPaymentStatusColor(rowOrder.paymentStatus)}>
+                              {isOverdue ? "vencido" : rowOrder.paymentStatus}
                             </Badge>
-                            {order.paymentStatus !== "pagado" && (
+                            {rowOrder.paymentStatus !== "pagado" && (
                               <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
                             )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {order.status !== "completada" && order.status !== "cancelada" && (
+                            {rowOrder.status !== "completada" && rowOrder.status !== "cancelada" && (
                               <ProtectedUpdate module="purchaseOrders">
-                                <Button variant="outline" size="sm" onClick={() => handleReceiveOrder(order.id)}>
+                                <Button variant="outline" size="sm" onClick={() => handleReceiveOrder(rowOrder.id)}>
                                   <Package className="mr-2 h-4 w-4" />
                                   Recibir
                                 </Button>
                               </ProtectedUpdate>
                             )}
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-                                <DialogHeader>
-                                  <DialogTitle>Orden de Compra {order.orderNumber}</DialogTitle>
-                                  <DialogDescription>Detalles de la orden de compra</DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <Label className="text-xs text-muted-foreground">Proveedor</Label>
-                                      <p className="font-medium">{supplier?.businessName}</p>
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs text-muted-foreground">Almacén</Label>
-                                      <p className="font-medium">{warehouse?.name}</p>
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs text-muted-foreground">Fecha de Orden</Label>
-                                      <p className="font-medium">{orderDate ? orderDate.toLocaleDateString() : "-"}</p>
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs text-muted-foreground">Entrega Esperada</Label>
-                                      <p className="font-medium">{expectedDate ? expectedDate.toLocaleDateString() : "-"}</p>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <Label className="text-xs text-muted-foreground">Productos</Label>
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Producto</TableHead>
-                                          <TableHead>Cantidad</TableHead>
-                                          <TableHead>Recibido</TableHead>
-                                          <TableHead>Precio</TableHead>
-                                          <TableHead>Total</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {order.items.map((item) => {
-                                          const product = products.find((p) => p.id === item.productId)
-                                          return (
-                                            <TableRow key={item.id}>
-                                              <TableCell>{product?.name}</TableCell>
-                                              <TableCell>{item.quantity}</TableCell>
-                                              <TableCell>{item.receivedQuantity}</TableCell>
-                                              <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                                              <TableCell>{formatCurrency(item.total)}</TableCell>
-                                            </TableRow>
-                                          )
-                                        })}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-
-                                  <div className="flex justify-end gap-4 border-t pt-4">
-                                    <div className="text-right">
-                                      <p className="text-sm text-muted-foreground">Subtotal</p>
-                                      <p className="font-medium">{formatCurrency(order.subtotal)}</p>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="text-sm text-muted-foreground">IVA</p>
-                                      <p className="font-medium">{formatCurrency(order.tax)}</p>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="text-sm text-muted-foreground">Total</p>
-                                      <p className="text-lg font-bold">{formatCurrency(order.total)}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
+                            <ProtectedUpdate module="purchaseOrders">
+                              <Button variant="outline" size="icon" onClick={() => onEditOrder(rowOrder)} disabled={!editable} aria-label="Editar orden">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </ProtectedUpdate>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setDetailsOrderId(rowOrder.id)
+                                setDetailsDialogOpen(true)
+                              }}
+                              aria-label="Ver detalle"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -345,7 +297,6 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
         </CardContent>
       </Card>
 
-      {/* Receive Order Dialog */}
       <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -357,7 +308,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground">Proveedor</Label>
-                  <p className="font-medium">{suppliers.find((s) => s.id === order.supplierId)?.businessName}</p>
+                  <p className="font-medium">{order.supplier?.name || suppliers.find((s) => s.id === order.supplierId)?.name || "-"}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Almacén</Label>
@@ -419,6 +370,105 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Completar Recepción
                 </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Orden de Compra {detailsOrder?.orderNumber || ""}</DialogTitle>
+            <DialogDescription>Detalles de la orden de compra</DialogDescription>
+          </DialogHeader>
+
+          {!detailsOrder ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Cargando detalle...</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Proveedor</Label>
+                  <p className="font-medium">{detailsOrder.supplier?.name || "-"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Almacén</Label>
+                  <p className="font-medium">{detailsOrder.warehouse?.name || "-"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Fecha de Orden</Label>
+                  <p className="font-medium">{formatDateSafely(detailsOrder.orderDate as any)}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Entrega Esperada</Label>
+                  <p className="font-medium">{formatDateSafely(detailsOrder.expectedDeliveryDate as any)}</p>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">Productos</Label>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Cantidad</TableHead>
+                      <TableHead>Recibido</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(detailsOrder.items || []).map((item) => {
+                      const product = products.find((p) => p.id === item.productId)
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell>{product?.name}</TableCell>
+                          <TableCell>{item.quantity}</TableCell>
+                          <TableCell>{item.receivedQuantity}</TableCell>
+                          <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                          <TableCell>{formatCurrency(item.total)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex justify-end gap-4 border-t pt-4">
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Subtotal</p>
+                  <p className="font-medium">{formatCurrency(detailsOrder.subtotal)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">IVA</p>
+                  <p className="font-medium">{formatCurrency(detailsOrder.tax)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="font-medium">{formatCurrency(detailsOrder.total)}</p>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">Historial</Label>
+                {detailsLoading ? (
+                  <p className="text-sm text-muted-foreground mt-2">Cargando historial...</p>
+                ) : detailsTraceability.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-2">No hay historial registrado.</p>
+                ) : (
+                  <div className="mt-2 space-y-2 rounded-md border p-3">
+                    {detailsTraceability.map((event: any) => (
+                      <div key={event.id} className="border-b pb-2 last:border-b-0 last:pb-0">
+                        <p className="text-sm font-medium capitalize">{event.action}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(event.createdAt).toLocaleString()} • {event.userName || event.userId || "sistema"}
+                        </p>
+                        {event.reason && <p className="text-xs text-muted-foreground">Motivo: {event.reason}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

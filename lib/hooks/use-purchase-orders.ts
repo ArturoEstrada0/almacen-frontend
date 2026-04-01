@@ -50,3 +50,7 @@ export async function registerPayment(orderId: string, data: {
 }) {
   return ApiClient.post<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.registerPayment(orderId), data)
 }
+
+export async function updatePurchaseOrder(id: string, data: any) {
+  return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.update(id), data)
+}

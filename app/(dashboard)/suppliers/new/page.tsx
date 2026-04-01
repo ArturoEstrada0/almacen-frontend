@@ -40,8 +40,9 @@ export default function NewSupplierPage() {
       return
     }
 
+    let loadingId: string | number | undefined
     try {
-      toast.loading("Creando proveedor...")
+      loadingId = toast.loading("Creando proveedor...")
       await apiPost("/suppliers", {
         code: form.code,
         name: form.name,
@@ -60,11 +61,16 @@ export default function NewSupplierPage() {
         accountNumberUsd: form.accountNumberUsd || undefined,
         swiftCodeUsd: form.swiftCodeUsd || undefined,
       })
+      if (loadingId) toast.dismiss(loadingId)
       toast.success("Proveedor creado")
       router.push("/suppliers")
     } catch (err: any) {
-      console.error(err)
-      toast.error(err?.message || "Error creando proveedor")
+      // Evitar mostrar en consola errores esperados (registro ya existe)
+      const isDuplicateError = typeof err?.message === 'string' && err.message.includes('Este registro ya existe')
+      if (!isDuplicateError) console.error(err)
+      if (loadingId) toast.dismiss(loadingId)
+      const message = err?.message || (err?.statusCode ? `Error ${err.statusCode}` : "Error creando proveedor")
+      toast.error(message)
     }
   }
 

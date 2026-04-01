@@ -6,9 +6,11 @@ import { PurchaseOrdersListTab } from "@/components/purchase-orders/purchase-ord
 import { NewPurchaseOrderTab } from "@/components/purchase-orders/new-purchase-order-tab"
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
 import { ProtectedCreate } from "@/components/auth/protected-action"
+import type { PurchaseOrder } from "@/lib/types"
 
 export default function PurchaseOrdersPage() {
   const [activeTab, setActiveTab] = useState("list")
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null)
 
   return (
     <div className="space-y-6">
@@ -25,12 +27,32 @@ export default function PurchaseOrdersPage() {
         </TabsList>
 
         <TabsContent value="list" className="space-y-4">
-          <PurchaseOrdersListTab onCreateNew={() => setActiveTab("new")} />
+          <PurchaseOrdersListTab
+            onCreateNew={() => {
+              setEditingOrder(null)
+              setActiveTab("new")
+            }}
+            onEditOrder={(order) => {
+              setEditingOrder(order)
+              setActiveTab("new")
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="new" className="space-y-4">
           <ProtectedCreate module="purchaseOrders">
-            <NewPurchaseOrderTab onSuccess={() => setActiveTab("list")} />
+            <NewPurchaseOrderTab
+              mode={editingOrder ? "edit" : "create"}
+              initialOrder={editingOrder}
+              onCancelEdit={() => {
+                setEditingOrder(null)
+                setActiveTab("list")
+              }}
+              onSuccess={() => {
+                setEditingOrder(null)
+                setActiveTab("list")
+              }}
+            />
           </ProtectedCreate>
         </TabsContent>
 

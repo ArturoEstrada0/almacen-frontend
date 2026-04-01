@@ -61,9 +61,15 @@ export const API_ENDPOINTS = {
     list: () => `${API_BASE_URL}/api/purchase-orders`,
     get: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}`,
     create: () => `${API_BASE_URL}/api/purchase-orders`,
+    update: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}`,
     receive: (id: string, itemId: string) => `${API_BASE_URL}/api/purchase-orders/${id}/receive/${itemId}`,
     cancel: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/cancel`,
     registerPayment: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/payment`,
+  },
+
+  // Traceability
+  traceability: {
+    byEntity: (entityType: string, entityId: string) => `${API_BASE_URL}/api/traceability/${entityType}/${entityId}`,
   },
 
   // Producers
