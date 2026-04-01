@@ -5,6 +5,25 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { UserPermissions, DEFAULT_PERMISSIONS, PermissionModule } from '@/lib/types/permissions';
 
+function mergePermissionsByRole(role: string, userPermissions: Partial<UserPermissions> | undefined): UserPermissions {
+  const roleDefaults = DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.viewer;
+
+  if (!userPermissions) {
+    return roleDefaults;
+  }
+
+  const merged = { ...roleDefaults } as UserPermissions;
+
+  for (const moduleKey of Object.keys(roleDefaults) as PermissionModule[]) {
+    merged[moduleKey] = {
+      ...roleDefaults[moduleKey],
+      ...(userPermissions[moduleKey] || {}),
+    };
+  }
+
+  return merged;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -57,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           const userRole = session.user.user_metadata?.role || 'viewer';
-          const userPermissions = session.user.user_metadata?.permissions || DEFAULT_PERMISSIONS[userRole];
+          const userPermissions = mergePermissionsByRole(userRole, session.user.user_metadata?.permissions);
           console.log('[AuthContext] Role:', userRole);
           setRole(userRole);
           setPermissions(userPermissions);
@@ -80,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         const userRole = session.user.user_metadata?.role || 'viewer';
-        const userPermissions = session.user.user_metadata?.permissions || DEFAULT_PERMISSIONS[userRole];
+        const userPermissions = mergePermissionsByRole(userRole, session.user.user_metadata?.permissions);
         setRole(userRole);
         setPermissions(userPermissions);
       } else {
