@@ -16,6 +16,7 @@ import {
 import { AlertCircle, Info } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Customer } from "@/lib/hooks/use-customers"
+import { Switch } from "@/components/ui/switch"
 
 export interface CustomerFormData {
   rfc: string
@@ -81,28 +82,36 @@ const MEXICAN_STATES = [
 ]
 
 export function CustomerForm({ initialData, onSubmit, isLoading = false, error }: CustomerFormProps) {
-  const [formData, setFormData] = useState<CustomerFormData>(
-    initialData || {
-      rfc: "",
-      name: "",
-      businessType: "",
-      street: "",
-      streetNumber: "",
-      neighborhood: "",
-      city: "",
-      state: "",
-      postalCode: "",
-      phone: "",
-      email: "",
-      contactName: "",
-      paymentMethod: "bank_transfer",
-      creditDays: 0,
-      bankName: "",
-      accountNumber: "",
-      clabe: "",
-      notes: "",
-    },
+  const [showPaymentFields, setShowPaymentFields] = useState<boolean>(
+    Boolean(
+      initialData?.bankName ||
+        initialData?.clabe ||
+        initialData?.accountNumber ||
+        (initialData?.paymentMethod && initialData.paymentMethod !== "cash"),
+    ),
   )
+  const buildInitialForm = (data?: Customer): CustomerFormData => ({
+    rfc: data?.rfc ?? "",
+    name: data?.name ?? "",
+    businessType: data?.businessType ?? "",
+    street: data?.street ?? "",
+    streetNumber: data?.streetNumber ?? "",
+    neighborhood: data?.neighborhood ?? "",
+    city: data?.city ?? "",
+    state: data?.state ?? "",
+    postalCode: data?.postalCode ?? "",
+    phone: data?.phone ?? "",
+    email: data?.email ?? "",
+    contactName: data?.contactName ?? "",
+    paymentMethod: (data?.paymentMethod as any) ?? "bank_transfer",
+    creditDays: typeof data?.creditDays === "number" ? data!.creditDays : 0,
+    bankName: data?.bankName ?? "",
+    accountNumber: data?.accountNumber ?? "",
+    clabe: data?.clabe ?? "",
+    notes: data?.notes ?? "",
+  })
+
+  const [formData, setFormData] = useState<CustomerFormData>(buildInitialForm(initialData))
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(error || null)
@@ -110,6 +119,17 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
   useEffect(() => {
     setSubmitError(error || null)
   }, [error])
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData(buildInitialForm(initialData))
+      setShowPaymentFields(
+        Boolean(
+          initialData.bankName || initialData.clabe || initialData.accountNumber || (initialData.paymentMethod && initialData.paymentMethod !== "cash"),
+        ),
+      )
+    }
+  }, [initialData])
 
   const validateRFC = (rfc: string): boolean => {
     const rfcRegex = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/
@@ -210,17 +230,19 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
       errors.email = "Email inválido"
     }
 
-    if (formData.paymentMethod === "bank_transfer") {
-      if (!formData.bankName) {
-        errors.bankName = "Nombre del banco es requerido para transferencia bancaria"
-      }
-      if (!formData.clabe) {
-        errors.clabe = "CLABE es requerida para transferencia bancaria"
-      } else if (!validateCLABE(formData.clabe)) {
+    if (showPaymentFields) {
+      if (formData.paymentMethod === "bank_transfer") {
+        if (!formData.bankName) {
+          errors.bankName = "Nombre del banco es requerido para transferencia bancaria"
+        }
+        if (!formData.clabe) {
+          errors.clabe = "CLABE es requerida para transferencia bancaria"
+        } else if (!validateCLABE(formData.clabe)) {
+          errors.clabe = "CLABE inválida (debe ser 18 dígitos)"
+        }
+      } else if (formData.clabe && !validateCLABE(formData.clabe)) {
         errors.clabe = "CLABE inválida (debe ser 18 dígitos)"
       }
-    } else if (formData.clabe && !validateCLABE(formData.clabe)) {
-      errors.clabe = "CLABE inválida (debe ser 18 dígitos)"
     }
 
     setValidationErrors(errors)
@@ -237,7 +259,12 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
     }
 
     try {
-      await onSubmit(formData)
+      // Si no se desean datos de pago, limpiarlos antes de enviar
+      const payload = showPaymentFields
+        ? formData
+        : { ...formData, paymentMethod: "cash", bankName: "", accountNumber: "", clabe: "", creditDays: 0 }
+
+      await onSubmit(payload)
     } catch (err: any) {
       setSubmitError(err.message || "Error al guardar cliente")
     }
@@ -438,93 +465,104 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
         </CardContent>
       </Card>
 
-      {/* Datos de Pago */}
+      {/* Datos de Pago (opcional) */}
       <Card>
         <CardHeader>
-          <CardTitle>Datos de Pago</CardTitle>
-          <CardDescription>Información de pago del cliente</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center justify-between w-full">
             <div>
-              <Label htmlFor="paymentMethod">Forma de Pago *</Label>
-              <Select value={formData.paymentMethod} onValueChange={(value: any) => handleFieldChange("paymentMethod", value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Efectivo</SelectItem>
-                  <SelectItem value="bank_transfer">Transferencia Bancaria</SelectItem>
-                  <SelectItem value="check">Cheque</SelectItem>
-                  <SelectItem value="credit">Crédito</SelectItem>
-                </SelectContent>
-              </Select>
+              <CardTitle>Datos de Pago</CardTitle>
+              <CardDescription>Información de pago del cliente</CardDescription>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Agregar datos de pago</span>
+              <Switch checked={showPaymentFields} onCheckedChange={(v: any) => setShowPaymentFields(Boolean(v))} />
+            </div>
+          </div>
+        </CardHeader>
 
-            <div>
-              <Label htmlFor="creditDays">Días de Crédito</Label>
-              <Input
-                id="creditDays"
-                type="number"
-                min="0"
-                placeholder="30"
-                value={formData.creditDays}
-                onChange={(e) => handleFieldChange("creditDays", parseInt(e.target.value) || 0)}
-              />
-              <p className="text-xs text-gray-500 mt-1">0 = Al contado</p>
+        {showPaymentFields && (
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="paymentMethod">Forma de Pago *</Label>
+                <Select value={formData.paymentMethod} onValueChange={(value: any) => handleFieldChange("paymentMethod", value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Efectivo</SelectItem>
+                    <SelectItem value="bank_transfer">Transferencia Bancaria</SelectItem>
+                    <SelectItem value="check">Cheque</SelectItem>
+                    <SelectItem value="credit">Crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="creditDays">Días de Crédito</Label>
+                <Input
+                  id="creditDays"
+                  type="number"
+                  min="0"
+                  placeholder="30"
+                  value={formData.creditDays}
+                  onChange={(e) => handleFieldChange("creditDays", parseInt(e.target.value) || 0)}
+                />
+                <p className="text-xs text-gray-500 mt-1">0 = Al contado</p>
+              </div>
+
+              {formData.paymentMethod === "bank_transfer" && (
+                <>
+                  <div>
+                    <Label htmlFor="bankName">Nombre del Banco *</Label>
+                    <Input
+                      id="bankName"
+                      placeholder="Banco del Bajío"
+                      value={formData.bankName}
+                      onChange={(e) => handleFieldChange("bankName", e.target.value)}
+                      className={validationErrors.bankName ? "border-red-500" : ""}
+                    />
+                    {validationErrors.bankName && (
+                      <p className="text-sm text-red-500 mt-1">{validationErrors.bankName}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="accountNumber">Número de Cuenta</Label>
+                    <Input
+                      id="accountNumber"
+                      placeholder="123456789012345678"
+                      value={formData.accountNumber}
+                      onChange={(e) => handleFieldChange("accountNumber", e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="clabe">CLABE (18 dígitos) *</Label>
+                    <Input
+                      id="clabe"
+                      placeholder="012580000123456789"
+                      value={formData.clabe}
+                      onChange={(e) => handleFieldChange("clabe", e.target.value.replace(/\D/g, ""))}
+                      className={validationErrors.clabe ? "border-red-500" : ""}
+                      maxLength={18}
+                    />
+                    {validationErrors.clabe && <p className="text-sm text-red-500 mt-1">{validationErrors.clabe}</p>}
+                  </div>
+                </>
+              )}
             </div>
 
             {formData.paymentMethod === "bank_transfer" && (
-              <>
-                <div>
-                  <Label htmlFor="bankName">Nombre del Banco *</Label>
-                  <Input
-                    id="bankName"
-                    placeholder="Banco del Bajío"
-                    value={formData.bankName}
-                    onChange={(e) => handleFieldChange("bankName", e.target.value)}
-                    className={validationErrors.bankName ? "border-red-500" : ""}
-                  />
-                  {validationErrors.bankName && (
-                    <p className="text-sm text-red-500 mt-1">{validationErrors.bankName}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="accountNumber">Número de Cuenta</Label>
-                  <Input
-                    id="accountNumber"
-                    placeholder="123456789012345678"
-                    value={formData.accountNumber}
-                    onChange={(e) => handleFieldChange("accountNumber", e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="clabe">CLABE (18 dígitos) *</Label>
-                  <Input
-                    id="clabe"
-                    placeholder="012580000123456789"
-                    value={formData.clabe}
-                    onChange={(e) => handleFieldChange("clabe", e.target.value.replace(/\D/g, ""))}
-                    className={validationErrors.clabe ? "border-red-500" : ""}
-                    maxLength={18}
-                  />
-                  {validationErrors.clabe && <p className="text-sm text-red-500 mt-1">{validationErrors.clabe}</p>}
-                </div>
-              </>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Para pagos por transferencia bancaria, se requieren datos del banco y CLABE
+                </AlertDescription>
+              </Alert>
             )}
-          </div>
-
-          {formData.paymentMethod === "bank_transfer" && (
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                Para pagos por transferencia bancaria, se requieren datos del banco y CLABE
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
 
       {/* Notas */}

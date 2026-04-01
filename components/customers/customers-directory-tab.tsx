@@ -70,9 +70,12 @@ export function CustomersDirectoryTab() {
   const handleCreateCustomer = async (data: CustomerFormData) => {
     setIsSubmitting(true)
     try {
-      await createCustomer(data)
+      const newCustomer = await createCustomer(data)
       setCreateDialogOpen(false)
-      await fetchCustomers()
+      // Update filtered list immediately for reactivity
+      if (newCustomer) {
+        setFilteredCustomers((prev) => [newCustomer, ...prev])
+      }
       toast({
         title: "Éxito",
         description: "Cliente creado exitosamente",
@@ -95,10 +98,15 @@ export function CustomersDirectoryTab() {
 
     setIsSubmitting(true)
     try {
-      await updateCustomer(selectedCustomer.id, data)
+      // DEBUG: mostrar payload enviado al backend
+      console.debug("Updating customer payload:", data)
+      const updated = await updateCustomer(selectedCustomer.id, data)
       setEditDialogOpen(false)
       setSelectedCustomer(null)
-      await fetchCustomers()
+      // Update filtered list immediately for reactivity
+      if (updated) {
+        setFilteredCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+      }
       toast({
         title: "Éxito",
         description: "Cliente actualizado exitosamente",
@@ -234,8 +242,6 @@ export function CustomersDirectoryTab() {
                     <TableHead>Contacto</TableHead>
                     <TableHead>Teléfono</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Forma de Pago</TableHead>
-                    <TableHead>Crédito</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -254,14 +260,6 @@ export function CustomersDirectoryTab() {
                         <a href={`mailto:${customer.email}`} className="text-blue-600 hover:underline text-sm">
                           {customer.email}
                         </a>
-                      </TableCell>
-                      <TableCell>{PAYMENT_METHOD_LABELS[customer.paymentMethod]}</TableCell>
-                      <TableCell>
-                        {customer.creditDays > 0 ? (
-                          <Badge variant="outline">{customer.creditDays} días</Badge>
-                        ) : (
-                          <Badge variant="secondary">Contado</Badge>
-                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={customer.active ? "default" : "secondary"}>

@@ -124,6 +124,7 @@ export function useCustomers() {
     if (!session?.access_token) return null
 
     try {
+      console.debug("createCustomer request:", data)
       const response = await fetch(`${API_ROOT}/customers`, {
         method: "POST",
         headers: {
@@ -134,8 +135,20 @@ export function useCustomers() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`)
+        const text = await response.text().catch(() => "")
+        let errorData: any = {}
+        try {
+          errorData = JSON.parse(text || "{}")
+        } catch {
+          errorData = { message: text }
+        }
+          console.error("createCustomer response error:", response.status, response.statusText, errorData)
+          // Throw structured error so callers can inspect `errors`
+          throw {
+            message: errorData.message || text || `Error ${response.status}: ${response.statusText}`,
+            status: response.status,
+            errors: errorData.errors,
+          }
       }
 
       const newCustomer = await response.json()
@@ -151,6 +164,7 @@ export function useCustomers() {
     if (!session?.access_token) return null
 
     try {
+      console.debug("updateCustomer request:", id, data)
       const response = await fetch(`${API_ROOT}/customers/${id}`, {
         method: "PATCH",
         headers: {
@@ -161,8 +175,20 @@ export function useCustomers() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`)
+        const text = await response.text().catch(() => "")
+        let errorData: any = {}
+        try {
+          errorData = JSON.parse(text || "{}")
+        } catch {
+          errorData = { message: text }
+        }
+          console.error("updateCustomer response error:", response.status, response.statusText, errorData)
+          // Throw structured error so callers can inspect `errors`
+          throw {
+            message: errorData.message || text || `Error ${response.status}: ${response.statusText}`,
+            status: response.status,
+            errors: errorData.errors,
+          }
       }
 
       const updatedCustomer = await response.json()
