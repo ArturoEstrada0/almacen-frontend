@@ -151,8 +151,7 @@ export function NewPurchaseOrderTab({
 
         await createPurchaseOrder(payload)
         toast.success("Orden de compra creada exitosamente")
-      }
-
+      
       mutate()
       onSuccess()
     } catch (e: any) {
