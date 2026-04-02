@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { ShipmentStatus } from "@/lib/types"
 import {
@@ -32,8 +32,9 @@ import {
   updateShipmentStatus as apiUpdateShipmentStatus,
   deleteShipment as apiDeleteShipment,
 } from "@/lib/hooks/use-producers"
+import { useSuppliers } from "@/lib/hooks/use-suppliers"
+import { useCustomers } from "@/lib/hooks/use-customers"
 import { mutate as globalMutate } from "swr"
-import { products } from "@/lib/mock-data"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
@@ -59,6 +60,11 @@ export function ShipmentsTab() {
   const [selectedReceptions, setSelectedReceptions] = useState<string[]>([])
   const [carrier, setCarrier] = useState("")
   const [carrierContact, setCarrierContact] = useState("")
+  const [invoiceAmount, setInvoiceAmount] = useState("")
+  const [carrierInvoiceAmount, setCarrierInvoiceAmount] = useState("")
+  const [shipmentInvoiceFile, setShipmentInvoiceFile] = useState<File | null>(null)
+  const [carrierInvoiceFile, setCarrierInvoiceFile] = useState<File | null>(null)
+  const [waybillFile, setWaybillFile] = useState<File | null>(null)
   const [shipmentDate, setShipmentDate] = useState(new Date().toISOString().split("T")[0])
   const [notes, setNotes] = useState("")
 
@@ -67,6 +73,11 @@ export function ShipmentsTab() {
   const [editSelectedReceptions, setEditSelectedReceptions] = useState<string[]>([])
   const [editCarrier, setEditCarrier] = useState("")
   const [editCarrierContact, setEditCarrierContact] = useState("")
+  const [editInvoiceAmount, setEditInvoiceAmount] = useState("")
+  const [editCarrierInvoiceAmount, setEditCarrierInvoiceAmount] = useState("")
+  const [editShipmentInvoiceFile, setEditShipmentInvoiceFile] = useState<File | null>(null)
+  const [editCarrierInvoiceFile, setEditCarrierInvoiceFile] = useState<File | null>(null)
+  const [editWaybillFile, setEditWaybillFile] = useState<File | null>(null)
   const [editShipmentDate, setEditShipmentDate] = useState("")
   const [editNotes, setEditNotes] = useState("")
 
@@ -84,12 +95,24 @@ export function ShipmentsTab() {
   // Estado para el modal de detalles
   const [viewShipment, setViewShipment] = useState<any | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  // Modal to inform user that backend does not accept files for shipments
+  const [isFilesNotSupportedDialogOpen, setIsFilesNotSupportedDialogOpen] = useState(false)
+  const [pendingCreatePayload, setPendingCreatePayload] = useState<any | null>(null)
+  const [pendingEditPayload, setPendingEditPayload] = useState<any | null>(null)
+  const [pendingEditId, setPendingEditId] = useState<string | null>(null)
 
   const { fruitReceptions } = useFruitReceptions()
   const { shipments, mutate: mutateShipments, isLoading } = useShipments()
   const { producers } = useProducers()
+  const { suppliers } = useSuppliers()
+  const { customers, fetchCustomers } = useCustomers()
 
   const pendingReceptions = (fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente")
+
+  const hasCreateInvoiceData = !!shipmentInvoiceFile && Number(invoiceAmount || 0) > 0
+  const hasCreateCarrierInvoiceData = !!carrierInvoiceFile && Number(carrierInvoiceAmount || 0) > 0
+  const hasEditInvoiceData = !!editShipmentInvoiceFile && Number(editInvoiceAmount || 0) > 0
+  const hasEditCarrierInvoiceData = !!editCarrierInvoiceFile && Number(editCarrierInvoiceAmount || 0) > 0
 
   const getProducerNameForShipment = (shipment: any) => {
     if (shipment?.producer?.name) return String(shipment.producer.name).toLowerCase()
@@ -113,13 +136,13 @@ export function ShipmentsTab() {
   const sortedShipments = [...(shipments || [])].sort((a, b) => {
     switch (sortBy) {
       case 'code': {
-        const av = String(a.code || a.shipmentNumber || "").toLowerCase()
-        const bv = String(b.code || b.shipmentNumber || "").toLowerCase()
+        const av = String((a as any).code || (a as any).shipmentNumber || "").toLowerCase()
+        const bv = String((b as any).code || (b as any).shipmentNumber || "").toLowerCase()
         return sortOrder === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
       }
       case 'date': {
-        const aTime = new Date(a.date || a.shipmentDate || 0).getTime() || 0
-        const bTime = new Date(b.date || b.shipmentDate || 0).getTime() || 0
+        const aTime = new Date((a as any).date || (a as any).shipmentDate || 0).getTime() || 0
+        const bTime = new Date((b as any).date || (b as any).shipmentDate || 0).getTime() || 0
         return sortOrder === 'asc' ? aTime - bTime : bTime - aTime
       }
       case 'producer':
@@ -186,7 +209,6 @@ export function ShipmentsTab() {
   const handleCreateShipment = () => {
     ;(async () => {
       try {
-        // Backend DTO accepts: receptionIds, carrier?, driver?, notes?, date?
         const payload: any = {
           receptionIds: selectedReceptions,
           date: shipmentDate,
@@ -194,25 +216,72 @@ export function ShipmentsTab() {
           notes,
         }
         if (carrierContact) payload.driver = carrierContact
-        const created = await apiCreateShipment(payload)
+        // Try to resolve customerId and carrierId for traceability/accounting
+        const matchedCustomer = (customers || []).find((c: any) => String(c.name) === String(carrierContact))
+        if (matchedCustomer?.id) payload.customerId = matchedCustomer.id
+        const matchedCarrier = (suppliers || []).find((s: any) => {
+          const candidate = String(s.businessName || s.name || s.id)
+          return candidate === String(carrier)
+        })
+        if (matchedCarrier?.id) payload.carrierId = matchedCarrier.id
+        if (invoiceAmount) payload.invoiceAmount = Number(invoiceAmount)
+        if (carrierInvoiceAmount) payload.carrierInvoiceAmount = Number(carrierInvoiceAmount)
+        // Normalize and validate receptionIds
+        payload.receptionIds = Array.isArray(payload.receptionIds) ? payload.receptionIds.map(String) : []
+        if (!payload.receptionIds || payload.receptionIds.length === 0) {
+          alert("Seleccione al menos una recepción antes de crear el embarque")
+          return
+        }
+        if (shipmentInvoiceFile || carrierInvoiceFile || waybillFile) {
+          // Store payload and ask user to confirm creating without files
+          setPendingCreatePayload(payload)
+          setIsFilesNotSupportedDialogOpen(true)
+          return
+        }
+        const created: any = await apiCreateShipment(payload)
   // Refresh lists
   await mutateShipments()
   // Refresh receptions list
   await globalMutate("fruit-receptions")
+  await globalMutate("accounts-receivable")
+  await globalMutate("accounts-payable")
         // Reset form
         setSelectedReceptions([])
         setCarrier("")
         setCarrierContact("")
+        setInvoiceAmount("")
+        setCarrierInvoiceAmount("")
+        setShipmentInvoiceFile(null)
+        setCarrierInvoiceFile(null)
+        setWaybillFile(null)
         setShipmentDate(new Date().toISOString().split("T")[0])
         setNotes("")
         setIsCreateDialogOpen(false)
         console.log("Created shipment", created)
       } catch (err) {
-        console.error("Failed creating shipment", err)
-        alert("Error al crear embarque: " + (err as any)?.message || err)
+        const e: any = err || {}
+        console.error("Failed creating shipment", e)
+        // Build helpful message
+        let msg = e.message || String(e)
+        if (e.status) msg = `(${e.status}) ${msg}`
+        if (e.errors) msg += "\nErrors: " + JSON.stringify(e.errors)
+        if (e.technicalDetails) msg += "\nDetails: " + JSON.stringify(e.technicalDetails)
+        if (e.raw && typeof e.raw === 'string' && e.raw.trim()) msg += "\nResponse: " + e.raw
+        alert("Error al crear embarque: " + msg)
       }
     })()
   }
+
+  useEffect(() => {
+    fetchCustomers().catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (isCreateDialogOpen || isEditDialogOpen) {
+      // Load customers for the contact selector when dialogs open
+      fetchCustomers().catch(() => {})
+    }
+  }, [isCreateDialogOpen, isEditDialogOpen, fetchCustomers])
 
   const handleUpdateShipment = () => {
     ;(async () => {
@@ -276,6 +345,58 @@ export function ShipmentsTab() {
     }
   }
 
+  // Perform create now (used after confirming modal)
+  const performCreateConfirmed = async () => {
+    if (!pendingCreatePayload) return
+    try {
+      const created: any = await apiCreateShipment(pendingCreatePayload)
+      await mutateShipments()
+      await globalMutate("fruit-receptions")
+      await globalMutate("accounts-receivable")
+      await globalMutate("accounts-payable")
+      // Reset form
+      setSelectedReceptions([])
+      setCarrier("")
+      setCarrierContact("")
+      setInvoiceAmount("")
+      setCarrierInvoiceAmount("")
+      setShipmentInvoiceFile(null)
+      setCarrierInvoiceFile(null)
+      setWaybillFile(null)
+      setShipmentDate(new Date().toISOString().split("T")[0])
+      setNotes("")
+      setIsCreateDialogOpen(false)
+      console.log("Created shipment", created)
+    } catch (err) {
+      console.error("Failed creating shipment", err)
+      alert("Error al crear embarque: " + (err as any)?.message || String(err))
+    } finally {
+      setPendingCreatePayload(null)
+      setIsFilesNotSupportedDialogOpen(false)
+    }
+  }
+
+  // Perform edit now (used after confirming modal)
+  const performEditConfirmed = async () => {
+    if (!pendingEditPayload || !pendingEditId) return
+    try {
+      await apiUpdateShipment(pendingEditId, pendingEditPayload)
+      await mutateShipments()
+      await globalMutate("fruit-receptions")
+      await globalMutate("accounts-receivable")
+      await globalMutate("accounts-payable")
+      setIsEditDialogOpen(false)
+      setEditingShipmentId(null)
+    } catch (err) {
+      console.error("Error updating shipment:", err)
+      alert("Error al actualizar: " + (err as any)?.message || String(err))
+    } finally {
+      setPendingEditPayload(null)
+      setPendingEditId(null)
+      setIsFilesNotSupportedDialogOpen(false)
+    }
+  }
+
   const handleEditShipment = (shipment: any) => {
     setEditingShipmentId(shipment.id)
     
@@ -285,7 +406,12 @@ export function ShipmentsTab() {
     
     setEditSelectedReceptions(currentReceptionIds)
     setEditCarrier(shipment.carrier || "")
-    setEditCarrierContact(shipment.carrierContact || "")
+    setEditCarrierContact(shipment.carrierContact || shipment.customer?.name || shipment.client?.name || shipment.customerName || "")
+    setEditInvoiceAmount(shipment.invoiceAmount ? String(shipment.invoiceAmount) : "")
+    setEditCarrierInvoiceAmount(shipment.carrierInvoiceAmount ? String(shipment.carrierInvoiceAmount) : "")
+    setEditShipmentInvoiceFile(null)
+    setEditCarrierInvoiceFile(null)
+    setEditWaybillFile(null)
     setEditShipmentDate(shipment.date || shipment.shipmentDate || "")
     setEditNotes(shipment.notes || "")
     setIsEditDialogOpen(true)
@@ -308,10 +434,27 @@ export function ShipmentsTab() {
       }
       if (editCarrierContact) payload.driver = editCarrierContact
       if (editNotes) payload.notes = editNotes
+      if (editInvoiceAmount) payload.invoiceAmount = Number(editInvoiceAmount)
+      if (editCarrierInvoiceAmount) payload.carrierInvoiceAmount = Number(editCarrierInvoiceAmount)
 
+      // Normalize and validate receptionIds
+      payload.receptionIds = Array.isArray(payload.receptionIds) ? payload.receptionIds.map(String) : []
+      if (!payload.receptionIds || payload.receptionIds.length === 0) {
+        alert("Seleccione al menos una recepción antes de actualizar el embarque")
+        return
+      }
+
+      if (editShipmentInvoiceFile || editCarrierInvoiceFile || editWaybillFile) {
+        setPendingEditPayload(payload)
+        setPendingEditId(editingShipmentId)
+        setIsFilesNotSupportedDialogOpen(true)
+        return
+      }
       await apiUpdateShipment(editingShipmentId, payload)
       await mutateShipments()
       await globalMutate("fruit-receptions")
+      await globalMutate("accounts-receivable")
+      await globalMutate("accounts-payable")
       setIsEditDialogOpen(false)
       setEditingShipmentId(null)
       setEditSearchTerm("")
@@ -363,6 +506,30 @@ export function ShipmentsTab() {
                       Selecciona múltiples recepciones de diferentes productores para agrupar en un embarque
                     </DialogDescription>
                   </DialogHeader>
+
+                  {/* Modal: files not supported (confirmation) */}
+                  <Dialog open={isFilesNotSupportedDialogOpen} onOpenChange={setIsFilesNotSupportedDialogOpen}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Archivos no soportados en este formulario</DialogTitle>
+                        <DialogDescription>
+                          El servidor actual no acepta la subida de documentos desde el formulario de Embarques.
+                          Si continúas, el embarque se creará/actualizará pero los archivos adjuntos no serán enviados.
+                          Si necesitas adjuntar facturas o carta porte, sube los documentos mediante el módulo de documentos o espera a que el backend soporte multipart.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <div className="flex gap-2 justify-end">
+                          <Button variant="outline" onClick={() => { setIsFilesNotSupportedDialogOpen(false); setPendingCreatePayload(null); setPendingEditPayload(null); setPendingEditId(null); }}>
+                            Cancelar
+                          </Button>
+                          <Button onClick={() => { if (pendingCreatePayload) performCreateConfirmed(); else performEditConfirmed(); }}>
+                            Continuar sin archivos
+                          </Button>
+                        </div>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
                 <div className="flex-1 overflow-y-auto px-6 pb-4">
                 <div className="grid gap-6 py-4">
@@ -453,8 +620,8 @@ export function ShipmentsTab() {
                                       />
                                     </TableCell>
                                     <TableCell className="text-sm">
-                                      {reception.trackingFolio ? (
-                                        <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{reception.trackingFolio}</span>
+                                      {(reception as any).trackingFolio ? (
+                                        <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{(reception as any).trackingFolio}</span>
                                       ) : (
                                         <span className="text-muted-foreground">-</span>
                                       )}
@@ -480,28 +647,162 @@ export function ShipmentsTab() {
                       <Label htmlFor="carrier" className="text-sm font-semibold">
                         Transportista <span className="text-red-500">*</span>
                       </Label>
-                      <Input
-                        id="carrier"
-                        placeholder="Nombre de la empresa transportista"
+                      <ComboBox
+                        options={(suppliers || []).map((s: any) => ({
+                          value: String(s.businessName || s.name || s.id),
+                          label: String(s.businessName || s.name || s.id),
+                          subtitle: String(s.rfc || ""),
+                        }))}
                         value={carrier}
-                        onChange={(e) => setCarrier(e.target.value)}
+                        onChange={(v) => setCarrier(v)}
+                        placeholder="Seleccionar transportista"
                         className="h-10 text-sm"
                       />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="carrierContact" className="text-sm font-semibold">
-                        Contacto del Transportista
+                        Cliente
                       </Label>
-                      <Input
-                        id="carrierContact"
-                        placeholder="Teléfono o email"
+                      <ComboBox
+                        options={(customers || []).map((c) => ({
+                          value: String(c.name),
+                          label: String(c.name),
+                          subtitle: `${c.contactName || "Sin contacto"}${c.phone ? ` • ${c.phone}` : ""}`,
+                        }))}
                         value={carrierContact}
-                        onChange={(e) => setCarrierContact(e.target.value)}
+                        onChange={(v) => setCarrierContact(v)}
+                        placeholder="Seleccionar cliente"
+                        emptyMessage="No se encontraron clientes"
                         className="h-10 text-sm"
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="invoiceAmount" className="text-sm font-semibold">Monto factura embarque</Label>
+                      <Input
+                        id="invoiceAmount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={invoiceAmount}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            setInvoiceAmount(value)
+                          }
+                        }}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="carrierInvoiceAmount" className="text-sm font-semibold">Monto factura transportista</Label>
+                      <Input
+                        id="carrierInvoiceAmount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={carrierInvoiceAmount}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            setCarrierInvoiceAmount(value)
+                          }
+                        }}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-sm font-semibold">Facturas y documentos del viaje</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Se permiten 2 facturas: embarque (PDF/XML) y transportista (PDF/XML). También se puede adjuntar el complemento carta porte.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-3 rounded-lg border p-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Truck className="h-4 w-4" />
+                          Documentación del transportista
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="carrierInvoiceFile" className="text-xs text-muted-foreground">Factura del transportista (PDF/XML)</Label>
+                          <Input
+                            id="carrierInvoiceFile"
+                            type="file"
+                            accept=".pdf,.xml"
+                            onChange={(e) => setCarrierInvoiceFile(e.target.files?.[0] || null)}
+                            className="h-10 text-sm"
+                          />
+                          {carrierInvoiceFile && (
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <span className="truncate">{carrierInvoiceFile.name}</span>
+                              <Button type="button" size="sm" variant="outline" onClick={() => setCarrierInvoiceFile(null)}>Quitar</Button>
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="waybillFile" className="text-xs text-muted-foreground">Complemento carta porte (PDF/XML)</Label>
+                          <Input
+                            id="waybillFile"
+                            type="file"
+                            accept=".pdf,.xml"
+                            onChange={(e) => setWaybillFile(e.target.files?.[0] || null)}
+                            className="h-10 text-sm"
+                          />
+                          {waybillFile && (
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <span className="truncate">{waybillFile.name}</span>
+                              <Button type="button" size="sm" variant="outline" onClick={() => setWaybillFile(null)}>Quitar</Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 rounded-lg border p-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <FileText className="h-4 w-4" />
+                          Factura del embarque
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Upload className="h-3.5 w-3.5" />
+                          PDF/XML
+                        </div>
+                        <Input
+                          id="shipmentInvoiceFile"
+                          type="file"
+                          accept=".pdf,.xml"
+                          onChange={(e) => setShipmentInvoiceFile(e.target.files?.[0] || null)}
+                          className="h-10 text-sm"
+                        />
+                        {shipmentInvoiceFile && (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="truncate">{shipmentInvoiceFile.name}</span>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setShipmentInvoiceFile(null)}>Quitar</Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(hasCreateInvoiceData || hasCreateCarrierInvoiceData) && (
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                      <div className="flex items-start gap-2">
+                        <DollarSign className="h-5 w-5 text-green-600 mt-0.5" />
+                        <div className="space-y-2 flex-1">
+                          <p className="text-sm font-medium text-green-900">Resumen de cuentas automáticas</p>
+                          {hasCreateInvoiceData && (
+                            <p className="text-sm text-green-700">Se generará cuenta por cobrar al cliente por {formatCurrency(Number(invoiceAmount || 0))}</p>
+                          )}
+                          {hasCreateCarrierInvoiceData && (
+                            <p className="text-sm text-green-700">Se generará cuenta por pagar al transportista por {formatCurrency(Number(carrierInvoiceAmount || 0))}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="shipmentDate" className="text-sm font-semibold">
@@ -579,6 +880,7 @@ export function ShipmentsTab() {
                 <TableHead>Cajas Totales</TableHead>
                     <TableHead>Peso Total</TableHead>
                 <TableHead>Transportista</TableHead>
+                <TableHead>Cliente</TableHead>
                 <TableHead>Embarque</TableHead>
                 <TableHead>Llegada</TableHead>
                 <TableHead>Precio Venta</TableHead>
@@ -603,39 +905,39 @@ export function ShipmentsTab() {
                 const shipmentDate = (shipment as any).shipmentDate || (shipment as any).date || (shipment as any).createdAt
                 return (
                   <TableRow key={shipment.id}>
-                    <TableCell>
-                      {(() => {
-                        const folios = [...new Set(receptions.map((r) => r.trackingFolio).filter(Boolean))]
-                        if (folios.length === 0 && (shipment as any).trackingFolio) {
-                          return <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{(shipment as any).trackingFolio}</span>
-                        }
-                        if (folios.length === 0) return <span className="text-muted-foreground text-sm">-</span>
-                        if (folios.length === 1) {
-                          return <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{folios[0]}</span>
-                        }
-                        return (
-                          <div className="text-sm">
-                            <span className="font-mono text-xs bg-blue-50 px-1 py-0.5 rounded">{folios[0]}</span>
-                            <div className="text-muted-foreground text-xs">+{folios.length - 1} más</div>
-                          </div>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        {producersList.length > 0 ? (
-                          <>
-                            <div>{producersList[0]?.name}</div>
-                            {producersList.length > 1 && (
-                              <div className="text-muted-foreground text-xs">+{producersList.length - 1} más</div>
-                            )}
-                          </>
-                        ) : (
-                          "-"
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{(shipment as any).totalBoxes}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const folios = [...new Set(receptions.map((r) => r.trackingFolio).filter(Boolean))]
+                          if (folios.length === 0 && (shipment as any).trackingFolio) {
+                            return <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{(shipment as any).trackingFolio}</span>
+                          }
+                          if (folios.length === 0) return <span className="text-muted-foreground text-sm">-</span>
+                          if (folios.length === 1) {
+                            return <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded">{folios[0]}</span>
+                          }
+                          return (
+                            <div className="text-sm">
+                              <span className="font-mono text-xs bg-blue-50 px-1 py-0.5 rounded">{folios[0]}</span>
+                              <div className="text-muted-foreground text-xs">+{folios.length - 1} más</div>
+                            </div>
+                          )
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          if (!producersList || producersList.length === 0) return "-"
+                          const first = producersList[0]
+                          return (
+                            <div className="text-sm">
+                              <div>{first?.name || (first as any)?.businessName || first?.id}</div>
+                              {producersList.length > 1 && (
+                                <div className="text-muted-foreground text-xs">+{producersList.length - 1} más</div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </TableCell>
+                      <TableCell>{(shipment as any).totalBoxes}</TableCell>
                     <TableCell>
                       {(() => {
                         const sw = parseFloat((shipment as any).totalWeight)
@@ -654,10 +956,10 @@ export function ShipmentsTab() {
                     <TableCell>
                       <div className="text-sm">
                         <div>{(shipment as any).carrier}</div>
-                        {(shipment as any).carrierContact && (
-                          <div className="text-muted-foreground text-xs">{(shipment as any).carrierContact}</div>
-                        )}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {(shipment as any).carrierContact || "-"}
                     </TableCell>
                     <TableCell>{shipmentDate ? formatDate(shipmentDate) : "-"}</TableCell>
                     <TableCell>{(shipment as any).arrivalDate ? formatDate((shipment as any).arrivalDate) : "-"}</TableCell>
@@ -856,8 +1158,8 @@ export function ShipmentsTab() {
                                       />
                                     </TableCell>
                                     <TableCell className="text-sm">
-                                      {reception.trackingFolio ? (
-                                        <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{reception.trackingFolio}</span>
+                                      {(reception as any).trackingFolio ? (
+                                        <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{(reception as any).trackingFolio}</span>
                                       ) : (
                                         <span className="text-muted-foreground">-</span>
                                       )}
@@ -891,28 +1193,162 @@ export function ShipmentsTab() {
                       <Label htmlFor="editCarrier" className="text-sm font-semibold">
                         Transportista <span className="text-red-500">*</span>
                       </Label>
-                      <Input
-                        id="editCarrier"
-                        placeholder="Nombre de la empresa transportista"
+                      <ComboBox
+                        options={(suppliers || []).map((s: any) => ({
+                          value: String(s.businessName || s.name || s.id),
+                          label: String(s.businessName || s.name || s.id),
+                          subtitle: String(s.rfc || ""),
+                        }))}
                         value={editCarrier}
-                        onChange={(e) => setEditCarrier(e.target.value)}
+                        onChange={(v) => setEditCarrier(v)}
+                        placeholder="Seleccionar transportista"
                         className="h-10 text-sm"
                       />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="editCarrierContact" className="text-sm font-semibold">
-                        Contacto del Transportista
+                        Cliente
                       </Label>
-                      <Input
-                        id="editCarrierContact"
-                        placeholder="Teléfono o email"
+                      <ComboBox
+                        options={(customers || []).map((c) => ({
+                          value: String(c.name),
+                          label: String(c.name),
+                          subtitle: `${c.contactName || "Sin contacto"}${c.phone ? ` • ${c.phone}` : ""}`,
+                        }))}
                         value={editCarrierContact}
-                        onChange={(e) => setEditCarrierContact(e.target.value)}
+                        onChange={(v) => setEditCarrierContact(v)}
+                        placeholder="Seleccionar cliente"
+                        emptyMessage="No se encontraron clientes"
                         className="h-10 text-sm"
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="editInvoiceAmount" className="text-sm font-semibold">Monto factura embarque</Label>
+                      <Input
+                        id="editInvoiceAmount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={editInvoiceAmount}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            setEditInvoiceAmount(value)
+                          }
+                        }}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="editCarrierInvoiceAmount" className="text-sm font-semibold">Monto factura transportista</Label>
+                      <Input
+                        id="editCarrierInvoiceAmount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={editCarrierInvoiceAmount}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            setEditCarrierInvoiceAmount(value)
+                          }
+                        }}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-sm font-semibold">Facturas y documentos del viaje</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Se permiten 2 facturas: embarque (PDF/XML) y transportista (PDF/XML). También se puede adjuntar el complemento carta porte.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-3 rounded-lg border p-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Truck className="h-4 w-4" />
+                          Documentación del transportista
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editCarrierInvoiceFile" className="text-xs text-muted-foreground">Factura del transportista (PDF/XML)</Label>
+                          <Input
+                            id="editCarrierInvoiceFile"
+                            type="file"
+                            accept=".pdf,.xml"
+                            onChange={(e) => setEditCarrierInvoiceFile(e.target.files?.[0] || null)}
+                            className="h-10 text-sm"
+                          />
+                          {editCarrierInvoiceFile && (
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <span className="truncate">{editCarrierInvoiceFile.name}</span>
+                              <Button type="button" size="sm" variant="outline" onClick={() => setEditCarrierInvoiceFile(null)}>Quitar</Button>
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editWaybillFile" className="text-xs text-muted-foreground">Complemento carta porte (PDF/XML)</Label>
+                          <Input
+                            id="editWaybillFile"
+                            type="file"
+                            accept=".pdf,.xml"
+                            onChange={(e) => setEditWaybillFile(e.target.files?.[0] || null)}
+                            className="h-10 text-sm"
+                          />
+                          {editWaybillFile && (
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <span className="truncate">{editWaybillFile.name}</span>
+                              <Button type="button" size="sm" variant="outline" onClick={() => setEditWaybillFile(null)}>Quitar</Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 rounded-lg border p-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <FileText className="h-4 w-4" />
+                          Factura del embarque
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Upload className="h-3.5 w-3.5" />
+                          PDF/XML
+                        </div>
+                        <Input
+                          id="editShipmentInvoiceFile"
+                          type="file"
+                          accept=".pdf,.xml"
+                          onChange={(e) => setEditShipmentInvoiceFile(e.target.files?.[0] || null)}
+                          className="h-10 text-sm"
+                        />
+                        {editShipmentInvoiceFile && (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="truncate">{editShipmentInvoiceFile.name}</span>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setEditShipmentInvoiceFile(null)}>Quitar</Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(hasEditInvoiceData || hasEditCarrierInvoiceData) && (
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                      <div className="flex items-start gap-2">
+                        <DollarSign className="h-5 w-5 text-green-600 mt-0.5" />
+                        <div className="space-y-2 flex-1">
+                          <p className="text-sm font-medium text-green-900">Resumen de cuentas automáticas</p>
+                          {hasEditInvoiceData && (
+                            <p className="text-sm text-green-700">Se generará cuenta por cobrar al cliente por {formatCurrency(Number(editInvoiceAmount || 0))}</p>
+                          )}
+                          {hasEditCarrierInvoiceData && (
+                            <p className="text-sm text-green-700">Se generará cuenta por pagar al transportista por {formatCurrency(Number(editCarrierInvoiceAmount || 0))}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="editShipmentDate" className="text-sm font-semibold">
@@ -1159,10 +1595,67 @@ export function ShipmentsTab() {
                         </div>
                         {viewShipment.carrierContact && (
                           <div>
-                            <p className="text-sm text-muted-foreground mb-1">Contacto</p>
+                            <p className="text-sm text-muted-foreground mb-1">Cliente</p>
                             <p className="font-semibold text-base">{viewShipment.carrierContact}</p>
                           </div>
                         )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-2 shadow-sm">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Documentos y Evidencias</CardTitle>
+                      <CardDescription>Archivos adjuntos, fechas de carga y referencias contables</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {[
+                        {
+                          label: "Factura del embarque",
+                          url: viewShipment.shipmentInvoiceUrl || viewShipment.documents?.shipmentInvoice?.url,
+                          uploadedAt: viewShipment.shipmentInvoiceUploadedAt || viewShipment.documents?.shipmentInvoice?.uploadedAt,
+                        },
+                        {
+                          label: "Factura del transportista",
+                          url: viewShipment.carrierInvoiceUrl || viewShipment.documents?.carrierInvoice?.url,
+                          uploadedAt: viewShipment.carrierInvoiceUploadedAt || viewShipment.documents?.carrierInvoice?.uploadedAt,
+                        },
+                        {
+                          label: "Complemento carta porte",
+                          url: viewShipment.waybillComplementUrl || viewShipment.documents?.waybillComplement?.url,
+                          uploadedAt: viewShipment.waybillComplementUploadedAt || viewShipment.documents?.waybillComplement?.uploadedAt,
+                        },
+                      ].map((doc) => (
+                        <div key={doc.label} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                          <div>
+                            <p className="font-medium">{doc.label}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Cargado: {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString("es-MX") : "Sin fecha"}
+                            </p>
+                          </div>
+                          {doc.url ? (
+                            <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
+                              Descargar / Ver
+                            </a>
+                          ) : (
+                            <Badge variant="outline">Sin adjunto</Badge>
+                          )}
+                        </div>
+                      ))}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        <div className="p-3 border rounded-lg">
+                          <p className="text-sm text-muted-foreground">Cuenta por cobrar</p>
+                          <p className="font-semibold">
+                            {(viewShipment.accountsReceivable?.id || viewShipment.accountsReceivableId || viewShipment.receivableAccountId || "-") as any}
+                          </p>
+                        </div>
+                        <div className="p-3 border rounded-lg">
+                          <p className="text-sm text-muted-foreground">Cuenta por pagar</p>
+                          <p className="font-semibold">
+                            {(viewShipment.accountsPayable?.id || viewShipment.accountsPayableId || viewShipment.payableAccountId || "-") as any}
+                          </p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

@@ -13,6 +13,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { apiPost, apiPatch } from "@/lib/db/localApi"
 import { toast } from "@/lib/utils/toast"
+import { log, error } from '@/lib/utils/logger'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -79,9 +80,9 @@ export default function NewProductPage() {
 
     try {
       const loadingToast = toast.loading("Creando producto...")
-      console.log("Payload enviado al backend:", payload)
+      log("Payload enviado al backend:", payload)
       const created = await apiPost(`/products`, payload)
-      console.log("Producto creado:", created)
+      log("Producto creado:", created)
 
       // Persist per-warehouse inventory defaults (min/max/reorder) and create 'ajuste' movements for initial stock
       for (const inv of warehouseInventories) {
@@ -94,7 +95,7 @@ export default function NewProductPage() {
               maxStock: inv.maxStock !== "" ? Number(inv.maxStock) : undefined,
               reorderPoint: inv.reorderPoint !== "" ? Number(inv.reorderPoint) : undefined,
             })
-          } catch (cfgErr: any) {
+                } catch (cfgErr: any) {
             // If backend doesn't have the exact route yet (404), try the compat route
             const isNotFound = cfgErr?.message?.includes("404") || cfgErr?.message?.includes("Not Found")
             if (isNotFound) {
@@ -106,10 +107,10 @@ export default function NewProductPage() {
                   reorderPoint: inv.reorderPoint !== "" ? Number(inv.reorderPoint) : undefined,
                 })
               } catch (compatErr) {
-                console.error("Error guardando settings de inventario (compat):", compatErr)
+                error("Error guardando settings de inventario (compat):", compatErr)
               }
             } else {
-              console.error("Error guardando settings de inventario:", cfgErr)
+              error("Error guardando settings de inventario:", cfgErr)
             }
           }
         }
@@ -129,7 +130,7 @@ export default function NewProductPage() {
             })
           } catch (movErr) {
             // non-fatal: log and continue
-            console.error("Error creando movimiento de ajuste:", movErr)
+            error("Error creando movimiento de ajuste:", movErr)
           }
         }
       }
@@ -140,8 +141,8 @@ export default function NewProductPage() {
       router.push("/products")
     } catch (err: any) {
       toast.dismiss(loadingToast)
-      console.error("Error completo:", err)
-      console.error("Error creando producto:", {
+      error("Error completo:", err)
+      error("Error creando producto:", {
         message: err?.message,
         statusCode: err?.statusCode,
         errors: err?.errors,
@@ -150,7 +151,7 @@ export default function NewProductPage() {
       
       // Log detallado de los errores
       if (err?.errors) {
-        console.error("Detalles de errores de validación:", JSON.stringify(err.errors, null, 2))
+        error("Detalles de errores de validación:", JSON.stringify(err.errors, null, 2))
       }
       
       let errorMessage = "Error creando producto"

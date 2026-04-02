@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,13 +9,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
-import { createPurchaseOrder, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
+import { cancelPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
 import { formatCurrency } from "@/lib/utils/format"
+import type { PurchaseOrder } from "@/lib/types"
 import { Plus, Trash2, Save } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import InvoiceImportForm from "@/components/invoice-import/InvoiceImportForm"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface PurchaseOrderItem {
   productId: string
@@ -25,9 +37,17 @@ interface PurchaseOrderItem {
 
 interface NewPurchaseOrderTabProps {
   onSuccess: () => void
+  mode?: "create" | "edit"
+  initialOrder?: PurchaseOrder | null
+  onCancelEdit?: () => void
 }
 
-export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
+export function NewPurchaseOrderTab({
+  onSuccess,
+  mode = "create",
+  initialOrder = null,
+  onCancelEdit,
+}: NewPurchaseOrderTabProps) {
   const [supplierId, setSupplierId] = useState("")
   const [warehouseId, setWarehouseId] = useState("")
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("")
@@ -80,9 +100,34 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
   const { products } = useProducts()
   const { warehouses } = useWarehouses()
 
+  useEffect(() => {
+    if (mode !== "edit" || !initialOrder) {
+      setSupplierId("")
+      setWarehouseId("")
+      setExpectedDeliveryDate("")
+      setCreditDays(0)
+      setItems([])
+      setNotes("")
+      return
+    }
+
+    setSupplierId(initialOrder.supplierId || "")
+    setWarehouseId(initialOrder.warehouseId || "")
+    setExpectedDeliveryDate(initialOrder.expectedDeliveryDate ? String(initialOrder.expectedDeliveryDate).split("T")[0] : "")
+    setCreditDays(initialOrder.creditDays || 0)
+    setNotes(initialOrder.notes || "")
+    setItems(
+      (initialOrder.items || []).map((it) => ({
+        productId: it.productId,
+        quantity: Number(it.quantity || 0),
+        unitPrice: Number((it as any).unitPrice ?? (it as any).price ?? 0),
+      })),
+    )
+  }, [mode, initialOrder])
+
   const handleSubmit = async () => {
     setSubmitted(true)
-    if (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0) {
+    if (mode === "create" && (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0)) {
       toast.error("Por favor completa todos los campos requeridos")
       // Scroll hasta el card de información general dentro del contenedor del layout
       infoCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -104,13 +149,31 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
         })),
       }
 
-      await createPurchaseOrder(payload)
-      toast.success("Orden de compra creada exitosamente")
+        await createPurchaseOrder(payload)
+        toast.success("Orden de compra creada exitosamente")
+      }
+
       mutate()
       onSuccess()
     } catch (e: any) {
-      console.error(e)
-      toast.error(e?.message || "Error creando la orden de compra")
+      const errorMessage = Array.isArray(e?.message)
+        ? e.message.join(" • ")
+        : e?.message || e?.technicalDetails || (mode === "edit" ? "Error actualizando la orden de compra" : "Error creando la orden de compra")
+      toast.error(errorMessage)
+    }
+  }
+
+  const handleCancelOrder = async () => {
+    if (mode !== "edit" || !initialOrder?.id) return
+
+    try {
+      await cancelPurchaseOrder(initialOrder.id)
+      toast.success("Orden de compra cancelada")
+      mutate()
+      onSuccess()
+    } catch (e: any) {
+      const errorMessage = e?.message || e?.technicalDetails || "Error al cancelar la orden"
+      toast.error(errorMessage)
     }
   }
 
@@ -136,18 +199,25 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Proveedor *</Label>
-              <Select value={supplierId} onValueChange={handleSupplierChange}>
-                <SelectTrigger className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}>
-                  <SelectValue placeholder="Selecciona un proveedor" />
-                </SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-              </Select>
+              {mode === "edit" ? (
+                <div>
+                  <p className="font-medium">{supplier?.name || "-"}</p>
+                  <p className="text-xs text-muted-foreground">Para cambiar proveedor, cancela esta orden y crea una nueva</p>
+                </div>
+              ) : (
+                <Select value={supplierId} onValueChange={handleSupplierChange}>
+                  <SelectTrigger className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}>
+                    <SelectValue placeholder="Selecciona un proveedor" />
+                  </SelectTrigger>
+                    <SelectContent>
+                      {suppliers.map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>
+                          {supplier.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                </Select>
+              )}
               {submitted && !supplierId
                 ? <p className="text-xs text-red-500">Selecciona un proveedor para continuar</p>
                 : supplier && <p className="text-xs text-muted-foreground">Días de crédito: {supplier.paymentTerms} días • RFC: {supplier.rfc}</p>
@@ -331,14 +401,38 @@ export function NewPurchaseOrderTab({ onSuccess }: NewPurchaseOrderTabProps) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={onSuccess}>
-          Cancelar
-        </Button>
-        <Button onClick={handleSubmit}>
-          <Save className="mr-2 h-4 w-4" />
-          Crear Orden de Compra
-        </Button>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          {mode === "edit" && initialOrder?.status !== "cancelada" && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">Cancelar orden</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    ¿De seguro que quieres cancelar esta orden? Esta acción no se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Volver</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleCancelOrder}>Sí, cancelar orden</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => (mode === "edit" ? onCancelEdit?.() : onSuccess())}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit}>
+            <Save className="mr-2 h-4 w-4" />
+            {mode === "edit" ? "Guardar Cambios" : "Crear Orden de Compra"}
+          </Button>
+        </div>
       </div>
     </div>
   )

@@ -5,6 +5,25 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { UserPermissions, DEFAULT_PERMISSIONS, PermissionModule } from '@/lib/types/permissions';
 
+function mergePermissionsByRole(role: string, userPermissions: Partial<UserPermissions> | undefined): UserPermissions {
+  const roleDefaults = DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.viewer;
+
+  if (!userPermissions) {
+    return roleDefaults;
+  }
+
+  const merged = { ...roleDefaults } as UserPermissions;
+
+  for (const moduleKey of Object.keys(roleDefaults) as PermissionModule[]) {
+    merged[moduleKey] = {
+      ...roleDefaults[moduleKey],
+      ...(userPermissions[moduleKey] || {}),
+    };
+  }
+
+  return merged;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -42,7 +61,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Obtener sesión inicial
-    console.log('[AuthContext] Obteniendo sesión inicial...');
     supabase.auth.getSession()
       .then(({ data: { session }, error }) => {
         if (error) {
@@ -51,14 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        console.log('[AuthContext] Sesión inicial:', session ? 'Sí' : 'No', session?.user?.email || '');
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
           const userRole = session.user.user_metadata?.role || 'viewer';
-          const userPermissions = session.user.user_metadata?.permissions || DEFAULT_PERMISSIONS[userRole];
-          console.log('[AuthContext] Role:', userRole);
+          const userPermissions = mergePermissionsByRole(userRole, session.user.user_metadata?.permissions);
+          
           setRole(userRole);
           setPermissions(userPermissions);
         }
@@ -74,13 +92,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[AuthContext] Auth state changed:', event, session?.user?.email || 'No user');
+      
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
         const userRole = session.user.user_metadata?.role || 'viewer';
-        const userPermissions = session.user.user_metadata?.permissions || DEFAULT_PERMISSIONS[userRole];
+        const userPermissions = mergePermissionsByRole(userRole, session.user.user_metadata?.permissions);
         setRole(userRole);
         setPermissions(userPermissions);
       } else {

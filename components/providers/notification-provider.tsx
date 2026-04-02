@@ -28,7 +28,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/g, '');
+  const API_ROOT = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
 
   // Get auth token
   const getToken = () => {
@@ -52,7 +53,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (query?.page) params.append('page', String(query.page));
       if (query?.limit) params.append('limit', String(query.limit));
 
-      const response = await fetch(`${API_URL}/notifications?${params}`, {
+      const response = await fetch(`${API_ROOT}/notifications?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -67,13 +68,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  }, [API_URL]);
+  }, [API_ROOT]);
 
   // Fetch unread count
   const refreshUnreadCount = useCallback(async () => {
     try {
       const token = getToken();
-      const response = await fetch(`${API_URL}/notifications/unread-count`, {
+      const response = await fetch(`${API_ROOT}/notifications/unread-count`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -86,13 +87,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
-  }, [API_URL]);
+  }, [API_ROOT]);
 
   // Mark notification as read
   const markAsRead = useCallback(async (id: string) => {
     try {
       const token = getToken();
-      const response = await fetch(`${API_URL}/notifications/${id}/read`, {
+      const response = await fetch(`${API_ROOT}/notifications/${id}/read`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -108,13 +109,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
-  }, [API_URL]);
+  }, [API_ROOT]);
 
   // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
     try {
       const token = getToken();
-      const response = await fetch(`${API_URL}/notifications/mark-all-read`, {
+      const response = await fetch(`${API_ROOT}/notifications/mark-all-read`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -134,13 +135,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
-  }, [API_URL, toast]);
+  }, [API_ROOT, toast]);
 
   // Delete notification
   const deleteNotification = useCallback(async (id: string) => {
     try {
       const token = getToken();
-      const response = await fetch(`${API_URL}/notifications/${id}`, {
+      const response = await fetch(`${API_ROOT}/notifications/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -154,13 +155,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
-  }, [API_URL, refreshUnreadCount]);
+  }, [API_ROOT, refreshUnreadCount]);
 
   // Delete all read notifications
   const deleteAllRead = useCallback(async () => {
     try {
       const token = getToken();
-      const response = await fetch(`${API_URL}/notifications/read/all`, {
+      const response = await fetch(`${API_ROOT}/notifications/read/all`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -177,14 +178,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.error('Error deleting read notifications:', error);
     }
-  }, [API_URL, toast]);
+  }, [API_ROOT, toast]);
 
   // Setup WebSocket connection
   useEffect(() => {
     const token = getToken();
     if (!token) return;
 
-    const newSocket = io(`${API_URL}/notifications`, {
+    const newSocket = io(`${API_BASE_URL}/notifications`, {
       auth: { token },
       transports: ['websocket', 'polling'],
     });
@@ -223,7 +224,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => {
       newSocket.disconnect();
     };
-  }, [API_URL, toast]);
+  }, [API_BASE_URL, toast]);
 
   // Initial fetch
   useEffect(() => {

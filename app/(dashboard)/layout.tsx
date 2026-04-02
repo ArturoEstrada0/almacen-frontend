@@ -16,12 +16,10 @@ export default function DashboardLayout({
   const router = useRouter()
   const pathname = usePathname()
 
-  console.log('[Dashboard Layout] loading:', loading, 'user:', user?.email || 'No user', 'pathname:', pathname);
+  
 
   useEffect(() => {
-    console.log('[Dashboard useEffect] loading:', loading, 'user:', user?.email || 'No user');
     if (!loading && !user) {
-      console.log('[Dashboard] No user detected, redirecting to login with returnUrl:', pathname);
       router.push(`/auth/login?returnUrl=${pathname}`)
     }
   }, [user, loading, router, pathname]);

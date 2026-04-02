@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
+  Building2,
   Package,
   Warehouse,
   Users,
@@ -31,11 +32,13 @@ const navigation: NavigationItem[] = [
   { name: "Productos", href: "/products", icon: Package, module: "products" },
   { name: "Stock y Almacenes", href: "/inventory", icon: Warehouse, module: "inventory" },
   { name: "Productores", href: "/producers", icon: Sprout, module: "producers" },
+  
   { name: "Proveedores", href: "/suppliers", icon: Users, module: "suppliers" },
   { name: "Órdenes de Compra", href: "/purchase-orders", icon: ShoppingCart, module: "purchaseOrders" },
   { name: "Reportes", href: "/reports", icon: BarChart3, module: "reports" },
   { name: "Notificaciones", href: "/notifications", icon: Bell },
   { name: "Importar/Exportar", href: "/import-export", icon: FileText },
+  { name: "Clientes", href: "/customers", icon: Users },
   { name: "Usuarios", href: "/users", icon: UserCog, module: "users" },
   // { name: "Configuración", href: "/settings", icon: Settings },
 ]

@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { Search, Building2, Edit, Trash2, Mail, Phone, Send, Eye } from "lucide-react"
-import { updateSupplier } from "@/lib/hooks/use-suppliers"
+import { updateSupplier, deleteSupplier } from "@/lib/hooks/use-suppliers"
+import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { useToast } from "@/hooks/use-toast"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
@@ -75,8 +76,26 @@ export function SuppliersDirectoryTab() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deletionBlockedReason, setDeletionBlockedReason] = useState<string | null>(null)
 
-  const handleDeleteClick = (supplierId: string) => {
+  const handleDeleteClick = async (supplierId: string) => {
+    // Check if supplier has related purchase orders before asking for confirmation
+    try {
+      const url = API_ENDPOINTS.purchaseOrders.list() + `?supplierId=${supplierId}`
+      const orders: any[] = await ApiClient.get<any[]>(url)
+
+      if (Array.isArray(orders) && orders.length > 0) {
+        setDeletionBlockedReason(`No se puede eliminar el proveedor porque tiene ${orders.length} orden${orders.length > 1 ? "es" : ""} de compra asignada${orders.length > 1 ? "s" : ""}.`)
+        setDeleteTarget(null)
+        setDeleteDialogOpen(true)
+        return
+      }
+    } catch (error: any) {
+      console.error("Error verificando órdenes de compra del proveedor:", error)
+      // If the check fails, fall back to showing the confirmation dialog so user can attempt deletion.
+    }
+
+    setDeletionBlockedReason(null)
     setDeleteTarget(supplierId)
     setDeleteDialogOpen(true)
   }
@@ -145,15 +164,17 @@ export function SuppliersDirectoryTab() {
     if (!deleteTarget) return
     setIsDeleting(true)
     try {
-      // Soft-delete: marcar como inactivo para evitar violaciones de FK
-      await updateSupplier(deleteTarget, { isActive: false })
+      // Intentar eliminar en backend
+      await deleteSupplier(deleteTarget)
       mutate()
       setDeleteDialogOpen(false)
       setDeleteTarget(null)
-      toast({ title: "Proveedor eliminado", description: "El proveedor fue desactivado correctamente." })
+      toast({ title: "Proveedor eliminado", description: "El proveedor fue eliminado correctamente." })
     } catch (error) {
       console.error("Error eliminando proveedor:", error)
-      toast({ title: "Error", description: "No se pudo eliminar el proveedor. Revisa la consola para más detalles.", action: { label: 'Ver consola' } })
+      // If backend responds with a clear message, show it (e.g., FK violation because of assigned purchases)
+      const errMsg = (error as any)?.message || "No se pudo eliminar el proveedor. Revisa la consola para más detalles."
+      toast({ title: "No se puede eliminar", description: errMsg })
     } finally {
       setIsDeleting(false)
     }
@@ -176,19 +197,25 @@ export function SuppliersDirectoryTab() {
         </CardContent>
       </Card>
       {/* Delete confirmation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeletionBlockedReason(null) }; setDeleteDialogOpen(open) }}>
         <DialogContent className="w-full max-w-lg">
           <DialogHeader>
-            <DialogTitle>Confirmar eliminación</DialogTitle>
-            <DialogDescription>¿Seguro que deseas eliminar este proveedor? Esta acción no se puede deshacer.</DialogDescription>
+            <DialogTitle>{deletionBlockedReason ? "No se puede eliminar" : "Confirmar eliminación"}</DialogTitle>
+            <DialogDescription>
+              {deletionBlockedReason
+                ? deletionBlockedReason
+                : "¿Seguro que deseas eliminar este proveedor? Esta acción no se puede deshacer."}
+            </DialogDescription>
           </DialogHeader>
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting}>
-              Cancelar
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setDeletionBlockedReason(null) }} disabled={isDeleting}>
+              Cerrar
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
-              {isDeleting ? "Eliminando..." : "Eliminar"}
-            </Button>
+            {!deletionBlockedReason && (
+              <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+                {isDeleting ? "Eliminando..." : "Eliminar"}
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
