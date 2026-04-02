@@ -191,6 +191,8 @@ export class ApiClient {
       error.timestamp = errorData?.timestamp
       error.path = errorData?.path
       error.technicalDetails = errorData?.technicalDetails
+      // Preserve raw error body for better diagnostics (could be string or object)
+      error.raw = errorData
       
       // Si es un error 401, redirigir al login
       if (response.status === 401 && typeof window !== 'undefined') {
@@ -229,12 +231,34 @@ export class ApiClient {
     return this.handleResponse<T>(response)
   }
 
+  static async postFormData<T>(url: string, data: FormData): Promise<T> {
+    const headers = await this.getAuthHeaders()
+    delete headers["Content-Type"]
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: data,
+    })
+    return this.handleResponse<T>(response)
+  }
+
   static async patch<T>(url: string, data: any): Promise<T> {
     const headers = await this.getAuthHeaders()
     const response = await fetch(url, {
       method: "PATCH",
       headers,
       body: JSON.stringify(data),
+    })
+    return this.handleResponse<T>(response)
+  }
+
+  static async patchFormData<T>(url: string, data: FormData): Promise<T> {
+    const headers = await this.getAuthHeaders()
+    delete headers["Content-Type"]
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers,
+      body: data,
     })
     return this.handleResponse<T>(response)
   }

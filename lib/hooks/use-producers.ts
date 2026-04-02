@@ -119,8 +119,16 @@ export async function createShipment(data: any) {
   return ApiClient.post<Shipment>(API_ENDPOINTS.producers.shipments.create(), data)
 }
 
+export async function createShipmentWithDocuments(formData: FormData) {
+  return ApiClient.postFormData<Shipment>(API_ENDPOINTS.producers.shipments.create(), formData)
+}
+
 export async function updateShipment(id: string, data: any) {
   return ApiClient.patch<Shipment>(API_ENDPOINTS.producers.shipments.update(id), data)
+}
+
+export async function updateShipmentWithDocuments(id: string, formData: FormData) {
+  return ApiClient.patchFormData<Shipment>(API_ENDPOINTS.producers.shipments.update(id), formData)
 }
 
 export async function updateShipmentStatus(id: string, status: string, salePrice?: number) {

@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { log, error } from '@/lib/utils/logger'
 import { Package } from 'lucide-react';
 
 const loginSchema = z.object({
@@ -42,7 +43,7 @@ function LoginForm() {
   // Redirigir si el usuario ya está autenticado
   useEffect(() => {
     if (!loading && user && !redirecting) {
-      console.log('[Login] Usuario detectado, redirigiendo a:', returnUrl);
+      log('[Login] Usuario detectado, redirigiendo a:', returnUrl);
       setRedirecting(true);
       router.push(returnUrl);
     }
@@ -60,7 +61,7 @@ function LoginForm() {
     setIsLoading(true);
     try {
       const result = await signIn(data);
-      console.log('[Login] Login exitoso:', result);
+      log('[Login] Login exitoso:', result);
       
       toast({
         title: 'Inicio de sesión exitoso',
@@ -69,8 +70,8 @@ function LoginForm() {
       
       // El useEffect detectará el cambio de user y redirigirá automáticamente
       // No necesitamos setIsLoading(false) porque nos vamos a redirigir
-    } catch (error: any) {
-      console.error('[Login] Error en login:', error);
+    } catch (err: any) {
+      error('[Login] Error en login:', err);
       toast({
         title: 'Error',
         description: error.message || 'Credenciales inválidas',

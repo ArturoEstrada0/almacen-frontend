@@ -61,7 +61,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Obtener sesión inicial
-    console.log('[AuthContext] Obteniendo sesión inicial...');
     supabase.auth.getSession()
       .then(({ data: { session }, error }) => {
         if (error) {
@@ -70,14 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        console.log('[AuthContext] Sesión inicial:', session ? 'Sí' : 'No', session?.user?.email || '');
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
           const userRole = session.user.user_metadata?.role || 'viewer';
           const userPermissions = mergePermissionsByRole(userRole, session.user.user_metadata?.permissions);
-          console.log('[AuthContext] Role:', userRole);
+          
           setRole(userRole);
           setPermissions(userPermissions);
         }
@@ -93,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[AuthContext] Auth state changed:', event, session?.user?.email || 'No user');
+      
       setSession(session);
       setUser(session?.user ?? null);
       
