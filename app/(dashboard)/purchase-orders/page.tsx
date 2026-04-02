@@ -1,7 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Plus } from "lucide-react"
 import { PurchaseOrdersListTab } from "@/components/purchase-orders/purchase-orders-list-tab"
 import { NewPurchaseOrderTab } from "@/components/purchase-orders/new-purchase-order-tab"
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
@@ -9,14 +12,50 @@ import { ProtectedCreate } from "@/components/auth/protected-action"
 import type { PurchaseOrder } from "@/lib/types"
 
 export default function PurchaseOrdersPage() {
-  const [activeTab, setActiveTab] = useState("list")
+  const searchParams = useSearchParams()
+  const initialTab = (searchParams?.get("tab") as string) || "list"
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  useEffect(() => {
+    const t = (searchParams?.get("tab") as string) || "list"
+    setActiveTab(t)
+  }, [searchParams])
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null)
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Órdenes de Compra</h1>
-        <p className="text-muted-foreground">Gestión de compras, recepciones y cuentas por pagar</p>
+      <div className="py-4">
+        {(() => {
+          const map: Record<string, { title: string; description: string }> = {
+            list: {
+              title: "Órdenes de Compra",
+              description: "Gestiona y recibe órdenes de compra",
+            },
+            new: {
+              title: "Nueva Orden de Compra",
+              description: "Crea una nueva orden de compra a proveedor",
+            },
+            payables: {
+              title: "Cuentas por Pagar",
+              description: "Gestiona pagos pendientes a proveedores",
+            },
+          }
+          const header = map[activeTab] || map.list
+          return (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">{header.title}</h1>
+                <p className="text-muted-foreground">{header.description}</p>
+              </div>
+              <ProtectedCreate module="purchaseOrders">
+                <Button onClick={() => setActiveTab("new")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva Orden
+                </Button>
+              </ProtectedCreate>
+            </div>
+          )
+        })()}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

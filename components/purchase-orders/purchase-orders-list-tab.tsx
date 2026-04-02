@@ -137,18 +137,7 @@ export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrde
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Órdenes de Compra</h2>
-          <p className="text-sm text-muted-foreground">Gestiona y recibe órdenes de compra</p>
-        </div>
-        <ProtectedCreate module="purchaseOrders">
-          <Button onClick={onCreateNew}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Orden
-          </Button>
-        </ProtectedCreate>
-      </div>
+      {/* Botón movido dentro del header y hecho sticky */}
 
       <Card>
         <CardContent className="pt-6">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import InvoiceImportForm from "@/components/invoice-import/InvoiceImportForm"
 
 interface PurchaseOrderItem {
   productId: string
@@ -53,9 +54,22 @@ export function NewPurchaseOrderTab({
   const [creditDays, setCreditDays] = useState(0)
   const [items, setItems] = useState<PurchaseOrderItem[]>([])
   const [notes, setNotes] = useState("")
+  const [submitted, setSubmitted] = useState(false)
+  const infoCardRef = useRef<HTMLDivElement>(null)
 
   const addItem = () => {
     setItems([...items, { productId: "", quantity: 1, unitPrice: 0 }])
+  }
+
+  const [showImporter, setShowImporter] = useState(false)
+
+  function handleImportComplete(result: any) {
+    // Map imported items into current items array
+    const importedItems = (result.items || []).map((it: any) => ({ productId: it.productId || "", quantity: Number(it.quantity) || 1, unitPrice: Number(it.unitPrice) || 0 }))
+    setSupplierId(result.supplierId || supplierId)
+    setWarehouseId(result.warehouseId || warehouseId)
+    setItems((cur) => [...cur, ...importedItems])
+    setShowImporter(false)
   }
 
   const removeItem = (index: number) => {
@@ -113,53 +127,28 @@ export function NewPurchaseOrderTab({
 
   const handleSubmit = async () => {
     if (mode === "create" && (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0)) {
+    setSubmitted(true)
+    if (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0) {
       toast.error("Por favor completa todos los campos requeridos")
-      return
-    }
-
-    if (mode === "edit" && (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0 || !initialOrder?.id)) {
-      toast.error("Faltan campos obligatorios para actualizar la orden")
-      return
-    }
-
-    const hasInvalidItems = items.some(
-      (it) => !it.productId || Number(it.quantity) <= 0 || Number.isNaN(Number(it.quantity)) || Number(it.unitPrice) < 0 || Number.isNaN(Number(it.unitPrice)),
-    )
-    if (hasInvalidItems) {
-      toast.error("Revisa los productos: cada renglón debe tener producto, cantidad mayor a 0 y precio válido")
+      // Scroll hasta el card de información general dentro del contenedor del layout
+      infoCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
       return
     }
 
     try {
-      if (mode === "edit" && initialOrder?.id) {
-        const payload = {
-          supplierId,
-          warehouseId,
-          expectedDate: expectedDeliveryDate,
-          creditDays,
-          notes,
-          items: items.map((it) => ({
-            productId: it.productId,
-            quantity: Number(it.quantity),
-            unitPrice: Number(it.unitPrice),
-          })),
-        }
-        await updatePurchaseOrder(initialOrder.id, payload)
-        toast.success("Orden de compra actualizada exitosamente")
-      } else {
-        const payload = {
-          supplierId,
-          warehouseId,
-          expectedDate: expectedDeliveryDate,
-          creditDays,
-          notes,
-          items: items.map((it) => ({
-            productId: it.productId,
-            quantity: Number(it.quantity),
-            unitPrice: Number(it.unitPrice),
-            notes: undefined,
-          })),
-        }
+      const payload = {
+        supplierId,
+        warehouseId,
+        expectedDate: expectedDeliveryDate,
+        creditDays,
+        notes,
+        items: items.map((it) => ({
+          productId: it.productId,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          notes: undefined,
+        })),
+      }
 
         await createPurchaseOrder(payload)
         toast.success("Orden de compra creada exitosamente")
@@ -210,6 +199,7 @@ export function NewPurchaseOrderTab({
       </div>
 
       <Card>
+      <Card ref={infoCardRef}>
         <CardHeader>
           <CardTitle>Información General</CardTitle>
           <CardDescription>Datos básicos de la orden de compra</CardDescription>
@@ -225,7 +215,7 @@ export function NewPurchaseOrderTab({
                 </div>
               ) : (
                 <Select value={supplierId} onValueChange={handleSupplierChange}>
-                  <SelectTrigger>
+                  <SelectTrigger className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}>
                     <SelectValue placeholder="Selecciona un proveedor" />
                   </SelectTrigger>
                     <SelectContent>
@@ -237,17 +227,16 @@ export function NewPurchaseOrderTab({
                     </SelectContent>
                 </Select>
               )}
-              {supplier && (
-                <p className="text-xs text-muted-foreground">
-                  Días de crédito: {supplier.paymentTerms} días • RFC: {supplier.rfc}
-                </p>
-              )}
+              {submitted && !supplierId
+                ? <p className="text-xs text-red-500">Selecciona un proveedor para continuar</p>
+                : supplier && <p className="text-xs text-muted-foreground">Días de crédito: {supplier.paymentTerms} días • RFC: {supplier.rfc}</p>
+              }
             </div>
 
             <div className="space-y-2">
               <Label>Almacén de Destino *</Label>
               <Select value={warehouseId} onValueChange={setWarehouseId}>
-                <SelectTrigger>
+                <SelectTrigger className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}>
                   <SelectValue placeholder="Selecciona un almacén" />
                 </SelectTrigger>
                 <SelectContent>
@@ -258,6 +247,9 @@ export function NewPurchaseOrderTab({
                   ))}
                 </SelectContent>
               </Select>
+              {submitted && !warehouseId && (
+                <p className="text-xs text-red-500">Selecciona un almacén de destino</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -266,7 +258,11 @@ export function NewPurchaseOrderTab({
                 type="date"
                 value={expectedDeliveryDate}
                 onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                className={submitted && !expectedDeliveryDate ? 'border-red-500 ring-1 ring-red-500' : ''}
               />
+              {submitted && !expectedDeliveryDate && (
+                <p className="text-xs text-red-500">Indica la fecha de entrega esperada</p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -301,13 +297,23 @@ export function NewPurchaseOrderTab({
               <CardTitle>Productos</CardTitle>
               <CardDescription>Agrega los productos a la orden de compra</CardDescription>
             </div>
-            <Button onClick={addItem} size="sm">
+            <div className="flex gap-2">
+              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline">
+                Importar XML
+              </Button>
+              <Button onClick={addItem} size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Agregar Producto
             </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {showImporter && (
+            <div className="mb-4">
+              <InvoiceImportForm initialSupplierId={supplierId} initialWarehouseId={warehouseId} onImportComplete={handleImportComplete} />
+            </div>
+          )}
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-sm text-muted-foreground">No hay productos agregados</p>

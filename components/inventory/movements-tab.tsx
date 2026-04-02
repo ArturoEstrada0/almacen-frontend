@@ -54,6 +54,26 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
     return matchesSearch && matchesType && matchesWarehouse
   })
 
+  // Pagination state (client-side)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(10)
+
+  // Reset to first page when filters or movement list change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, typeFilter, warehouseId, movements])
+
+  const totalItems = filteredMovements.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedMovements = filteredMovements.slice(startIndex, endIndex)
+
+  // Keep current page within range when pageSize/totalPages change
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [pageSize, totalPages])
+
   const getMovementIcon = (type: string) => {
     switch (type) {
       case "entrada":
@@ -262,7 +282,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMovements.map((movement, index) => (
+                  {paginatedMovements.map((movement, index) => (
                     <motion.tr
                       key={movement.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -296,6 +316,37 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   ))}
                 </TableBody>
               </Table>
+
+              {/* Pagination controls */}
+              <div className="flex items-center justify-between px-4 py-2">
+                <div className="text-sm text-muted-foreground">
+                  {totalItems === 0
+                    ? "Mostrando 0 de 0"
+                    : `Mostrando ${startIndex + 1}–${Math.min(endIndex, totalItems)} de ${totalItems}`}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                    Anterior
+                  </Button>
+                  <div className="text-sm">Página {currentPage} / {totalPages}</div>
+                  <Button variant="outline" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                    Siguiente
+                  </Button>
+
+                  <Select value={String(pageSize)} onValueChange={(v) => setPageSize(parseInt(v))}>
+                    <SelectTrigger className="w-[80px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
