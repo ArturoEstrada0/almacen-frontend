@@ -91,7 +91,7 @@ export default function DashboardPage() {
             <Link href="/inventory">Ver Inventario</Link>
           </Button>
           <Button asChild>
-            <Link href="/purchase-orders/new">Nueva Orden</Link>
+            <Link href="/purchase-orders?tab=new">Nueva Orden</Link>
           </Button>
         </div>
       </div>

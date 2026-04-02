@@ -1,6 +1,7 @@
 "use client"
 
 import { Search, LogOut, User } from "lucide-react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -15,6 +16,8 @@ import { useAuth } from "@/lib/context/auth-context"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { NotificationBell } from "@/components/notifications/notification-bell"
+import RouteSearch from "./route-search"
+import { usePathname } from "next/navigation"
 
 export function Header() {
   const { user, signOut, role } = useAuth()
@@ -45,16 +48,28 @@ export function Header() {
     viewer: "Visualizador",
   }
 
+  const pathname = usePathname()
+  const [routeSearchOpen, setRouteSearchOpen] = useState(false)
+
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
       <div className="flex flex-1 items-center gap-4">
         <div className="relative w-96">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input type="search" placeholder="Buscar productos, SKU, proveedores..." className="pl-10" />
+          <Input
+            type="search"
+            placeholder="Buscar rutas..."
+            className="pl-10"
+            readOnly
+            onFocus={() => setRouteSearchOpen(true)}
+            onClick={() => setRouteSearchOpen(true)}
+          />
         </div>
       </div>
       <div className="flex items-center gap-2">
         <NotificationBell />
+
+        <RouteSearch open={routeSearchOpen} onOpenChange={setRouteSearchOpen} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
