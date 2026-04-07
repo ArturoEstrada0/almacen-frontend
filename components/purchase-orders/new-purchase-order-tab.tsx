@@ -144,22 +144,37 @@ export function NewPurchaseOrderTab({
         notes,
         items: items.map((it) => ({
           productId: it.productId,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
+            quantity: Number(it.quantity),
+            unitPrice: Number(it.unitPrice),
           notes: undefined,
         })),
       }
 
-        await createPurchaseOrder(payload)
-        toast.success("Orden de compra creada exitosamente")
+        if (mode === "edit" && initialOrder?.id) {
+          await updatePurchaseOrder(initialOrder.id, payload)
+          toast.success("Orden de compra actualizada exitosamente")
+        } else {
+          await createPurchaseOrder(payload)
+          toast.success("Orden de compra creada exitosamente")
+        }
+
+        mutate()
+        onSuccess()
+    } catch (e: any) {
+      // Log full error for debugging (server may return structured info)
+      console.error("Purchase order save error:", e)
+
+      // Prefer structured backend message when available
+      const backendMessage = e?.raw?.message || e?.message || e?.technicalDetails
+      const errorMessage = Array.isArray(backendMessage)
+        ? backendMessage.join(" • ")
+        : backendMessage || (mode === "edit" ? "Error actualizando la orden de compra" : "Error creando la orden de compra")
+
+      // If there's a raw payload, include it in console for inspection
+      if (e?.raw && typeof e.raw !== "string") {
+        console.info("Backend error payload:", e.raw)
       }
 
-      mutate()
-      onSuccess()
-    } catch (e: any) {
-      const errorMessage = Array.isArray(e?.message)
-        ? e.message.join(" • ")
-        : e?.message || e?.technicalDetails || (mode === "edit" ? "Error actualizando la orden de compra" : "Error creando la orden de compra")
       toast.error(errorMessage)
     }
   }

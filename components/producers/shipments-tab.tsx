@@ -28,7 +28,9 @@ import {
   useFruitReceptions,
   useProducers,
   createShipment as apiCreateShipment,
+  createShipmentWithDocuments,
   updateShipment as apiUpdateShipment,
+  updateShipmentWithDocuments,
   updateShipmentStatus as apiUpdateShipmentStatus,
   deleteShipment as apiDeleteShipment,
 } from "@/lib/hooks/use-producers"
@@ -78,6 +80,12 @@ export function ShipmentsTab() {
   const [editShipmentInvoiceFile, setEditShipmentInvoiceFile] = useState<File | null>(null)
   const [editCarrierInvoiceFile, setEditCarrierInvoiceFile] = useState<File | null>(null)
   const [editWaybillFile, setEditWaybillFile] = useState<File | null>(null)
+  const [editShipmentInvoiceUrl, setEditShipmentInvoiceUrl] = useState<string | null>(null)
+  const [editCarrierInvoiceUrl, setEditCarrierInvoiceUrl] = useState<string | null>(null)
+  const [editWaybillUrl, setEditWaybillUrl] = useState<string | null>(null)
+  const [initialEditShipmentInvoiceUrl, setInitialEditShipmentInvoiceUrl] = useState<string | null>(null)
+  const [initialEditCarrierInvoiceUrl, setInitialEditCarrierInvoiceUrl] = useState<string | null>(null)
+  const [initialEditWaybillUrl, setInitialEditWaybillUrl] = useState<string | null>(null)
   const [editShipmentDate, setEditShipmentDate] = useState("")
   const [editNotes, setEditNotes] = useState("")
 
@@ -127,6 +135,17 @@ export function ShipmentsTab() {
 
     // Fallback to code/number
     return String(shipment.code || shipment.shipmentNumber || "").toLowerCase()
+  }
+
+  const getStoredFileName = (url: string | null, fallbackName: string) => {
+    if (!url) return fallbackName
+    try {
+      const noQuery = url.split("?")[0]
+      const rawName = decodeURIComponent(noQuery.substring(noQuery.lastIndexOf("/") + 1))
+      return rawName.replace(/^\d+-/, "") || fallbackName
+    } catch {
+      return fallbackName
+    }
   }
 
   const sortedShipments = [...(shipments || [])].sort((a, b) => {
@@ -195,9 +214,38 @@ export function ShipmentsTab() {
           return
         }
         if (shipmentInvoiceFile || carrierInvoiceFile || waybillFile) {
-          // Store payload and ask user to confirm creating without files
-          setPendingCreatePayload(payload)
-          setIsFilesNotSupportedDialogOpen(true)
+          // Build FormData to send files
+          const form = new FormData()
+          payload.receptionIds.forEach((id: string) => form.append('receptionIds', id))
+          if (payload.date) form.append('date', payload.date)
+          if (payload.carrier) form.append('carrier', payload.carrier)
+          if (payload.driver) form.append('driver', payload.driver)
+          if (payload.notes) form.append('notes', payload.notes)
+          if (invoiceAmount) form.append('invoiceAmount', String(invoiceAmount))
+          if (carrierInvoiceAmount) form.append('carrierInvoiceAmount', String(carrierInvoiceAmount))
+          if (shipmentInvoiceFile) form.append('shipmentInvoiceFile', shipmentInvoiceFile)
+          if (carrierInvoiceFile) form.append('carrierInvoiceFile', carrierInvoiceFile)
+          if (waybillFile) form.append('waybillFile', waybillFile)
+
+          const created: any = await createShipmentWithDocuments(form)
+          // continue normally after creation
+          await mutateShipments()
+          await globalMutate("fruit-receptions")
+          await globalMutate("accounts-receivable")
+          await globalMutate("accounts-payable")
+          // Reset form
+          setSelectedReceptions([])
+          setCarrier("")
+          setCarrierContact("")
+          setInvoiceAmount("")
+          setCarrierInvoiceAmount("")
+          setShipmentInvoiceFile(null)
+          setCarrierInvoiceFile(null)
+          setWaybillFile(null)
+          setShipmentDate(new Date().toISOString().split("T")[0])
+          setNotes("")
+          setIsCreateDialogOpen(false)
+          console.log("Created shipment", created)
           return
         }
         const created: any = await apiCreateShipment(payload)
@@ -374,6 +422,17 @@ export function ShipmentsTab() {
     setEditShipmentInvoiceFile(null)
     setEditCarrierInvoiceFile(null)
     setEditWaybillFile(null)
+    // Load existing file URLs from shipment
+    const shipmentInvoiceUrl = shipment.shipmentInvoiceUrl || shipment.invoiceUrl || null
+    const carrierInvoiceUrl = shipment.carrierInvoiceUrl || null
+    const waybillUrl = shipment.waybillComplementUrl || shipment.waybillUrl || null
+
+    setEditShipmentInvoiceUrl(shipmentInvoiceUrl)
+    setEditCarrierInvoiceUrl(carrierInvoiceUrl)
+    setEditWaybillUrl(waybillUrl)
+    setInitialEditShipmentInvoiceUrl(shipmentInvoiceUrl)
+    setInitialEditCarrierInvoiceUrl(carrierInvoiceUrl)
+    setInitialEditWaybillUrl(waybillUrl)
     setEditShipmentDate(shipment.date || shipment.shipmentDate || "")
     setEditNotes(shipment.notes || "")
     setIsEditDialogOpen(true)
@@ -406,13 +465,34 @@ export function ShipmentsTab() {
         return
       }
 
-      if (editShipmentInvoiceFile || editCarrierInvoiceFile || editWaybillFile) {
-        setPendingEditPayload(payload)
-        setPendingEditId(editingShipmentId)
-        setIsFilesNotSupportedDialogOpen(true)
-        return
+      const shouldClearShipmentInvoice = !!initialEditShipmentInvoiceUrl && !editShipmentInvoiceUrl && !editShipmentInvoiceFile
+      const shouldClearCarrierInvoice = !!initialEditCarrierInvoiceUrl && !editCarrierInvoiceUrl && !editCarrierInvoiceFile
+      const shouldClearWaybill = !!initialEditWaybillUrl && !editWaybillUrl && !editWaybillFile
+
+      if (editShipmentInvoiceFile || editCarrierInvoiceFile || editWaybillFile || shouldClearShipmentInvoice || shouldClearCarrierInvoice || shouldClearWaybill) {
+        // Build FormData and send files
+        const form = new FormData()
+        payload.receptionIds.forEach((id: string) => form.append('receptionIds', id))
+        if (payload.date) form.append('date', payload.date)
+        if (payload.carrier) form.append('carrier', payload.carrier)
+        if (payload.driver) form.append('driver', payload.driver)
+        if (payload.notes) form.append('notes', payload.notes)
+        if (editInvoiceAmount) form.append('invoiceAmount', String(editInvoiceAmount))
+        if (editCarrierInvoiceAmount) form.append('carrierInvoiceAmount', String(editCarrierInvoiceAmount))
+        if (editShipmentInvoiceFile) form.append('shipmentInvoiceFile', editShipmentInvoiceFile)
+        if (editCarrierInvoiceFile) form.append('carrierInvoiceFile', editCarrierInvoiceFile)
+        if (editWaybillFile) form.append('waybillFile', editWaybillFile)
+        if (shouldClearShipmentInvoice) form.append('invoiceUrl', '')
+        if (shouldClearCarrierInvoice) form.append('carrierInvoiceUrl', '')
+        if (shouldClearWaybill) form.append('waybillUrl', '')
+
+        await updateShipmentWithDocuments(editingShipmentId, form)
+      } else {
+        if (shouldClearShipmentInvoice) payload.invoiceUrl = null
+        if (shouldClearCarrierInvoice) payload.carrierInvoiceUrl = null
+        if (shouldClearWaybill) payload.waybillUrl = null
+        await apiUpdateShipment(editingShipmentId, payload)
       }
-      await apiUpdateShipment(editingShipmentId, payload)
       await mutateShipments()
       await globalMutate("fruit-receptions")
       await globalMutate("accounts-receivable")
@@ -1245,34 +1325,74 @@ export function ShipmentsTab() {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="editCarrierInvoiceFile" className="text-xs text-muted-foreground">Factura del transportista (PDF/XML)</Label>
-                          <Input
-                            id="editCarrierInvoiceFile"
-                            type="file"
-                            accept=".pdf,.xml"
-                            onChange={(e) => setEditCarrierInvoiceFile(e.target.files?.[0] || null)}
-                            className="h-10 text-sm"
-                          />
-                          {editCarrierInvoiceFile && (
-                            <div className="flex items-center justify-between gap-2 text-xs">
-                              <span className="truncate">{editCarrierInvoiceFile.name}</span>
-                              <Button type="button" size="sm" variant="outline" onClick={() => setEditCarrierInvoiceFile(null)}>Quitar</Button>
+                          {editCarrierInvoiceUrl && !editCarrierInvoiceFile ? (
+                            <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="truncate font-medium">{getStoredFileName(editCarrierInvoiceUrl, 'Factura transportista.pdf')}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button type="button" size="sm" variant="outline" asChild className="h-8 px-3">
+                                  <a href={editCarrierInvoiceUrl} target="_blank" rel="noreferrer">Ver</a>
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => { setEditCarrierInvoiceUrl(null); setEditCarrierInvoiceFile(null) }}>Quitar</Button>
+                              </div>
                             </div>
+                          ) : (
+                            <>
+                              <Input
+                                id="editCarrierInvoiceFile"
+                                type="file"
+                                accept=".pdf,.xml"
+                                onChange={(e) => setEditCarrierInvoiceFile(e.target.files?.[0] || null)}
+                                className="h-10 text-sm"
+                              />
+                              {editCarrierInvoiceFile && (
+                                <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="truncate font-medium">{editCarrierInvoiceFile.name}</span>
+                                  </div>
+                                  <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => setEditCarrierInvoiceFile(null)}>Quitar</Button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="editWaybillFile" className="text-xs text-muted-foreground">Complemento carta porte (PDF/XML)</Label>
-                          <Input
-                            id="editWaybillFile"
-                            type="file"
-                            accept=".pdf,.xml"
-                            onChange={(e) => setEditWaybillFile(e.target.files?.[0] || null)}
-                            className="h-10 text-sm"
-                          />
-                          {editWaybillFile && (
-                            <div className="flex items-center justify-between gap-2 text-xs">
-                              <span className="truncate">{editWaybillFile.name}</span>
-                              <Button type="button" size="sm" variant="outline" onClick={() => setEditWaybillFile(null)}>Quitar</Button>
+                          {editWaybillUrl && !editWaybillFile ? (
+                            <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="truncate font-medium">{getStoredFileName(editWaybillUrl, 'Complemento carta porte.pdf')}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button type="button" size="sm" variant="outline" asChild className="h-8 px-3">
+                                  <a href={editWaybillUrl} target="_blank" rel="noreferrer">Ver</a>
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => { setEditWaybillUrl(null); setEditWaybillFile(null) }}>Quitar</Button>
+                              </div>
                             </div>
+                          ) : (
+                            <>
+                              <Input
+                                id="editWaybillFile"
+                                type="file"
+                                accept=".pdf,.xml"
+                                onChange={(e) => setEditWaybillFile(e.target.files?.[0] || null)}
+                                className="h-10 text-sm"
+                              />
+                              {editWaybillFile && (
+                                <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="truncate font-medium">{editWaybillFile.name}</span>
+                                  </div>
+                                  <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => setEditWaybillFile(null)}>Quitar</Button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -1282,23 +1402,45 @@ export function ShipmentsTab() {
                           <FileText className="h-4 w-4" />
                           Factura del embarque
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Upload className="h-3.5 w-3.5" />
-                          PDF/XML
-                        </div>
-                        <Input
-                          id="editShipmentInvoiceFile"
-                          type="file"
-                          accept=".pdf,.xml"
-                          onChange={(e) => setEditShipmentInvoiceFile(e.target.files?.[0] || null)}
-                          className="h-10 text-sm"
-                        />
-                        {editShipmentInvoiceFile && (
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="truncate">{editShipmentInvoiceFile.name}</span>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setEditShipmentInvoiceFile(null)}>Quitar</Button>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Upload className="h-3.5 w-3.5" />
+                            PDF/XML
                           </div>
-                        )}
+                          {editShipmentInvoiceUrl && !editShipmentInvoiceFile ? (
+                            <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="truncate font-medium">{getStoredFileName(editShipmentInvoiceUrl, 'Factura embarque.pdf')}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button type="button" size="sm" variant="outline" asChild className="h-8 px-3">
+                                  <a href={editShipmentInvoiceUrl} target="_blank" rel="noreferrer">Ver</a>
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => { setEditShipmentInvoiceUrl(null); setEditShipmentInvoiceFile(null) }}>Quitar</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <Input
+                                id="editShipmentInvoiceFile"
+                                type="file"
+                                accept=".pdf,.xml"
+                                onChange={(e) => setEditShipmentInvoiceFile(e.target.files?.[0] || null)}
+                                className="h-10 text-sm"
+                              />
+                              {editShipmentInvoiceFile && (
+                                <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="truncate font-medium">{editShipmentInvoiceFile.name}</span>
+                                  </div>
+                                  <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => setEditShipmentInvoiceFile(null)}>Quitar</Button>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1596,19 +1738,32 @@ export function ShipmentsTab() {
                           uploadedAt: viewShipment.waybillComplementUploadedAt || viewShipment.documents?.waybillComplement?.uploadedAt,
                         },
                       ].map((doc) => (
-                        <div key={doc.label} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div key={doc.label} className="p-3 bg-muted rounded-lg space-y-2">
                           <div>
                             <p className="font-medium">{doc.label}</p>
                             <p className="text-xs text-muted-foreground">
                               Cargado: {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString("es-MX") : "Sin fecha"}
                             </p>
                           </div>
+
                           {doc.url ? (
-                            <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
-                              Descargar / Ver
-                            </a>
+                            <div className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="truncate font-medium">{getStoredFileName(doc.url, `${doc.label}.pdf`)}</span>
+                              </div>
+                              <Button type="button" size="sm" variant="outline" asChild className="h-8 px-3 shrink-0">
+                                <a href={doc.url} target="_blank" rel="noreferrer">Ver</a>
+                              </Button>
+                            </div>
                           ) : (
-                            <Badge variant="outline">Sin adjunto</Badge>
+                            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <FileText className="h-4 w-4" />
+                                <span>Sin adjunto</span>
+                              </div>
+                              <Badge variant="outline">Sin archivo</Badge>
+                            </div>
                           )}
                         </div>
                       ))}

@@ -330,13 +330,53 @@ export interface Shipment {
   totalBoxes: number // Total boxes from all receptions
   carrier?: string
   carrierContact?: string
+  customerId?: string
+  customerName?: string
+  carrierId?: string
+  carrierName?: string
+  invoiceAmount?: number
+  carrierInvoiceAmount?: number
   shipmentDate?: Date
   arrivalDate?: Date
   salePrice?: number // Price per box when sold
   saleTotalAmount?: number // Total sale amount
   notes?: string
+  invoiceUrl?: string
+  carrierInvoiceUrl?: string
+  waybillUrl?: string
+  invoiceRegisteredAt?: Date
+  carrierInvoiceRegisteredAt?: Date
+  waybillRegisteredAt?: Date
   userId: string
   userName: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ShipmentAccountingEntry {
+  id: string
+  shipmentId: string
+  shipmentCode: string
+  trackingFolio?: string
+  entryType: "cuenta_por_cobrar" | "cuenta_por_pagar"
+  partyType: "customer" | "carrier"
+  partyId?: string
+  partyName: string
+  amount: number
+  paidAmount?: number
+  pendingAmount?: number
+  paymentStatus?: "pendiente" | "parcial" | "pagado"
+  description: string
+  documentType?: string
+  documentUrl?: string
+  documentRegisteredAt?: Date
+  referenceNumber?: string
+  lastPaymentAt?: Date
+  lastPaymentMethod?: string
+  lastPaymentReference?: string
+  lastPaymentNotes?: string
+  documents?: Array<{ label: string; url: string }>
+  metadata?: Record<string, any>
   createdAt: Date
   updatedAt: Date
 }

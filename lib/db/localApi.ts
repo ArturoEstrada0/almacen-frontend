@@ -1,4 +1,5 @@
 // Prefer an explicit local backend override, otherwise use the main API URL.
+import { supabase } from "@/lib/supabase/client"
 const API_URL = process.env.NEXT_PUBLIC_LOCAL_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL
 
 if (!API_URL) {
@@ -15,7 +16,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   // Get the Supabase session token
   if (typeof window !== 'undefined') {
     try {
-      const { supabase } = await import('@/lib/supabase/client')
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session?.access_token) {

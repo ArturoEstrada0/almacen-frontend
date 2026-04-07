@@ -82,17 +82,28 @@ export function FruitReceptionsTab() {
     ;(async () => {
       try {
         setLoading(true)
-        const [pRes, wRes, prodRes, recRes] = await Promise.all([
+        const [pRes, wRes, prodRes, recRes] = await Promise.allSettled([
           apiGet("/api/producers"),
           apiGet("/api/warehouses"),
           apiGet("/api/products"),
           apiGet("/api/producers/fruit-receptions/all"),
         ])
         if (!mounted) return
-        setProducers(Array.isArray(pRes) ? pRes : [])
-        setWarehouses(Array.isArray(wRes) ? wRes : [])
-        setProducts(Array.isArray(prodRes) ? prodRes : [])
-        setReceptions(Array.isArray(recRes) ? recRes : [])
+        if (pRes.status === "fulfilled") {
+          setProducers(Array.isArray(pRes.value) ? pRes.value : [])
+        }
+        if (wRes.status === "fulfilled") {
+          setWarehouses(Array.isArray(wRes.value) ? wRes.value : [])
+        }
+        if (prodRes.status === "fulfilled") {
+          setProducts(Array.isArray(prodRes.value) ? prodRes.value : [])
+        }
+        if (recRes.status === "fulfilled") {
+          setReceptions(Array.isArray(recRes.value) ? recRes.value : [])
+        } else {
+          console.error("Error loading receptions:", recRes.reason)
+          setReceptions([])
+        }
       } catch (err) {
         console.error("Error loading receptions:", err)
       } finally {

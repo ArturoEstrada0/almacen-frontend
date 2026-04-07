@@ -1,4 +1,5 @@
 // API Configuration for connecting to NestJS backend
+import { supabase } from "@/lib/supabase/client"
 
 let API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
@@ -65,6 +66,11 @@ export const API_ENDPOINTS = {
     receive: (id: string, itemId: string) => `${API_BASE_URL}/api/purchase-orders/${id}/receive/${itemId}`,
     cancel: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/cancel`,
     registerPayment: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/payment`,
+  },
+
+  accounting: {
+    shipmentPayables: () => `${API_BASE_URL}/api/accounting/shipments/payables`,
+    registerShipmentPayablePayment: (id: string) => `${API_BASE_URL}/api/accounting/shipments/payables/${id}/payment`,
   },
 
   // Traceability
@@ -154,7 +160,6 @@ export class ApiClient {
     // Get the Supabase session token
     if (typeof window !== 'undefined') {
       try {
-        const { supabase } = await import('@/lib/supabase/client')
         const { data: { session } } = await supabase.auth.getSession()
         
         if (session?.access_token) {

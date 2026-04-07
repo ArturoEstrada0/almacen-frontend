@@ -1,11 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { usePurchaseOrders, registerPayment } from "@/lib/hooks/use-purchase-orders"
+import {
+  usePurchaseOrders,
+  registerPayment,
+  useShipmentPayables,
+  registerShipmentPayablePayment,
+  type ShipmentPayableEntry,
+} from "@/lib/hooks/use-purchase-orders"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { formatCurrency } from "@/lib/utils/format"
 import { Search, DollarSign, AlertCircle, Calendar } from "lucide-react"
@@ -17,38 +23,95 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { ProtectedUpdate } from "@/components/auth/protected-action"
 import Spinner2 from "@/components/ui/spinner2"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
+import { PayableDocumentsList } from "@/components/purchase-orders/payable-documents-list"
+
+type PayableSource = "purchase-order" | "shipment"
+
+type PayableRow = {
+  id: string
+  source: PayableSource
+  orderNumber: string
+  supplierName: string
+  supplierCode?: string
+  orderDate?: string | Date | null
+  dueDate?: string | Date | null
+  creditDays?: number
+  total: number
+  amountPaid: number
+  paymentStatus: "pendiente" | "parcial" | "pagado" | "vencido"
+  documents?: Array<{ label: string; url: string }>
+}
 
 export function AccountsPayableTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
+  const [selectedPayableId, setSelectedPayableId] = useState<string | null>(null)
   const [paymentAmount, setPaymentAmount] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("")
   const [paymentReference, setPaymentReference] = useState("")
   const [paymentNotes, setPaymentNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { purchaseOrders, isLoading, mutate } = usePurchaseOrders()
+  const { purchaseOrders, isLoading: ordersLoading, mutate } = usePurchaseOrders()
+  const { shipmentPayables, isLoading: shipmentPayablesLoading, mutate: mutateShipmentPayables } = useShipmentPayables()
   const { suppliers } = useSuppliers()
 
-  const payableOrders = (purchaseOrders || []).filter((order) => order.paymentStatus !== "pagado")
+  const payableRows = useMemo<PayableRow[]>(() => {
+    const purchaseOrderRows: PayableRow[] = (purchaseOrders || []).map((order) => {
+      const supplier = suppliers.find((s) => s.id === order.supplierId)
+      return {
+        id: order.id,
+        source: "purchase-order",
+        orderNumber: order.orderNumber,
+        supplierName: supplier?.name || "Proveedor",
+        supplierCode: supplier?.code,
+        orderDate: order.orderDate,
+        dueDate: order.dueDate,
+        creditDays: Number(order.creditDays || 0),
+        total: Number(order.total || 0),
+        amountPaid: Number((order as any).amountPaid || 0),
+        paymentStatus: (order.paymentStatus as any) || "pendiente",
+      }
+    })
 
-  const filteredOrders = payableOrders.filter((order) => {
-  const supplier = suppliers.find((s) => s.id === order.supplierId)
+    const shipmentRows: PayableRow[] = (shipmentPayables || []).map((entry: ShipmentPayableEntry) => {
+      const status = (entry.paymentStatus as any) || "pendiente"
+      return {
+        id: entry.id,
+        source: "shipment",
+        orderNumber: entry.shipmentCode,
+        supplierName: entry.partyName || "Transportista",
+        supplierCode: entry.trackingFolio || "",
+        orderDate: entry.shipmentDate || null,
+        dueDate: null,
+        creditDays: 0,
+        total: Number(entry.amount || 0),
+        amountPaid: Number(entry.paidAmount || 0),
+        paymentStatus: status,
+        documents: entry.documents || (entry.documentUrl ? [{ label: "Factura", url: entry.documentUrl }] : []),
+      }
+    })
+
+    return [...purchaseOrderRows, ...shipmentRows].filter((row) => row.paymentStatus !== "pagado")
+  }, [purchaseOrders, shipmentPayables, suppliers])
+
+  const filteredOrders = payableRows.filter((row) => {
     const matchesSearch =
-      order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier?.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || order.paymentStatus === filterStatus
+      row.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = filterStatus === "all" || row.paymentStatus === filterStatus
     return matchesSearch && matchesStatus
   })
 
-  const totalPayable = filteredOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
-  const overdueOrders = filteredOrders.filter((order) => order.dueDate && new Date() > new Date(order.dueDate))
-  const totalOverdue = overdueOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
+  const totalPayable = filteredOrders.reduce((sum, row) => sum + Math.max(row.total - row.amountPaid, 0), 0)
+  const { pagedItems: pagedOrders, paginationProps } = usePagination(filteredOrders, 20)
+  const overdueOrders = filteredOrders.filter((row) => row.dueDate && new Date() > new Date(row.dueDate))
+  const totalOverdue = overdueOrders.reduce((sum, row) => sum + Math.max(row.total - row.amountPaid, 0), 0)
 
-  const handleRegisterPayment = (orderId: string) => {
-    setSelectedOrder(orderId)
+  const handleRegisterPayment = (payableId: string) => {
+    setSelectedPayableId(payableId)
     setPaymentDialogOpen(true)
     setPaymentAmount("")
     setPaymentMethod("")
@@ -56,48 +119,54 @@ export function AccountsPayableTab() {
     setPaymentNotes("")
   }
 
+  const selectedPayable = selectedPayableId ? filteredOrders.find((row) => row.id === selectedPayableId) || payableRows.find((row) => row.id === selectedPayableId) : null
+
   const handleCompletePayment = async () => {
-    if (!selectedOrder || !paymentAmount || Number(paymentAmount) <= 0) {
+    if (!selectedPayable || !paymentAmount || Number(paymentAmount) <= 0) {
       toast.error("Por favor ingresa un monto válido")
+      return
+    }
+
+    const pendingAmount = Math.max(selectedPayable.total - selectedPayable.amountPaid, 0)
+    if (Number(paymentAmount) > pendingAmount) {
+      toast.error("El monto excede el saldo pendiente")
       return
     }
 
     setIsSubmitting(true)
     try {
-      console.log('[Payment] Registrando pago:', {
-        orderId: selectedOrder,
-        amount: Number(paymentAmount),
-        paymentMethod,
-        reference: paymentReference,
-        notes: paymentNotes,
-      })
-
-      const result = await registerPayment(selectedOrder, {
-        amount: Number(paymentAmount),
-        paymentMethod,
-        reference: paymentReference,
-        notes: paymentNotes,
-      })
-
-      console.log('[Payment] Pago registrado exitosamente:', result)
+      if (selectedPayable.source === "purchase-order") {
+        await registerPayment(selectedPayable.id, {
+          amount: Number(paymentAmount),
+          paymentMethod,
+          reference: paymentReference,
+          notes: paymentNotes,
+        })
+      } else {
+        await registerShipmentPayablePayment(selectedPayable.id, {
+          amount: Number(paymentAmount),
+          paymentMethod,
+          reference: paymentReference,
+          notes: paymentNotes,
+        })
+      }
 
       toast.success("Pago registrado exitosamente")
-      await mutate() // Refrescar la lista
+      await Promise.all([mutate(), mutateShipmentPayables()])
       setPaymentDialogOpen(false)
-      setSelectedOrder(null)
+      setSelectedPayableId(null)
     } catch (error: any) {
-      console.error('[Payment] Error al registrar pago:', error)
       toast.error(error?.message || "Error al registrar el pago")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const order = selectedOrder ? (purchaseOrders || []).find((o) => o.id === selectedOrder) : null
+  const isLoading = ordersLoading || shipmentPayablesLoading
+  const pendingAmount = selectedPayable ? Math.max(selectedPayable.total - selectedPayable.amountPaid, 0) : 0
 
   return (
     <>
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -106,7 +175,7 @@ export function AccountsPayableTab() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalPayable)}</div>
-            <p className="text-xs text-muted-foreground">{filteredOrders.length} órdenes pendientes</p>
+            <p className="text-xs text-muted-foreground">{filteredOrders.length} cuentas pendientes</p>
           </CardContent>
         </Card>
 
@@ -117,7 +186,7 @@ export function AccountsPayableTab() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">{formatCurrency(totalOverdue)}</div>
-            <p className="text-xs text-muted-foreground">{overdueOrders.length} órdenes vencidas</p>
+            <p className="text-xs text-muted-foreground">{overdueOrders.length} cuentas vencidas</p>
           </CardContent>
         </Card>
 
@@ -129,11 +198,9 @@ export function AccountsPayableTab() {
           <CardContent>
             <div className="text-2xl font-bold text-orange-500">
               {
-                filteredOrders.filter((order) => {
-                  if (!order.dueDate) return false
-                  const daysUntilDue = Math.ceil(
-                    (new Date(order.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
-                  )
+                filteredOrders.filter((row) => {
+                  if (!row.dueDate) return false
+                  const daysUntilDue = Math.ceil((new Date(row.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
                   return daysUntilDue > 0 && daysUntilDue <= 7
                 }).length
               }
@@ -143,14 +210,13 @@ export function AccountsPayableTab() {
         </Card>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 md:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por orden o proveedor..."
+                placeholder="Buscar por orden/embarque o proveedor..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -171,11 +237,10 @@ export function AccountsPayableTab() {
         </CardContent>
       </Card>
 
-      {/* Payables Table */}
       <Card>
         <CardHeader>
           <CardTitle>Cuentas por Pagar</CardTitle>
-          <CardDescription>Órdenes de compra con pagos pendientes</CardDescription>
+          <CardDescription>Órdenes de compra y embarques con saldo pendiente</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -183,114 +248,125 @@ export function AccountsPayableTab() {
               <Spinner2 />
             </div>
           ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Orden</TableHead>
-                <TableHead>Proveedor</TableHead>
-                <TableHead>Fecha Orden</TableHead>
-                <TableHead>Fecha Vencimiento</TableHead>
-                <TableHead>Días Crédito</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredOrders.map((order) => {
-                const supplier = suppliers.find((s) => s.id === order.supplierId)
-                const isOverdue = new Date() > new Date(order.dueDate)
-                const daysUntilDue = Math.ceil((new Date(order.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-
-                return (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-mono font-medium">{order.orderNumber}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{supplier?.name}</p>
-                        <p className="text-xs text-muted-foreground">{supplier?.code}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <div>
-                          <p className={`text-sm font-medium ${isOverdue ? "text-red-500" : ""}`}>
-                          {new Date(order.dueDate).toLocaleDateString()}
-                        </p>
-                        {!isOverdue && daysUntilDue <= 7 && (
-                          <p className="text-xs text-orange-500">Vence en {daysUntilDue} días</p>
-                        )}
-                        {isOverdue && (
-                          <p className="text-xs text-red-500">Vencido hace {Math.abs(daysUntilDue)} días</p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{order.creditDays} días</TableCell>
-                    <TableCell className="font-medium">{formatCurrency(order.total)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          isOverdue ? "destructive" : order.paymentStatus === "parcial" ? "outline" : "secondary"
-                        }
-                      >
-                        {isOverdue ? "vencido" : order.paymentStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ProtectedUpdate module="purchaseOrders">
-                        <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(order.id)}>
-                          <DollarSign className="mr-2 h-4 w-4" />
-                          Registrar Pago
-                        </Button>
-                      </ProtectedUpdate>
-                    </TableCell>
+            <div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Referencia</TableHead>
+                    <TableHead>Proveedor / Transportista</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Fecha Vencimiento</TableHead>
+                    <TableHead>Días Crédito</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {pagedOrders.map((row) => {
+                    const isOverdue = !!row.dueDate && new Date() > new Date(row.dueDate)
+                    const daysUntilDue = row.dueDate
+                      ? Math.ceil((new Date(row.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                      : null
+
+                    return (
+                      <TableRow key={`${row.source}-${row.id}`}>
+                        <TableCell className="font-mono font-medium">{row.orderNumber}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{row.supplierName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {row.source === "shipment" ? "Embarque" : row.supplierCode || "Proveedor"}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">{row.orderDate ? new Date(row.orderDate).toLocaleDateString() : "-"}</TableCell>
+                        <TableCell>
+                          {row.dueDate ? (
+                            <div>
+                              <p className={`text-sm font-medium ${isOverdue ? "text-red-500" : ""}`}>
+                                {new Date(row.dueDate).toLocaleDateString()}
+                              </p>
+                              {!isOverdue && daysUntilDue !== null && daysUntilDue <= 7 && (
+                                <p className="text-xs text-orange-500">Vence en {daysUntilDue} días</p>
+                              )}
+                              {isOverdue && daysUntilDue !== null && (
+                                <p className="text-xs text-red-500">Vencido hace {Math.abs(daysUntilDue)} días</p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{row.creditDays ? `${row.creditDays} días` : "-"}</TableCell>
+                        <TableCell className="font-medium">{formatCurrency(row.total - row.amountPaid)}</TableCell>
+                        <TableCell>
+                          <Badge variant={isOverdue ? "destructive" : row.paymentStatus === "parcial" ? "outline" : "secondary"}>
+                            {isOverdue ? "vencido" : row.paymentStatus}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ProtectedUpdate module="purchaseOrders">
+                            <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(row.id)}>
+                              <DollarSign className="mr-2 h-4 w-4" />
+                              Registrar Pago
+                            </Button>
+                          </ProtectedUpdate>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+              <TablePagination {...paginationProps} />
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Payment Dialog */}
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar Pago</DialogTitle>
-            <DialogDescription>Registra un pago para la orden {order?.orderNumber}</DialogDescription>
+            <DialogDescription>
+              Registra un pago para {selectedPayable?.source === "shipment" ? "el embarque" : "la orden"} {selectedPayable?.orderNumber}
+            </DialogDescription>
           </DialogHeader>
-          {order && (
+          {selectedPayable && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-muted-foreground">Proveedor</Label>
-                  <p className="font-medium">{suppliers.find((s) => s.id === order.supplierId)?.name}</p>
+                  <Label className="text-xs text-muted-foreground">Proveedor / Transportista</Label>
+                  <p className="font-medium">{selectedPayable.supplierName}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Total de la Orden</Label>
-                  <p className="font-medium">{formatCurrency(order.total)}</p>
+                  <Label className="text-xs text-muted-foreground">Total</Label>
+                  <p className="font-medium">{formatCurrency(selectedPayable.total)}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Monto Pagado</Label>
-                  <p className="font-medium">{formatCurrency(order.amountPaid || 0)}</p>
+                  <p className="font-medium">{formatCurrency(selectedPayable.amountPaid || 0)}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Saldo Pendiente</Label>
-                  <p className="font-medium text-orange-600">{formatCurrency((order.total || 0) - (order.amountPaid || 0))}</p>
+                  <p className="font-medium text-orange-600">{formatCurrency(pendingAmount)}</p>
                 </div>
               </div>
 
+              {selectedPayable.source === "shipment" && selectedPayable.documents && selectedPayable.documents.length > 0 && (
+                <PayableDocumentsList documents={selectedPayable.documents} />
+              )}
+
               <div className="space-y-2">
                 <Label>Monto del Pago *</Label>
-                <Input 
-                  type="number" 
-                  step={0.01} 
-                  placeholder="0.00" 
+                <Input
+                  type="number"
+                  step={0.01}
+                  placeholder="0.00"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   disabled={isSubmitting}
-                  max={(order.total || 0) - (order.amountPaid || 0)}
+                  max={pendingAmount}
                 />
               </div>
 
@@ -311,8 +387,8 @@ export function AccountsPayableTab() {
 
               <div className="space-y-2">
                 <Label>Referencia</Label>
-                <Input 
-                  placeholder="Número de referencia, cheque, etc." 
+                <Input
+                  placeholder="Número de referencia, cheque, etc."
                   value={paymentReference}
                   onChange={(e) => setPaymentReference(e.target.value)}
                   disabled={isSubmitting}
@@ -321,8 +397,8 @@ export function AccountsPayableTab() {
 
               <div className="space-y-2">
                 <Label>Notas</Label>
-                <Textarea 
-                  placeholder="Observaciones sobre el pago..." 
+                <Textarea
+                  placeholder="Observaciones sobre el pago..."
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
                   disabled={isSubmitting}
