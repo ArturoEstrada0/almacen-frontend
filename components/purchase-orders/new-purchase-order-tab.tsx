@@ -126,7 +126,6 @@ export function NewPurchaseOrderTab({
   }, [mode, initialOrder])
 
   const handleSubmit = async () => {
-    if (mode === "create" && (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0)) {
     setSubmitted(true)
     if (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0) {
       toast.error("Por favor completa todos los campos requeridos")
@@ -144,22 +143,22 @@ export function NewPurchaseOrderTab({
         notes,
         items: items.map((it) => ({
           productId: it.productId,
-            quantity: Number(it.quantity),
-            unitPrice: Number(it.unitPrice),
+          quantity: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
           notes: undefined,
         })),
       }
 
-        if (mode === "edit" && initialOrder?.id) {
-          await updatePurchaseOrder(initialOrder.id, payload)
-          toast.success("Orden de compra actualizada exitosamente")
-        } else {
-          await createPurchaseOrder(payload)
-          toast.success("Orden de compra creada exitosamente")
-        }
+      if (mode === "edit" && initialOrder?.id) {
+        await updatePurchaseOrder(initialOrder.id, payload)
+        toast.success("Orden de compra actualizada exitosamente")
+      } else {
+        await createPurchaseOrder(payload)
+        toast.success("Orden de compra creada exitosamente")
+      }
 
-        mutate()
-        onSuccess()
+      mutate()
+      onSuccess()
     } catch (e: any) {
       // Log full error for debugging (server may return structured info)
       console.error("Purchase order save error:", e)
@@ -213,7 +212,6 @@ export function NewPurchaseOrderTab({
         </p>
       </div>
 
-      <Card>
       <Card ref={infoCardRef}>
         <CardHeader>
           <CardTitle>Información General</CardTitle>
