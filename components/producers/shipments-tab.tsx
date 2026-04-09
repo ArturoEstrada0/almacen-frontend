@@ -22,6 +22,7 @@ import { ComboBox } from "@/components/ui/combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { compressDocument } from "@/lib/document-compression"
 import type { ShipmentStatus } from "@/lib/types"
 import {
   useShipments,
@@ -148,6 +149,22 @@ export function ShipmentsTab() {
     }
   }
 
+  const compressShipmentDocument = async (file: File | null) => {
+    if (!file) return null
+    const compressed = await compressDocument(file, {
+      forceZip: true,
+      allowedExtensions: [".pdf", ".xml"],
+    })
+    return compressed.file
+  }
+
+  const appendCompressedDocument = async (form: FormData, fieldName: string, file: File | null) => {
+    const compressedFile = await compressShipmentDocument(file)
+    if (compressedFile) {
+      form.append(fieldName, compressedFile)
+    }
+  }
+
   const sortedShipments = [...(shipments || [])].sort((a, b) => {
     switch (sortBy) {
       case 'code': {
@@ -223,9 +240,9 @@ export function ShipmentsTab() {
           if (payload.notes) form.append('notes', payload.notes)
           if (invoiceAmount) form.append('invoiceAmount', String(invoiceAmount))
           if (carrierInvoiceAmount) form.append('carrierInvoiceAmount', String(carrierInvoiceAmount))
-          if (shipmentInvoiceFile) form.append('shipmentInvoiceFile', shipmentInvoiceFile)
-          if (carrierInvoiceFile) form.append('carrierInvoiceFile', carrierInvoiceFile)
-          if (waybillFile) form.append('waybillFile', waybillFile)
+          await appendCompressedDocument(form, 'shipmentInvoiceFile', shipmentInvoiceFile)
+          await appendCompressedDocument(form, 'carrierInvoiceFile', carrierInvoiceFile)
+          await appendCompressedDocument(form, 'waybillFile', waybillFile)
 
           const created: any = await createShipmentWithDocuments(form)
           // continue normally after creation
@@ -479,9 +496,9 @@ export function ShipmentsTab() {
         if (payload.notes) form.append('notes', payload.notes)
         if (editInvoiceAmount) form.append('invoiceAmount', String(editInvoiceAmount))
         if (editCarrierInvoiceAmount) form.append('carrierInvoiceAmount', String(editCarrierInvoiceAmount))
-        if (editShipmentInvoiceFile) form.append('shipmentInvoiceFile', editShipmentInvoiceFile)
-        if (editCarrierInvoiceFile) form.append('carrierInvoiceFile', editCarrierInvoiceFile)
-        if (editWaybillFile) form.append('waybillFile', editWaybillFile)
+        await appendCompressedDocument(form, 'shipmentInvoiceFile', editShipmentInvoiceFile)
+        await appendCompressedDocument(form, 'carrierInvoiceFile', editCarrierInvoiceFile)
+        await appendCompressedDocument(form, 'waybillFile', editWaybillFile)
         if (shouldClearShipmentInvoice) form.append('invoiceUrl', '')
         if (shouldClearCarrierInvoice) form.append('carrierInvoiceUrl', '')
         if (shouldClearWaybill) form.append('waybillUrl', '')

@@ -3,10 +3,11 @@
 import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { Plus, Building2, FileText } from "lucide-react"
+import { Plus, Building2, FileText, DollarSign } from "lucide-react"
 import Link from "next/link"
 import { QuotationsTab } from "@/components/suppliers/quotations-tab"
 import { SuppliersDirectoryTab } from "@/components/suppliers/suppliers-directory-tab"
+import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
 import { ProtectedCreate } from "@/components/auth/protected-action"
 
 export default function SuppliersPage() {
@@ -30,7 +31,7 @@ export default function SuppliersPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-md grid-cols-3">
           <TabsTrigger value="directory" className="gap-2">
             <Building2 className="h-4 w-4" />
             Directorio
@@ -38,6 +39,10 @@ export default function SuppliersPage() {
           <TabsTrigger value="quotations" className="gap-2">
             <FileText className="h-4 w-4" />
             Cotizaciones
+          </TabsTrigger>
+          <TabsTrigger value="payables" className="gap-2">
+            <DollarSign className="h-4 w-4" />
+            Cuentas por Pagar
           </TabsTrigger>
         </TabsList>
 
@@ -47,6 +52,10 @@ export default function SuppliersPage() {
 
         <TabsContent value="quotations" className="space-y-4">
           <QuotationsTab />
+        </TabsContent>
+
+        <TabsContent value="payables" className="space-y-4">
+          <AccountsPayableTab />
         </TabsContent>
       </Tabs>
     </div>

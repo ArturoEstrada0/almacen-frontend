@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ProducersDirectoryTab } from "@/components/producers/producers-directory-tab"
 import { InputAssignmentsTab } from "@/components/producers/input-assignments-tab"
@@ -10,7 +10,40 @@ import { AccountStatementsTab } from "@/components/producers/account-statements-
 import { PaymentReportsTab } from "@/components/producers/payment-reports-tab"
 
 export default function ProducersPage() {
-  const [activeTab, setActiveTab] = useState("directory")
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      if (typeof window === 'undefined') return 'directory'
+      const params = new URL(window.location.href).searchParams
+      return params.get('tab') || 'directory'
+    } catch {
+      return 'directory'
+    }
+  })
+
+  // Keep the `tab` param in the URL in sync with the active tab without navigating
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', activeTab)
+      window.history.replaceState({}, '', url.toString())
+    } catch {
+      // ignore
+    }
+  }, [activeTab])
+
+  // Listen to back/forward navigation and update tab from URL
+  useEffect(() => {
+    const onPop = () => {
+      try {
+        const params = new URL(window.location.href).searchParams
+        setActiveTab(params.get('tab') || 'directory')
+      } catch {
+        setActiveTab('directory')
+      }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   return (
     <div className="flex flex-col gap-6 p-6">
