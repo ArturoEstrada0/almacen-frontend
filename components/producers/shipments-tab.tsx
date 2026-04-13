@@ -95,6 +95,9 @@ export function ShipmentsTab() {
   const [updateStatus, setUpdateStatus] = useState<ShipmentStatus>("embarcada")
   const [arrivalDate, setArrivalDate] = useState("")
   const [salePrice, setSalePrice] = useState("")
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().split("T")[0])
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0])
+  const [invoiceNumber, setInvoiceNumber] = useState("")
   const [updateNotes, setUpdateNotes] = useState("")
 
   // Estado para el modal de detalles
@@ -197,6 +200,20 @@ export function ShipmentsTab() {
   const selectedReceptionsData = pendingReceptions.filter((r) => selectedReceptions.includes(r.id))
   const totalBoxes = selectedReceptionsData.reduce((sum, r) => sum + Number(r.boxes || 0), 0)
   const producersInvolved = new Set(selectedReceptionsData.map((r) => r.producerId)).size
+  const selectedShipmentData = (shipments || []).find((s) => s.id === selectedShipment)
+
+  const selectedShipmentCustomer = selectedShipmentData?.customerId
+    ? (customers || []).find((c: any) => c.id === selectedShipmentData.customerId)
+    : null
+
+  const calculatedDueDate = (() => {
+    if (!invoiceDate) return ""
+    const baseDate = new Date(`${invoiceDate}T00:00:00`)
+    if (Number.isNaN(baseDate.getTime())) return ""
+    const creditDays = Number(selectedShipmentCustomer?.creditDays || 0)
+    baseDate.setDate(baseDate.getDate() + creditDays)
+    return baseDate.toISOString().split("T")[0]
+  })()
 
   const handleToggleReception = (receptionId: string) => {
     setSelectedReceptions((prev) =>
@@ -315,8 +332,20 @@ export function ShipmentsTab() {
       try {
         if (!selectedShipment) throw new Error("No shipment selected")
         const salePriceNumber = updateStatus === "vendida" && salePrice ? Number(salePrice) : undefined
-        const updated = await apiUpdateShipmentStatus(selectedShipment, updateStatus, salePriceNumber)
+        const updated = await apiUpdateShipmentStatus(
+          selectedShipment,
+          updateStatus,
+          salePriceNumber,
+          updateStatus === "vendida"
+            ? {
+                saleDate,
+                invoiceDate,
+                invoiceNumber: invoiceNumber?.trim() || (selectedShipmentData as any)?.code,
+              }
+            : undefined,
+        )
         await mutateShipments()
+        await globalMutate("accounts-receivable")
         setIsUpdateDialogOpen(false)
         console.log("Updated shipment", updated)
       } catch (err) {
@@ -555,7 +584,7 @@ export function ShipmentsTab() {
                 </DialogTrigger>
               </ProtectedCreate>
               <DialogContent 
-                className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0"
+                className="max-w-[60vw] w-[60vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0 gap-0"
               >
                 <div className="flex flex-col h-full p-6">
                   <DialogHeader className="shrink-0 space-y-2 pb-4">
@@ -620,10 +649,10 @@ export function ShipmentsTab() {
                     <Label className="text-base font-semibold">Seleccionar Recepciones Pendientes</Label>
                     <div className="rounded-lg border-2 shadow-sm">
                       <div className="max-h-[350px] overflow-y-auto">
-                        <Table>
+                        <Table className="table-fixed">
                           <TableHeader className="sticky top-0 bg-muted z-10">
                             <TableRow className="hover:bg-muted">
-                              <TableHead className="w-16 text-center h-12">
+                              <TableHead className="w-12 text-center h-12">
                                 <Checkbox
                                   checked={selectedReceptions.length === pendingReceptions.length && pendingReceptions.length > 0}
                                   onCheckedChange={(checked) => {
@@ -635,20 +664,20 @@ export function ShipmentsTab() {
                                   }}
                                 />
                               </TableHead>
-                              <TableHead className="font-semibold text-sm">Número</TableHead>
-                              <TableHead className="font-semibold text-sm">Folio</TableHead>
-                              <TableHead className="font-semibold text-sm">Productor</TableHead>
-                              <TableHead className="font-semibold text-sm">Producto</TableHead>
-                              <TableHead className="font-semibold text-sm text-right">Cajas</TableHead>
-                              <TableHead className="font-semibold text-sm text-right">Peso/Caja</TableHead>
-                              <TableHead className="font-semibold text-sm text-right">Peso Total</TableHead>
-                              <TableHead className="font-semibold text-sm">Fecha</TableHead>
+                              <TableHead className="w-28 font-semibold text-sm">Número</TableHead>
+                              <TableHead className="w-32 font-semibold text-sm">Folio</TableHead>
+                              <TableHead className="min-w-40 font-semibold text-sm">Productor</TableHead>
+                              <TableHead className="min-w-44 font-semibold text-sm">Producto</TableHead>
+                              <TableHead className="w-24 font-semibold text-sm text-right">Cajas</TableHead>
+                              <TableHead className="w-28 font-semibold text-sm text-right">Peso/Caja</TableHead>
+                              <TableHead className="w-28 font-semibold text-sm text-right">Peso Total</TableHead>
+                              <TableHead className="w-36 font-semibold text-sm">Fecha</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {pendingReceptions.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
+                                <TableCell colSpan={9} className="text-center text-muted-foreground py-12 text-sm">
                                   No hay recepciones pendientes de embarque
                                 </TableCell>
                               </TableRow>
@@ -670,6 +699,7 @@ export function ShipmentsTab() {
                                         onCheckedChange={() => handleToggleReception(reception.id)}
                                       />
                                     </TableCell>
+                                    <TableCell className="text-sm font-mono">{receptionNumber || <span className="text-muted-foreground">-</span>}</TableCell>
                                     <TableCell className="text-sm">
                                       {(reception as any).trackingFolio ? (
                                         <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{(reception as any).trackingFolio}</span>
@@ -1053,6 +1083,14 @@ export function ShipmentsTab() {
                                 onClick={() => {
                                   setSelectedShipment(shipment.id)
                                   setUpdateStatus((shipment as any).status)
+                                  setSalePrice((shipment as any).salePricePerBox ? String((shipment as any).salePricePerBox) : "")
+                                  setSaleDate(new Date().toISOString().split("T")[0])
+                                  setInvoiceDate(
+                                    (shipment as any).invoiceRegisteredAt
+                                      ? new Date((shipment as any).invoiceRegisteredAt).toISOString().split("T")[0]
+                                      : new Date().toISOString().split("T")[0],
+                                  )
+                                  setInvoiceNumber(String((shipment as any).code || ""))
                                   setIsUpdateDialogOpen(true)
                                 }}
                                 className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
@@ -1089,7 +1127,7 @@ export function ShipmentsTab() {
 
         {/* Edit Shipment Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-[98vw] w-[98vw]! max-h-[98vh] h-[98vh]! overflow-hidden flex flex-col p-0 gap-0">
+          <DialogContent className="max-w-[60vw] w-[60vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
             <div className="flex flex-col h-full p-6">
               <DialogHeader className="shrink-0 space-y-2 pb-4">
                 <DialogTitle className="text-xl">Editar Embarque</DialogTitle>
@@ -1224,6 +1262,7 @@ export function ShipmentsTab() {
                                         onCheckedChange={() => handleToggleEditReception(reception.id)}
                                       />
                                     </TableCell>
+                                    <TableCell className="text-sm font-mono">{receptionNumber || <span className="text-muted-foreground">-</span>}</TableCell>
                                     <TableCell className="text-sm">
                                       {(reception as any).trackingFolio ? (
                                         <span className="font-mono text-xs bg-blue-50 px-1.5 py-0.5 rounded">{(reception as any).trackingFolio}</span>
@@ -1563,6 +1602,45 @@ export function ShipmentsTab() {
               {updateStatus === "vendida" && (
                 <>
                   <div className="space-y-2">
+                    <Label htmlFor="saleDate">Fecha de Venta *</Label>
+                    <Input
+                      id="saleDate"
+                      type="date"
+                      value={saleDate}
+                      onChange={(e) => setSaleDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="invoiceNumber">Factura *</Label>
+                    <Input
+                      id="invoiceNumber"
+                      placeholder="Folio / número de factura"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="invoiceDate">Fecha de Emisión de Factura *</Label>
+                    <Input
+                      id="invoiceDate"
+                      type="date"
+                      value={invoiceDate}
+                      onChange={(e) => setInvoiceDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <div className="font-medium">Vencimiento automático</div>
+                    <div className="text-slate-600 mt-1">
+                      {selectedShipmentCustomer
+                        ? `Cliente: ${selectedShipmentCustomer.name} · Crédito: ${selectedShipmentCustomer.creditDays || 0} días · Vence: ${calculatedDueDate || "-"}`
+                        : `Sin cliente asociado en el embarque. Vence: ${calculatedDueDate || "-"}`}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="salePrice">Precio de Venta por Caja *</Label>
                     <Input
                       id="salePrice"
@@ -1631,7 +1709,13 @@ export function ShipmentsTab() {
               <Button variant="outline" onClick={() => setIsUpdateDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleUpdateShipment} disabled={updateStatus === "vendida" && !salePrice}>
+              <Button
+                onClick={handleUpdateShipment}
+                disabled={
+                  updateStatus === "vendida" &&
+                  (!salePrice || !saleDate || !invoiceDate || !invoiceNumber?.trim())
+                }
+              >
                 Actualizar
               </Button>
             </DialogFooter>
@@ -1640,7 +1724,7 @@ export function ShipmentsTab() {
 
         {/* View Shipment Details Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogContent className="max-w-[60vw] w-[60vw] max-h-[90vh] flex flex-col overflow-hidden">
             <DialogHeader className="shrink-0 pb-2 border-b">
               <DialogTitle className="text-2xl font-bold">Detalles del Embarque</DialogTitle>
               <DialogDescription>Información completa del embarque y sus recepciones</DialogDescription>

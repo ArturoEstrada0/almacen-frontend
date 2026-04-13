@@ -29,8 +29,74 @@ export interface Customer {
   updatedAt: string
 }
 
+export interface CustomerReceivablePayment {
+  id: string
+  receivableId: string
+  customerId: string
+  paymentDate: string
+  amount: number
+  reference?: string
+  invoiceFileUrl?: string
+  invoiceUrl?: string
+  evidenceUrl?: string
+  capturedByUserId?: string
+  capturedByUserName?: string
+  notes?: string
+  createdAt: string
+}
+
+export interface CustomerReceivable {
+  id: string
+  customerId: string
+  invoiceNumber: string
+  saleDate: string
+  invoiceDate: string
+  creditDays: number
+  dueDate: string
+  originalAmount: number
+  paidAmount: number
+  balanceAmount: number
+  status: "pendiente" | "parcial" | "pagada" | "vencida"
+  isOverdue?: boolean
+  notes?: string
+  createdByUserId?: string
+  createdByUserName?: string
+  lastPaymentAt?: string
+  lastPaymentReference?: string
+  payments?: CustomerReceivablePayment[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CustomerAccountStatement {
+  customer: Customer
+  totals: {
+    originalAmount: number
+    paidAmount: number
+    balanceAmount: number
+    overdueCount: number
+  }
+  receivables: CustomerReceivable[]
+}
+
 export type CreateCustomerInput = Omit<Customer, "id" | "createdAt" | "updatedAt" | "active"> & {
   active?: boolean
+}
+
+export interface CreateCustomerReceivableInput {
+  invoiceNumber: string
+  saleDate: string
+  invoiceDate: string
+  creditDays?: number
+  originalAmount: number
+  notes?: string
+}
+
+export interface RegisterCustomerReceivablePaymentInput {
+  paymentDate: string
+  amount: number
+  reference: string
+  notes?: string
 }
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001").replace(/\/+$/g, "")
@@ -249,6 +315,138 @@ export function useCustomers() {
     }
   }
 
+  const fetchCustomerAccountStatement = async (id: string): Promise<CustomerAccountStatement | null> => {
+    if (!session?.access_token) return null
+
+    try {
+      const response = await fetch(`${API_ROOT}/customers/${id}/account-statement`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
+      }
+
+      return await response.json()
+    } catch (err: any) {
+      console.error("Error fetching customer account statement:", err)
+      return null
+    }
+  }
+
+  const fetchCustomerReceivables = async (id: string): Promise<CustomerReceivable[]> => {
+    if (!session?.access_token) return []
+
+    try {
+      const response = await fetch(`${API_ROOT}/customers/${id}/receivables`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
+      }
+
+      return await response.json()
+    } catch (err: any) {
+      console.error("Error fetching customer receivables:", err)
+      return []
+    }
+  }
+
+  const createCustomerReceivable = async (
+    customerId: string,
+    data: CreateCustomerReceivableInput,
+  ): Promise<CustomerReceivable | null> => {
+    if (!session?.access_token) return null
+
+    try {
+      const response = await fetch(`${API_ROOT}/customers/${customerId}/receivables`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "")
+        let errorData: any = {}
+        try {
+          errorData = JSON.parse(text || "{}")
+        } catch {
+          errorData = { message: text }
+        }
+
+        throw {
+          message: errorData.message || text || `Error ${response.status}: ${response.statusText}`,
+          status: response.status,
+          errors: errorData.errors,
+        }
+      }
+
+      return await response.json()
+    } catch (err: any) {
+      console.error("Error creating customer receivable:", err)
+      throw err
+    }
+  }
+
+  const registerCustomerReceivablePayment = async (
+    customerId: string,
+    receivableId: string,
+    data: RegisterCustomerReceivablePaymentInput,
+    invoiceFile?: File | null,
+  ): Promise<CustomerReceivable | null> => {
+    if (!session?.access_token) return null
+
+    try {
+      const body = new FormData()
+      body.append("paymentDate", data.paymentDate)
+      body.append("amount", String(Number(data.amount || 0)))
+      body.append("reference", data.reference)
+      if (data.notes) body.append("notes", data.notes)
+      if (invoiceFile) body.append("invoiceFile", invoiceFile)
+
+      const response = await fetch(`${API_ROOT}/customers/${customerId}/receivables/${receivableId}/payments`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body,
+      })
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "")
+        let errorData: any = {}
+        try {
+          errorData = JSON.parse(text || "{}")
+        } catch {
+          errorData = { message: text }
+        }
+
+        throw {
+          message: errorData.message || text || `Error ${response.status}: ${response.statusText}`,
+          status: response.status,
+          errors: errorData.errors,
+        }
+      }
+
+      return await response.json()
+    } catch (err: any) {
+      console.error("Error registering customer receivable payment:", err)
+      throw err
+    }
+  }
+
   return {
     customers,
     isLoading,
@@ -261,5 +459,9 @@ export function useCustomers() {
     updateCustomer,
     deleteCustomer,
     toggleCustomerActive,
+    fetchCustomerAccountStatement,
+    fetchCustomerReceivables,
+    createCustomerReceivable,
+    registerCustomerReceivablePayment,
   }
 }

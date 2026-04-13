@@ -1,12 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useCustomers, Customer } from "@/lib/hooks/use-customers"
-import { Search, Building2, Edit, Trash2, Mail, Phone, Plus, Eye, AlertCircle } from "lucide-react"
+import {
+  useCustomers,
+  Customer,
+  CustomerAccountStatement,
+  CustomerReceivable,
+  CreateCustomerReceivableInput,
+  RegisterCustomerReceivablePaymentInput,
+} from "@/lib/hooks/use-customers"
+import { Search, Building2, Edit, Trash2, Mail, Phone, Plus, Eye, AlertCircle, CalendarClock, Wallet } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -21,6 +29,8 @@ import Spinner2 from "@/components/ui/spinner2"
 import { CustomerForm, CustomerFormData } from "./customer-form"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ProtectedDelete } from "@/components/auth/protected-action"
+import { Label } from "@/components/ui/label"
+import { formatLocalDateOnly, getLocalDateInputValue, parseDateOnly } from "@/lib/date-utils"
 
 const PAYMENT_METHOD_LABELS = {
   cash: "Efectivo",
@@ -40,8 +50,32 @@ export function CustomersDirectoryTab() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [accountStatement, setAccountStatement] = useState<CustomerAccountStatement | null>(null)
+  const [isLoadingStatement, setIsLoadingStatement] = useState(false)
+  const [isReceivableDialogOpen, setIsReceivableDialogOpen] = useState(false)
+  const [isSubmittingReceivable, setIsSubmittingReceivable] = useState(false)
+  const [receivableForm, setReceivableForm] = useState<CreateCustomerReceivableInput>({
+    invoiceNumber: "",
+    saleDate: "",
+    invoiceDate: "",
+    creditDays: 0,
+    originalAmount: 0,
+    notes: "",
+  })
+  const router = useRouter()
 
-  const { customers, isLoading, isError, error, fetchCustomers, searchCustomers, createCustomer, updateCustomer, deleteCustomer } = useCustomers()
+  const {
+    customers,
+    isLoading,
+    isError,
+    error,
+    fetchCustomers,
+    createCustomer,
+    updateCustomer,
+    deleteCustomer,
+    fetchCustomerAccountStatement,
+    createCustomerReceivable,
+  } = useCustomers()
   const { toast } = useToast()
 
   // Fetch customers on component mount
@@ -162,6 +196,100 @@ export function CustomersDirectoryTab() {
   const handleDetailsClick = (customer: Customer) => {
     setSelectedCustomer(customer)
     setDetailsDialogOpen(true)
+    loadCustomerStatement(customer.id)
+  }
+
+  const loadCustomerStatement = async (customerId: string) => {
+    setIsLoadingStatement(true)
+    try {
+      const statement = await fetchCustomerAccountStatement(customerId)
+      setAccountStatement(statement)
+    } finally {
+      setIsLoadingStatement(false)
+    }
+  }
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value || 0)
+
+  const formatDate = (value?: string) => formatLocalDateOnly(value)
+
+  const computeDueDateIso = (invoiceDate?: string, creditDays?: number) => {
+    if (!invoiceDate) return null
+    const d = parseDateOnly(invoiceDate)
+    if (!d) return null
+    const days = Number(creditDays || 0)
+    d.setDate(d.getDate() + days)
+    return getLocalDateInputValue(d)
+  }
+
+  const getReceivableStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      pendiente: "Pendiente",
+      parcial: "Parcial",
+      pagada: "Pagada",
+      vencida: "Vencida",
+    }
+    return labels[status] || status
+  }
+
+  const getReceivableStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    if (status === "pagada") return "default"
+    if (status === "vencida") return "destructive"
+    if (status === "parcial") return "secondary"
+    return "outline"
+  }
+
+  const openReceivableDialog = () => {
+    const today = getLocalDateInputValue()
+    setReceivableForm({
+      invoiceNumber: "",
+      saleDate: today,
+      invoiceDate: today,
+      creditDays: selectedCustomer?.creditDays ?? 0,
+      originalAmount: 0,
+      notes: "",
+    })
+    setIsReceivableDialogOpen(true)
+  }
+
+  const openPaymentDialog = (receivable: CustomerReceivable) => {
+    if (!selectedCustomer) return
+    setDetailsDialogOpen(false)
+    router.push(`/accounts/${selectedCustomer.id}?receivableId=${receivable.id}`)
+  }
+
+  const handleCreateReceivable = async () => {
+    if (!selectedCustomer) return
+
+    setIsSubmittingReceivable(true)
+    try {
+      await createCustomerReceivable(selectedCustomer.id, {
+        ...receivableForm,
+        creditDays: Number(receivableForm.creditDays || 0),
+        originalAmount: Number(receivableForm.originalAmount || 0),
+      })
+
+      setIsReceivableDialogOpen(false)
+      await loadCustomerStatement(selectedCustomer.id)
+      toast({
+        title: "Éxito",
+        description: "Cuenta por cobrar registrada correctamente",
+      })
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "No se pudo registrar la cuenta por cobrar",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmittingReceivable(false)
+    }
   }
 
   if (isLoading) {
@@ -323,13 +451,24 @@ export function CustomersDirectoryTab() {
       </Dialog>
 
       {/* Details Dialog */}
-      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle>Detalles del Cliente</DialogTitle>
+      <Dialog
+        open={detailsDialogOpen}
+        onOpenChange={(open) => {
+          setDetailsDialogOpen(open)
+          if (!open) {
+            setAccountStatement(null)
+          }
+        }}
+      >
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] p-0">
+          <div className="sticky top-0 z-20 border-b bg-background px-4 py-4 sm:px-6">
+            <DialogHeader>
+              <DialogTitle>Detalles del Cliente</DialogTitle>
               <DialogDescription>{selectedCustomer?.name}</DialogDescription>
-          </DialogHeader>
+            </DialogHeader>
+          </div>
           {selectedCustomer && (
+            <div className="max-h-[calc(90vh-86px)] overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
             <div className="space-y-4">
               {/* Identification */}
               <Card>
@@ -431,6 +570,108 @@ export function CustomersDirectoryTab() {
                 </CardContent>
               </Card>
 
+              {/* Accounts Receivable */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">Cuentas por Cobrar</CardTitle>
+                    <Button size="sm" className="gap-2" onClick={openReceivableDialog}>
+                      <Plus className="h-4 w-4" />
+                      Registrar venta
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {isLoadingStatement ? (
+                    <div className="flex justify-center py-4">
+                      <Spinner2 />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <Card>
+                          <CardContent className="pt-4">
+                            <p className="text-xs text-muted-foreground">Monto Original</p>
+                            <p className="text-sm font-semibold">{formatCurrency(accountStatement?.totals.originalAmount || 0)}</p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="pt-4">
+                            <p className="text-xs text-muted-foreground">Abonos</p>
+                            <p className="text-sm font-semibold">{formatCurrency(accountStatement?.totals.paidAmount || 0)}</p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="pt-4">
+                            <p className="text-xs text-muted-foreground">Saldo Pendiente</p>
+                            <p className="text-sm font-semibold">{formatCurrency(accountStatement?.totals.balanceAmount || 0)}</p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="pt-4">
+                            <p className="text-xs text-muted-foreground">Vencidas</p>
+                            <p className="text-sm font-semibold">{accountStatement?.totals.overdueCount || 0}</p>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {(accountStatement?.receivables || []).length === 0 ? (
+                        <div className="text-sm text-muted-foreground">No hay cuentas por cobrar registradas.</div>
+                      ) : (
+                        <div className="border rounded-md overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Factura</TableHead>
+                                <TableHead>Emisión</TableHead>
+                                <TableHead>Vencimiento</TableHead>
+                                <TableHead>Monto</TableHead>
+                                <TableHead>Saldo</TableHead>
+                                <TableHead>Estatus</TableHead>
+                                <TableHead>Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(accountStatement?.receivables || []).map((receivable) => (
+                                <TableRow key={receivable.id}>
+                                  <TableCell className="font-medium break-all">{receivable.invoiceNumber}</TableCell>
+                                  <TableCell>{formatDate(receivable.invoiceDate)}</TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      <CalendarClock className="h-3 w-3 text-muted-foreground" />
+                                      <span>{formatDate(receivable.dueDate)}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{formatCurrency(receivable.originalAmount)}</TableCell>
+                                  <TableCell>{formatCurrency(receivable.balanceAmount)}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={getReceivableStatusVariant(receivable.status)}>
+                                      {getReceivableStatusLabel(receivable.status)}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="gap-1"
+                                      onClick={() => openPaymentDialog(receivable)}
+                                      disabled={Number(receivable.balanceAmount || 0) <= 0}
+                                    >
+                                      <Wallet className="h-3 w-3" />
+                                      Abonar
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
               {selectedCustomer.notes && (
                 <Card>
                   <CardHeader className="pb-3">
@@ -442,7 +683,105 @@ export function CustomersDirectoryTab() {
                 </Card>
               )}
             </div>
+            </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Receivable Dialog */}
+      <Dialog open={isReceivableDialogOpen} onOpenChange={setIsReceivableDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Registrar Cuenta por Cobrar</DialogTitle>
+            <DialogDescription>Captura la información de la venta con factura.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="invoiceNumber">Factura</Label>
+              <Input
+                id="invoiceNumber"
+                value={receivableForm.invoiceNumber}
+                onChange={(e) => setReceivableForm((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
+                placeholder="F-000123"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="saleDate">Fecha de venta</Label>
+              <Input
+                id="saleDate"
+                type="date"
+                value={receivableForm.saleDate}
+                onChange={(e) => setReceivableForm((prev) => ({ ...prev, saleDate: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="invoiceDate">Fecha de emisión</Label>
+              <Input
+                id="invoiceDate"
+                type="date"
+                value={receivableForm.invoiceDate}
+                onChange={(e) => setReceivableForm((prev) => ({ ...prev, invoiceDate: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="creditDays">Días de crédito</Label>
+              <Input
+                id="creditDays"
+                type="number"
+                min={0}
+                value={receivableForm.creditDays ?? 0}
+                onChange={(e) => setReceivableForm((prev) => ({ ...prev, creditDays: Number(e.target.value || 0) }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dueDate">Fecha de vencimiento</Label>
+              <Input id="dueDate" value={formatLocalDateOnly(computeDueDateIso(receivableForm.invoiceDate, receivableForm.creditDays) || undefined)} readOnly />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="originalAmount">Monto original</Label>
+              <Input
+                id="originalAmount"
+                type="number"
+                min={0}
+                step="0.01"
+                value={receivableForm.originalAmount || ""}
+                onChange={(e) => setReceivableForm((prev) => ({ ...prev, originalAmount: Number(e.target.value || 0) }))}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="notes">Notas (opcional)</Label>
+              <Input
+                id="notes"
+                value={receivableForm.notes || ""}
+                onChange={(e) => setReceivableForm((prev) => ({ ...prev, notes: e.target.value }))}
+                placeholder="Observaciones"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsReceivableDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateReceivable}
+              disabled={
+                isSubmittingReceivable ||
+                !receivableForm.invoiceNumber.trim() ||
+                !receivableForm.saleDate ||
+                !receivableForm.invoiceDate ||
+                Number(receivableForm.originalAmount || 0) <= 0
+              }
+            >
+              {isSubmittingReceivable ? "Guardando..." : "Registrar"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

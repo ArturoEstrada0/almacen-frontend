@@ -131,8 +131,23 @@ export async function updateShipmentWithDocuments(id: string, formData: FormData
   return ApiClient.patchFormData<Shipment>(API_ENDPOINTS.producers.shipments.update(id), formData)
 }
 
-export async function updateShipmentStatus(id: string, status: string, salePrice?: number) {
-  return ApiClient.patch<Shipment>(API_ENDPOINTS.producers.shipments.updateStatus(id), { status, salePrice })
+export async function updateShipmentStatus(
+  id: string,
+  status: string,
+  salePrice?: number,
+  extra?: {
+    saleDate?: string
+    invoiceDate?: string
+    invoiceNumber?: string
+  },
+) {
+  return ApiClient.patch<Shipment>(API_ENDPOINTS.producers.shipments.updateStatus(id), {
+    status,
+    salePrice,
+    saleDate: extra?.saleDate,
+    invoiceDate: extra?.invoiceDate,
+    invoiceNumber: extra?.invoiceNumber,
+  })
 }
 
 export async function deleteShipment(id: string) {

@@ -31,6 +31,7 @@ type PayableSource = "purchase-order" | "shipment"
 type PayableRow = {
   id: string
   source: PayableSource
+  supplierId?: string
   orderNumber: string
   supplierName: string
   supplierCode?: string
@@ -43,7 +44,11 @@ type PayableRow = {
   documents?: Array<{ label: string; url: string }>
 }
 
-export function AccountsPayableTab() {
+type AccountsPayableTabProps = {
+  supplierId?: string
+}
+
+export function AccountsPayableTab({ supplierId }: AccountsPayableTabProps = {}) {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -64,6 +69,7 @@ export function AccountsPayableTab() {
       return {
         id: order.id,
         source: "purchase-order",
+        supplierId: order.supplierId,
         orderNumber: order.orderNumber,
         supplierName: supplier?.name || "Proveedor",
         supplierCode: supplier?.code,
@@ -81,6 +87,7 @@ export function AccountsPayableTab() {
       return {
         id: entry.id,
         source: "shipment",
+        supplierId: undefined,
         orderNumber: entry.shipmentCode,
         supplierName: entry.partyName || "Transportista",
         supplierCode: entry.trackingFolio || "",
@@ -102,7 +109,8 @@ export function AccountsPayableTab() {
       row.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       row.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = filterStatus === "all" || row.paymentStatus === filterStatus
-    return matchesSearch && matchesStatus
+    const matchesSupplier = !supplierId || row.supplierId === supplierId
+    return matchesSearch && matchesStatus && matchesSupplier
   })
 
   const totalPayable = filteredOrders.reduce((sum, row) => sum + Math.max(row.total - row.amountPaid, 0), 0)

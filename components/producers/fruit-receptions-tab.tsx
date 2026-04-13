@@ -310,7 +310,7 @@ export function FruitReceptionsTab() {
         )
       case "vendida":
         return (
-          <Badge variant="default" className="text-green-600 border-green-600">
+          <Badge variant="outline" className="text-green-600 border-green-600">
             Vendida
           </Badge>
         )
