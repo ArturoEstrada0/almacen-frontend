@@ -57,6 +57,16 @@ export const API_ENDPOINTS = {
     delete: (id: string) => `${API_BASE_URL}/api/suppliers/${id}`,
   },
 
+  // Customers
+  customers: {
+    list: () => `${API_BASE_URL}/api/customers`,
+    get: (id: string) => `${API_BASE_URL}/api/customers/${id}`,
+    create: () => `${API_BASE_URL}/api/customers`,
+    update: (id: string) => `${API_BASE_URL}/api/customers/${id}`,
+    delete: (id: string) => `${API_BASE_URL}/api/customers/${id}`,
+    pendingReceivables: () => `${API_BASE_URL}/api/customers/receivables/pending`,
+  },
+
   // Purchase Orders
   purchaseOrders: {
     list: () => `${API_BASE_URL}/api/purchase-orders`,
@@ -66,6 +76,7 @@ export const API_ENDPOINTS = {
     receive: (id: string, itemId: string) => `${API_BASE_URL}/api/purchase-orders/${id}/receive/${itemId}`,
     cancel: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/cancel`,
     registerPayment: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/payment`,
+    pending: () => `${API_BASE_URL}/api/purchase-orders/pending`,
   },
 
   accounting: {

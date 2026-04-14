@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -14,15 +14,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function AccountsPage() {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [customerQuery, setCustomerQuery] = useState("")
   const [supplierQuery, setSupplierQuery] = useState("")
-  const [activeTab, setActiveTab] = useState("customers")
+  const [activeTab, setActiveTab] = useState(() =>
+    searchParams?.get("tab") === "suppliers" ? "suppliers" : "customers"
+  )
   const { customers, fetchCustomers, isLoading } = useCustomers()
   const { suppliers, isLoading: isSuppliersLoading } = useSuppliers()
 
   useEffect(() => {
     fetchCustomers()
   }, [])
+
+  useEffect(() => {
+    const tab = searchParams?.get("tab") === "suppliers" ? "suppliers" : "customers"
+    setActiveTab(tab)
+  }, [searchParams])
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    const params = new URLSearchParams(searchParams?.toString())
+
+    if (value === "suppliers") {
+      params.set("tab", "suppliers")
+    } else {
+      params.delete("tab")
+    }
+
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname)
+  }
 
   const filteredCustomers = customers.filter((c) => {
     const q = customerQuery.trim().toLowerCase()
@@ -53,9 +76,14 @@ export default function AccountsPage() {
           <h1 className="text-2xl font-bold">Gestión de Cuentas</h1>
           <p className="text-gray-600 text-sm">Administra cuentas por cobrar de clientes y cuentas por pagar de proveedores</p>
         </div>
+        <div>
+          <Button asChild>
+            <a href={activeTab === "customers" ? "/receivables/pending" : "/purchase-orders/pending"}>Ver facturas pendientes</a>
+          </Button>
+        </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="customers" className="gap-2">
             <Building2 className="h-4 w-4" />

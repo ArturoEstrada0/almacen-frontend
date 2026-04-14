@@ -76,8 +76,18 @@ export async function registerPayment(orderId: string, data: {
   paymentMethod?: string
   reference?: string
   notes?: string
+  paymentDate?: string
+  invoiceFile?: File | null
 }) {
-  return ApiClient.post<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.registerPayment(orderId), data)
+  const body = new FormData()
+  body.append("amount", String(data.amount))
+  if (data.paymentMethod) body.append("paymentMethod", data.paymentMethod)
+  if (data.reference) body.append("reference", data.reference)
+  if (data.notes) body.append("notes", data.notes)
+  if (data.paymentDate) body.append("paymentDate", data.paymentDate)
+  if (data.invoiceFile) body.append("invoiceFile", data.invoiceFile)
+
+  return ApiClient.postFormData<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.registerPayment(orderId), body)
 }
 
 export async function registerShipmentPayablePayment(entryId: string, data: {

@@ -1,20 +1,17 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { AlertCircle, ArrowLeft, CalendarClock, DollarSign, Wallet } from "lucide-react"
+import { ArrowLeft, CalendarClock, Wallet } from "lucide-react"
+import PaymentManagementCard from "@/components/accounts/payment-management-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import Spinner2 from "@/components/ui/spinner2"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
-import { formatLocalDateOnly, parseDateOnly } from "@/lib/date-utils"
+import { formatLocalDateOnly, getLocalDateInputValue, parseDateOnly } from "@/lib/date-utils"
 import { registerPayment, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
 import { toast } from "sonner"
 
@@ -36,6 +33,17 @@ type SupplierPayable = {
   balanceAmount: number
   status: "pendiente" | "parcial" | "pagada" | "vencida"
   isOverdue: boolean
+  payments: SupplierPayablePayment[]
+}
+
+type SupplierPayablePayment = {
+  id: string
+  paymentDate?: string | Date | null
+  amount: number
+  reference?: string
+  notes?: string
+  invoiceUrl?: string | null
+  isInferred?: boolean
 }
 
 export default function SupplierAccountDetailPage() {
@@ -46,7 +54,15 @@ export default function SupplierAccountDetailPage() {
   const { purchaseOrders, isLoading: isLoadingOrders, mutate } = usePurchaseOrders()
   const [selectedPayableId, setSelectedPayableId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-  const [paymentForm, setPaymentForm] = useState({ amount: 0, reference: "transferencia", notes: "" })
+  const [attachedInvoiceFile, setAttachedInvoiceFile] = useState<File | null>(null)
+  const [attachedInvoicePreviewUrl, setAttachedInvoicePreviewUrl] = useState<string | null>(null)
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null)
+  const [paymentForm, setPaymentForm] = useState({
+    paymentDate: getLocalDateInputValue(),
+    amount: 0,
+    reference: "transferencia",
+    notes: "",
+  })
 
   const supplier = useMemo(
     () => suppliers.find((item: any) => item.id === supplierId) || null,
@@ -88,6 +104,20 @@ export default function SupplierAccountDetailPage() {
         const due = parseDateOnly(order.dueDate as any)
         const isOverdue = !!due && balanceAmount > 0 && due.getTime() < today.getTime()
         const status = balanceAmount <= 0 ? "pagada" : isOverdue ? "vencida" : paidAmount > 0 ? "parcial" : "pendiente"
+        const rawPayments = Array.isArray(order.payments)
+          ? order.payments
+          : Array.isArray(order.paymentHistory)
+            ? order.paymentHistory
+            : []
+
+        const payments = rawPayments.map((payment: any, index: number) => ({
+          id: String(payment?.id || `${order.id}-payment-${index}`),
+          paymentDate: payment?.paymentDate || payment?.date || payment?.createdAt || null,
+          amount: Number(payment?.amount || 0),
+          reference: payment?.reference || payment?.paymentMethod || undefined,
+          notes: payment?.notes || undefined,
+          invoiceUrl: payment?.invoiceFileUrl || payment?.invoiceUrl || payment?.evidenceUrl || null,
+        }))
 
         return {
           id: order.id,
@@ -99,6 +129,7 @@ export default function SupplierAccountDetailPage() {
           balanceAmount,
           status,
           isOverdue,
+          payments,
         }
       })
   }, [purchaseOrders, supplierId])
@@ -123,12 +154,132 @@ export default function SupplierAccountDetailPage() {
     [payables, selectedPayableId],
   )
 
-  const isPayablePaid = !selectedPayable || selectedPayable.balanceAmount <= 0 || selectedPayable.status === "pagada"
+  const selectedPayablePayments = useMemo<SupplierPayablePayment[]>(() => {
+    if (!selectedPayable) return []
+    if ((selectedPayable.payments || []).length > 0) return selectedPayable.payments
+    if (Number(selectedPayable.paidAmount || 0) <= 0) return []
+
+    return [{
+      id: `${selectedPayable.id}-inferred-payment`,
+      paymentDate: selectedPayable.invoiceDate || null,
+      amount: Number(selectedPayable.paidAmount || 0),
+      reference: "Pago acumulado",
+      notes: "Registro inferido del monto abonado total; no hay detalle histórico por movimiento.",
+      isInferred: true,
+    }]
+  }, [selectedPayable])
+
+  const selectedPayableCard = useMemo(() => {
+    if (!selectedPayable) return null
+    return {
+      invoiceNumber: selectedPayable.invoiceNumber,
+      invoiceDateText: formatLocalDateOnly(selectedPayable.invoiceDate as any),
+      dueDateText: formatLocalDateOnly(selectedPayable.dueDate as any),
+      statusLabel: getStatusLabel(selectedPayable.status),
+      statusVariant: getStatusVariant(selectedPayable.status),
+      originalAmountText: formatCurrency(selectedPayable.originalAmount),
+      balanceAmountText: formatCurrency(selectedPayable.balanceAmount),
+      paidAmountText: formatCurrency(selectedPayable.paidAmount),
+      recordsCount: selectedPayablePayments.length,
+    }
+  }, [selectedPayable, selectedPayablePayments])
+
+  const selectedPayableHistoryItems = useMemo(() => {
+    return selectedPayablePayments.map((payment) => ({
+      id: payment.id,
+      paymentDate: formatLocalDateOnly(payment.paymentDate as any),
+      amount: formatCurrency(payment.amount),
+      reference: payment.reference || "-",
+      notes: payment.notes,
+      invoiceUrl: payment.invoiceUrl || null,
+      helperText: payment.isInferred ? "Sin detalle de abonos históricos" : undefined,
+    }))
+  }, [selectedPayablePayments])
+
+  const isPayablePaid =
+    !!selectedPayable &&
+    (selectedPayable.balanceAmount <= 0 || selectedPayable.status === "pagada")
 
   useEffect(() => {
     if (!selectedPayable) return
-    setPaymentForm({ amount: selectedPayable.balanceAmount, reference: "transferencia", notes: "" })
+    setPaymentForm({
+      paymentDate: getLocalDateInputValue(),
+      amount: selectedPayable.balanceAmount,
+      reference: "transferencia",
+      notes: "",
+    })
+    setAttachedInvoiceFile(null)
+    if (attachedInvoicePreviewUrl) {
+      URL.revokeObjectURL(attachedInvoicePreviewUrl)
+      setAttachedInvoicePreviewUrl(null)
+    }
   }, [selectedPayableId])
+
+  useEffect(() => {
+    return () => {
+      if (attachedInvoicePreviewUrl) {
+        URL.revokeObjectURL(attachedInvoicePreviewUrl)
+      }
+    }
+  }, [attachedInvoicePreviewUrl])
+
+  const handleAttachInvoice = () => {
+    attachmentInputRef.current?.click()
+  }
+
+  const handleAttachedInvoiceFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      setAttachedInvoiceFile(null)
+      if (attachedInvoicePreviewUrl) {
+        URL.revokeObjectURL(attachedInvoicePreviewUrl)
+        setAttachedInvoicePreviewUrl(null)
+      }
+      return
+    }
+
+    const isPdf = file.type === "application/pdf"
+    const isImage = file.type.startsWith("image/")
+
+    if (!isPdf && !isImage) {
+      setAttachedInvoiceFile(null)
+      if (attachedInvoicePreviewUrl) {
+        URL.revokeObjectURL(attachedInvoicePreviewUrl)
+        setAttachedInvoicePreviewUrl(null)
+      }
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = ""
+      }
+      toast.error("Solo se permiten facturas en PDF o imágenes")
+      return
+    }
+
+    if (attachedInvoicePreviewUrl) {
+      URL.revokeObjectURL(attachedInvoicePreviewUrl)
+    }
+    setAttachedInvoiceFile(file)
+    setAttachedInvoicePreviewUrl(URL.createObjectURL(file))
+  }
+
+  const handleViewAttachedInvoice = () => {
+    if (!attachedInvoicePreviewUrl) return
+    window.open(attachedInvoicePreviewUrl, "_blank", "noopener,noreferrer")
+  }
+
+  const handleRemoveAttachedInvoice = () => {
+    setAttachedInvoiceFile(null)
+    if (attachedInvoicePreviewUrl) {
+      URL.revokeObjectURL(attachedInvoicePreviewUrl)
+      setAttachedInvoicePreviewUrl(null)
+    }
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = ""
+    }
+  }
+
+  const attachedInvoiceLabel = attachedInvoiceFile
+    ? attachedInvoiceFile.name
+    : "Adjuntar factura"
 
   const handleRegisterPayment = async () => {
     if (!selectedPayable) return
@@ -151,8 +302,25 @@ export default function SupplierAccountDetailPage() {
         paymentMethod: paymentForm.reference,
         reference: paymentForm.reference,
         notes: paymentForm.notes || undefined,
+        paymentDate: paymentForm.paymentDate || undefined,
+        invoiceFile: attachedInvoiceFile,
       })
       await mutate()
+      setPaymentForm((prev) => ({
+        ...prev,
+        paymentDate: getLocalDateInputValue(),
+        amount: Math.max(Number(selectedPayable.balanceAmount || 0) - amount, 0),
+        reference: "transferencia",
+        notes: "",
+      }))
+      setAttachedInvoiceFile(null)
+      if (attachedInvoicePreviewUrl) {
+        URL.revokeObjectURL(attachedInvoicePreviewUrl)
+        setAttachedInvoicePreviewUrl(null)
+      }
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = ""
+      }
       toast.success("Pago registrado correctamente")
     } catch (error: any) {
       toast.error(error?.message || "No se pudo registrar el pago")
@@ -186,7 +354,7 @@ export default function SupplierAccountDetailPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <Button variant="ghost" className="mb-2 gap-2 px-0 hover:bg-transparent" onClick={() => router.push("/accounts")}>
+          <Button variant="ghost" className="mb-2 gap-2 px-0 hover:bg-transparent" onClick={() => router.push("/accounts?tab=suppliers")}>
             <ArrowLeft className="h-4 w-4" />
             Volver a proveedores
           </Button>
@@ -195,6 +363,9 @@ export default function SupplierAccountDetailPage() {
             {supplier.name} · {supplierRfc}
           </p>
         </div>
+        <Button asChild>
+          <a href={`/purchase-orders/pending?supplierId=${supplierId}`}>Ver facturas pendientes</a>
+        </Button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -226,10 +397,9 @@ export default function SupplierAccountDetailPage() {
 
       {totals.overdueCount > 0 ? (
         <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
           <AlertTitle>Alerta de vencimiento</AlertTitle>
           <AlertDescription>
-            Hay {totals.overdueCount} factura(s) vencida(s) con saldo pendiente.
+            Hay {totals.overdueCount} factura(s) vencida(s) con saldo pendiente. Revisa y registra los abonos correspondientes.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -238,7 +408,7 @@ export default function SupplierAccountDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle>Cuentas por pagar</CardTitle>
-            <CardDescription>Selecciona una factura para revisar pagos y registrar un nuevo abono.</CardDescription>
+            <CardDescription>Selecciona una factura para ver sus abonos y registrar un nuevo pago.</CardDescription>
           </CardHeader>
           <CardContent>
             {payables.length === 0 ? (
@@ -273,7 +443,7 @@ export default function SupplierAccountDetailPage() {
                         </TableCell>
                         <TableCell>{formatCurrency(row.originalAmount)}</TableCell>
                         <TableCell>{formatCurrency(row.balanceAmount)}</TableCell>
-                        <TableCell>{row.paidAmount > 0 ? 1 : 0}</TableCell>
+                        <TableCell>{row.payments.length > 0 ? row.payments.length : row.paidAmount > 0 ? 1 : 0}</TableCell>
                         <TableCell>
                           <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                         </TableCell>
@@ -292,120 +462,38 @@ export default function SupplierAccountDetailPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Gestión de abonos</CardTitle>
-            <CardDescription>Registra abonos para la factura seleccionada.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!selectedPayable ? (
-              <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                Selecciona una factura para revisar su saldo y capturar un nuevo abono.
-              </div>
-            ) : (
-              <>
-                <div className="space-y-3 rounded-md border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold">{selectedPayable.invoiceNumber}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Emitida el {formatLocalDateOnly(selectedPayable.invoiceDate as any)} · Vence el {formatLocalDateOnly(selectedPayable.dueDate as any)}
-                      </p>
-                    </div>
-                    <Badge variant={getStatusVariant(selectedPayable.status)}>
-                      {getStatusLabel(selectedPayable.status)}
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Original</p>
-                      <p className="font-semibold">{formatCurrency(selectedPayable.originalAmount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Saldo</p>
-                      <p className="font-semibold">{formatCurrency(selectedPayable.balanceAmount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Abonos</p>
-                      <p className="font-semibold">{formatCurrency(selectedPayable.paidAmount)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {isPayablePaid ? (
-                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                    Esta factura ya está pagada. No se pueden registrar nuevos abonos.
-                  </div>
-                ) : (
-                  <div className="space-y-4 rounded-md border p-4">
-                    <div>
-                      <h3 className="text-sm font-semibold">Nuevo abono</h3>
-                      <p className="text-xs text-muted-foreground">El saldo se recalcula automáticamente después de guardar.</p>
-                    </div>
-
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="supplierPaymentAmount">Monto</Label>
-                        <Input
-                          id="supplierPaymentAmount"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={paymentForm.amount || ""}
-                          onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: Number(e.target.value || 0) }))}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Referencia</Label>
-                        <Select
-                          value={paymentForm.reference}
-                          onValueChange={(value) => setPaymentForm((prev) => ({ ...prev, reference: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona una referencia" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {PAYMENT_REFERENCE_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="supplierPaymentNotes">Notas</Label>
-                        <Textarea
-                          id="supplierPaymentNotes"
-                          value={paymentForm.notes || ""}
-                          onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
-                          placeholder="Referencia bancaria, folio del cheque, observaciones, etc."
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-
-                    <Button
-                      className="gap-2"
-                      onClick={handleRegisterPayment}
-                      disabled={
-                        isSaving ||
-                        Number(paymentForm.amount || 0) <= 0 ||
-                        Number(paymentForm.amount || 0) > Number(selectedPayable.balanceAmount || 0)
-                      }
-                    >
-                      <DollarSign className="h-4 w-4" />
-                      {isSaving ? "Guardando..." : "Registrar abono"}
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <PaymentManagementCard
+          selectedDocument={selectedPayableCard}
+          isDocumentPaid={isPayablePaid}
+          paymentDate={paymentForm.paymentDate}
+          amount={Number(paymentForm.amount || 0)}
+          reference={paymentForm.reference}
+          notes={paymentForm.notes || ""}
+          referenceOptions={PAYMENT_REFERENCE_OPTIONS}
+          onPaymentDateChange={(value) => setPaymentForm((prev) => ({ ...prev, paymentDate: value }))}
+          onAmountChange={(value) => setPaymentForm((prev) => ({ ...prev, amount: value }))}
+          onReferenceChange={(value) => setPaymentForm((prev) => ({ ...prev, reference: value }))}
+          onNotesChange={(value) => setPaymentForm((prev) => ({ ...prev, notes: value }))}
+          onRegisterPayment={handleRegisterPayment}
+          isSaving={isSaving}
+          registerDisabled={
+            isSaving ||
+            !paymentForm.paymentDate ||
+            !paymentForm.reference.trim() ||
+            Number(paymentForm.amount || 0) <= 0 ||
+            Number(paymentForm.amount || 0) > Number(selectedPayable?.balanceAmount || 0)
+          }
+          historyItems={selectedPayableHistoryItems}
+          showInvoiceColumn={true}
+          showAttachmentControls={true}
+          attachmentInputRef={attachmentInputRef}
+          onAttachmentFileChange={handleAttachedInvoiceFileChange}
+          onAttachClick={handleAttachInvoice}
+          attachmentLabel={attachedInvoiceLabel}
+          hasAttachedFile={!!attachedInvoiceFile}
+          onViewAttached={handleViewAttachedInvoice}
+          onRemoveAttached={handleRemoveAttachedInvoice}
+        />
       </div>
     </div>
   )

@@ -46,9 +46,10 @@ type PayableRow = {
 
 type AccountsPayableTabProps = {
   supplierId?: string
+  onRegister?: (row: PayableRow) => void
 }
 
-export function AccountsPayableTab({ supplierId }: AccountsPayableTabProps = {}) {
+export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTabProps = {}) {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -118,7 +119,13 @@ export function AccountsPayableTab({ supplierId }: AccountsPayableTabProps = {})
   const overdueOrders = filteredOrders.filter((row) => row.dueDate && new Date() > new Date(row.dueDate))
   const totalOverdue = overdueOrders.reduce((sum, row) => sum + Math.max(row.total - row.amountPaid, 0), 0)
 
-  const handleRegisterPayment = (payableId: string) => {
+  const handleRegisterPayment = (payableId: string, supplierId?: string) => {
+    const row = payableRows.find((r) => r.id === payableId)
+    if (onRegister && row) {
+      onRegister(row)
+      return
+    }
+
     setSelectedPayableId(payableId)
     setPaymentDialogOpen(true)
     setPaymentAmount("")
@@ -315,7 +322,7 @@ export function AccountsPayableTab({ supplierId }: AccountsPayableTabProps = {})
                         </TableCell>
                         <TableCell className="text-right">
                           <ProtectedUpdate module="purchaseOrders">
-                            <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(row.id)}>
+                            <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(row.id, row.supplierId)}>
                               <DollarSign className="mr-2 h-4 w-4" />
                               Registrar Pago
                             </Button>

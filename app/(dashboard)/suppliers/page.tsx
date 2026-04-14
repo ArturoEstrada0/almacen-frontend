@@ -8,10 +8,12 @@ import Link from "next/link"
 import { QuotationsTab } from "@/components/suppliers/quotations-tab"
 import { SuppliersDirectoryTab } from "@/components/suppliers/suppliers-directory-tab"
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
+import { useRouter } from "next/navigation"
 import { ProtectedCreate } from "@/components/auth/protected-action"
 
 export default function SuppliersPage() {
   const [activeTab, setActiveTab] = useState("directory")
+  const router = useRouter()
 
   return (
     <div className="space-y-6">
@@ -55,7 +57,13 @@ export default function SuppliersPage() {
         </TabsContent>
 
         <TabsContent value="payables" className="space-y-4">
-          <AccountsPayableTab />
+          <AccountsPayableTab
+            onRegister={(row) => {
+              if (row.supplierId) {
+                router.push(`/accounts/suppliers/${row.supplierId}`)
+              }
+            }}
+          />
         </TabsContent>
       </Tabs>
     </div>
