@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ComboBox } from "@/components/ui/combobox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck } from "lucide-react"
+import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck, Loader2 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { compressDocument } from "@/lib/document-compression"
 import type { ShipmentStatus } from "@/lib/types"
@@ -111,6 +111,7 @@ export function ShipmentsTab() {
   const [pendingEditId, setPendingEditId] = useState<string | null>(null)
   const [isShipmentErrorDialogOpen, setIsShipmentErrorDialogOpen] = useState(false)
   const [shipmentErrorMessage, setShipmentErrorMessage] = useState("")
+  const [isCreatingShipment, setIsCreatingShipment] = useState(false)
 
   const { fruitReceptions } = useFruitReceptions()
   const { shipments, mutate: mutateShipments, isLoading } = useShipments()
@@ -230,6 +231,8 @@ export function ShipmentsTab() {
   }
 
   const handleCreateShipment = () => {
+    if (isCreatingShipment) return
+    setIsCreatingShipment(true)
     ;(async () => {
       try {
         const payload: any = {
@@ -320,6 +323,8 @@ export function ShipmentsTab() {
         if (e.technicalDetails) msg += "\nDetails: " + JSON.stringify(e.technicalDetails)
         if (e.raw && typeof e.raw === 'string' && e.raw.trim()) msg += "\nResponse: " + e.raw
         openShipmentErrorDialog(`Error al crear embarque: ${msg}`)
+      } finally {
+        setIsCreatingShipment(false)
       }
     })()
   }
@@ -988,11 +993,15 @@ export function ShipmentsTab() {
                 </Button>
                 <Button 
                   onClick={handleCreateShipment} 
-                  disabled={selectedReceptions.length === 0 || !carrier}
+                  disabled={selectedReceptions.length === 0 || !carrier || isCreatingShipment}
                   className="h-10 px-6 text-sm"
                 >
-                  <Package className="mr-2 h-4 w-4" />
-                  Crear Embarque ({selectedReceptions.length} recepciones)
+                  {isCreatingShipment ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Package className="mr-2 h-4 w-4" />
+                  )}
+                  {isCreatingShipment ? "Creando embarque..." : `Crear Embarque (${selectedReceptions.length} recepciones)`}
                 </Button>
               </DialogFooter>
             </div>

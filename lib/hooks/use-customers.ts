@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { useAuth } from "@/lib/context/auth-context"
 
 export interface Customer {
@@ -112,7 +112,7 @@ export function useCustomers() {
   const [error, setError] = useState<string | null>(null)
   const { session } = useAuth()
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     if (!session?.access_token) return
 
     setIsLoading(true)
@@ -141,7 +141,7 @@ export function useCustomers() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [session?.access_token])
 
   const searchCustomers = async (query: string): Promise<Customer[]> => {
     if (!session?.access_token) return []
