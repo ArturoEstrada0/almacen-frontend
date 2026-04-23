@@ -63,31 +63,69 @@ export function InputAssignmentsTab() {
   const [returnReason, setReturnReason] = useState<string>("Excedente/No utilizado")
   const { toast } = useToast()
 
+  const normalizeReturnItems = (items: any[] = []) =>
+    items
+      .map((item: any) => ({
+        id: item.id || `${item.productId || item.product?.id || "item"}-${Math.random()}`,
+        productId: String(item.productId || item.product?.id || ""),
+        quantity: String(Math.trunc(Number(item.quantity || 0))),
+        unitPrice: String(Number(item.unitPrice ?? item.price ?? 0)),
+      }))
+      .filter((item) => item.productId)
+
+  const mapFruitReceptionToReturn = (reception: any) => {
+    const items = normalizeReturnItems(reception.returnedItems || [])
+    if (items.length === 0) return null
+
+    const total = items.reduce(
+      (sum, item) => sum + Math.trunc(Number(item.quantity || 0)) * Number(item.unitPrice || 0),
+      0,
+    )
+
+    return {
+      id: `fruit-return-${reception.id}`,
+      code: reception.code || reception.receptionNumber || `FR-${String(reception.id).slice(0, 8)}`,
+      assignmentNumber: reception.code || reception.receptionNumber || reception.id,
+      trackingFolio: reception.trackingFolio || reception.code || reception.receptionNumber || "",
+      producerId: reception.producerId,
+      warehouseId: reception.warehouseId,
+      date: reception.date || reception.receptionDate,
+      notes: reception.notes || "Devolución registrada desde recepción de fruta",
+      total,
+      items,
+      type: "return",
+      isReturn: true,
+      sourceType: "fruit_reception",
+      sourceCode: reception.code || reception.receptionNumber || "",
+    }
+  }
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         setLoading(true)
         // Fetch main lists and assignments first
-        const [pRes, wRes, prodRes, assignmentsRes] = await Promise.all([
+        const [pRes, wRes, prodRes, assignmentsRes, fruitReceptionsRes] = await Promise.allSettled([
           apiGet("/producers"),
           apiGet("/warehouses"),
           apiGet("/products"),
           apiGet("/producers/input-assignments/all"),
+          apiGet("/api/producers/fruit-receptions/all"),
         ])
         if (!mounted) return
-        setProducers(Array.isArray(pRes) ? pRes : [])
-        setWarehouses(Array.isArray(wRes) ? wRes : [])
-        setProducts(Array.isArray(prodRes) ? prodRes : [])
+        setProducers(pRes.status === "fulfilled" && Array.isArray(pRes.value) ? pRes.value : [])
+        setWarehouses(wRes.status === "fulfilled" && Array.isArray(wRes.value) ? wRes.value : [])
+        setProducts(prodRes.status === "fulfilled" && Array.isArray(prodRes.value) ? prodRes.value : [])
 
-        const assigns = Array.isArray(assignmentsRes) ? assignmentsRes : []
+        const assigns = assignmentsRes.status === "fulfilled" && Array.isArray(assignmentsRes.value) ? assignmentsRes.value : []
 
         // Try to fetch returns separately — if it fails, don't block showing assignments
         let returns: any[] = []
         try {
           const returnsRes = await apiGet("/producers/input-returns/all")
           if (Array.isArray(returnsRes)) {
-            returns = returnsRes.map((r: any) => ({ ...r, type: 'return' }))
+            returns = returnsRes.map((r: any) => ({ ...r, type: 'return', isReturn: true }))
           }
         } catch (err) {
           // Log but continue — older backends may not expose returns endpoint
@@ -95,8 +133,12 @@ export function InputAssignmentsTab() {
           console.warn('Could not load input returns:', err)
         }
 
+        const fruitReturns = fruitReceptionsRes.status === "fulfilled" && Array.isArray(fruitReceptionsRes.value)
+          ? fruitReceptionsRes.value.map(mapFruitReceptionToReturn).filter(Boolean)
+          : []
+
         // combine and sort by date desc
-        const combined = [...returns, ...assigns].sort((a: any, b: any) => {
+        const combined = [...returns, ...fruitReturns, ...assigns].sort((a: any, b: any) => {
           const at = new Date(a.date || a.assignmentDate || 0).getTime() || 0
           const bt = new Date(b.date || b.assignmentDate || 0).getTime() || 0
           return bt - at
@@ -118,14 +160,16 @@ export function InputAssignmentsTab() {
 
   const addItem = () =>
     setSelectedItems((s) => [...s, { id: Date.now(), productId: "", quantity: "", unitPrice: "" }])
+  const addReturnItem = () =>
+    setSelectedItems((s) => [...s, { id: Date.now(), productId: "", quantity: "1", unitPrice: "" }])
   const removeItem = (id: number) => setSelectedItems((s) => s.filter((it) => it.id !== id))
   const updateItem = (id: number, patch: Partial<AssignmentItem>) => {
     // Si se está cambiando el producto, obtener el precio de la base de datos
     if (patch.productId !== undefined) {
       const selectedProductItem = products.find(p => String(p.id) === patch.productId && p.type !== "fruta")
       if (selectedProductItem) {
-        // Usar el campo 'price' del producto de la BD
-        const productPrice = Number(selectedProductItem.price) || Number(selectedProductItem.salePrice) || 0
+        // Usar el costo/precio configurado del producto de la BD
+        const productPrice = Number(selectedProductItem.cost) || Number(selectedProductItem.price) || Number(selectedProductItem.salePrice) || 0
         patch.unitPrice = productPrice.toString()
       }
     }
@@ -318,7 +362,7 @@ export function InputAssignmentsTab() {
         reason: returnReason,
         items: selectedItems.map((it) => ({ 
           productId: it.productId, 
-          quantity: parseFloat(it.quantity) || 0, 
+          quantity: Math.trunc(Number(it.quantity) || 0), 
           unitPrice: parseFloat(it.unitPrice) || 0 
         })),
       }
@@ -384,7 +428,13 @@ export function InputAssignmentsTab() {
     const q = searchTerm.toLowerCase()
     const producer = producers.find((p) => String(p.id) === String(a.producerId))
     const code = (a.code || a.assignmentNumber || "").toString().toLowerCase()
-    return code.includes(q) || (producer?.name || "").toLowerCase().includes(q)
+    const producerName = (producer?.name || "").toLowerCase()
+    const producerCode = (producer?.code || producer?.producerCode || "").toString().toLowerCase()
+    return (
+      code.includes(q) ||
+      producerName.includes(q) ||
+      producerCode.includes(q)
+    )
   })
 
   // Pagination
@@ -449,18 +499,20 @@ export function InputAssignmentsTab() {
     
     const itemsHtml = items.map((item: any) => {
       const product = products.find(p => String(p.id) === String(item.productId))
+      const quantity = Math.trunc(Number(item.quantity) || 0)
+      const unitPrice = Number(item.unitPrice ?? item.price ?? 0)
       return `
         <tr>
           <td>${product?.name || '-'}</td>
-          <td style="text-align: center">${item.quantity || 0}</td>
-          <td style="text-align: right">${formatCurrency(Number(item.unitPrice) || 0)}</td>
-          <td style="text-align: right">${formatCurrency((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}</td>
+          <td style="text-align: center">${quantity}</td>
+          <td style="text-align: right">${formatCurrency(unitPrice)}</td>
+          <td style="text-align: right">${formatCurrency(quantity * unitPrice)}</td>
         </tr>
       `
     }).join('')
     
     const total = items.reduce((sum: number, item: any) => 
-      sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0
+      sum + (Math.trunc(Number(item.quantity || 0)) * Number(item.unitPrice || 0)), 0
     )
     
     const html = `<!DOCTYPE html>
@@ -610,7 +662,7 @@ export function InputAssignmentsTab() {
                             <ComboBox value={it.productId} onChange={(v) => updateItem(it.id, { productId: v })} options={insumoProducts.map(p => ({ value: String(p.id), label: `${p.sku || ''} - ${p.name}` }))} placeholder="Seleccionar insumo" />
                           </div>
                           <div>
-                            <Input value={it.quantity} onChange={(e) => updateItem(it.id, { quantity: e.target.value })} placeholder="Cantidad" />
+                            <Input type="number" step="1" min="1" inputMode="numeric" value={it.quantity} onChange={(e) => updateItem(it.id, { quantity: e.target.value.replace(/\D/g, "") })} placeholder="Cantidad" />
                           </div>
                           <div>
                             <Input value={it.unitPrice} onChange={(e) => updateItem(it.id, { unitPrice: e.target.value })} placeholder="Precio Unit." />
@@ -620,7 +672,7 @@ export function InputAssignmentsTab() {
                           </div>
                         </div>
                       ))}
-                      <Button variant="ghost" onClick={addItem}>Añadir item</Button>
+                      <Button variant="ghost" onClick={addReturnItem}>Añadir item</Button>
                     </div>
                   </div>
 
@@ -859,6 +911,8 @@ export function InputAssignmentsTab() {
               {pagedAssignments.map((assignment) => {
                 const producer = producers.find((p) => String(p.id) === String(assignment.producerId))
                 const warehouse = warehouses.find((w) => String(w.id) === String(assignment.warehouseId))
+                const isReturn = (assignment.type === 'return') || assignment.isReturn === true || assignment.isReturn === 'true'
+                const isFruitReceptionReturn = assignment.sourceType === 'fruit_reception'
                 const assignmentProducts = (assignment.items || [])
                   .map((item: any) => {
                     const product = products.find(p => String(p.id) === String(item.productId))
@@ -881,26 +935,21 @@ export function InputAssignmentsTab() {
                     </TableCell>
                     <TableCell>{warehouse?.name}</TableCell>
                     <TableCell>{formatDate(assignment.date || assignment.assignmentDate)}</TableCell>
-                      {
-                        // Mostrar devoluciones como abono (verde) y las asignaciones normales como cargo (destructive)
-                      }
-                      {(() => {
-                        const isReturn = (assignment.type === 'return') || assignment.isReturn === true || assignment.isReturn === 'true'
-                        return (
-                          <TableCell className="font-semibold">
-                            {isReturn ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-green-600">{formatCurrency(Number(assignment.total) || 0)}</span>
-                                <Badge variant="outline" className="text-green-600 border-green-600">Devolución</Badge>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span className="text-destructive">{formatCurrency(Number(assignment.total) || 0)}</span>
-                              </div>
-                            )}
-                          </TableCell>
-                        )
-                      })()}
+                    <TableCell className="font-semibold">
+                      {isReturn ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600">{formatCurrency(Number(assignment.total) || 0)}</span>
+                          <Badge variant="outline" className="text-green-600 border-green-600">Devolución</Badge>
+                          {isFruitReceptionReturn && (
+                            <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">Recepción de fruta</Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-destructive">{formatCurrency(Number(assignment.total) || 0)}</span>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" title="Imprimir nota" onClick={() => handlePrintAssignment(assignment)}>
@@ -909,22 +958,26 @@ export function InputAssignmentsTab() {
                         <Button variant="ghost" size="sm" title="Ver detalles" onClick={() => handleViewAssignment(assignment)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <ProtectedUpdate module="producers">
-                          <Button variant="ghost" size="sm" title="Editar asignación" onClick={() => handleEditAssignment(assignment)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </ProtectedUpdate>
-                        <ProtectedDelete module="producers">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            title="Eliminar asignación" 
-                            onClick={() => handleDeleteAssignment(assignment)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </ProtectedDelete>
+                        {!isFruitReceptionReturn && (
+                          <>
+                            <ProtectedUpdate module="producers">
+                              <Button variant="ghost" size="sm" title="Editar asignación" onClick={() => handleEditAssignment(assignment)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </ProtectedUpdate>
+                            <ProtectedDelete module="producers">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                title="Eliminar asignación" 
+                                onClick={() => handleDeleteAssignment(assignment)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </ProtectedDelete>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1014,8 +1067,8 @@ export function InputAssignmentsTab() {
                       <TableBody>
                         {(selectedAssignment.items || []).map((item: any, idx: number) => {
                           const product = products.find(p => String(p.id) === String(item.productId))
-                          const quantity = Number(item.quantity)
-                          const unitPrice = Number(item.price || item.unitPrice || 0)
+                          const quantity = Math.trunc(Number(item.quantity || 0))
+                          const unitPrice = Number(item.price ?? item.unitPrice ?? 0)
                           const subtotal = quantity * unitPrice
                           
                           return (

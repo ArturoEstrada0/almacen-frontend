@@ -306,7 +306,7 @@ export default function CustomerAccountDetailPage() {
           </Button>
           <h1 className="text-2xl font-bold">Estado de cuenta</h1>
           <p className="text-sm text-muted-foreground">
-            {statement.customer.name} · {statement.customer.rfc}
+            {statement.customer.name} · {statement.customer.rfc || "-"}
           </p>
         </div>
         <div className="flex items-center gap-2">

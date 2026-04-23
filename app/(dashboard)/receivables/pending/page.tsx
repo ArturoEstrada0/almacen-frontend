@@ -60,7 +60,7 @@ export default function PendingReceivablesPage() {
       ...customers.map((c) => ({
         value: c.id,
         label: c.name,
-        subtitle: c.rfc || undefined,
+        subtitle: [c.customerCode, c.rfc].filter(Boolean).join(" · ") || undefined,
       })),
     ]
   }, [customers])

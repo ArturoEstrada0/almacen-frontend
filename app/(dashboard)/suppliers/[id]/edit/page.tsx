@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,12 +9,16 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, ArrowLeft } from "lucide-react"
-import { apiPost } from "@/lib/db/localApi"
+import { updateSupplier, useSupplier } from "@/lib/hooks/use-suppliers"
 import { toast } from "@/lib/utils/toast"
 import { SUPPLIER_TYPE_OPTIONS } from "@/lib/constants/supplier-types"
 
-export default function NewSupplierPage() {
+export default function EditSupplierPage() {
   const router = useRouter()
+  const params = useParams<{ id: string }>()
+  const supplierId = Array.isArray(params?.id) ? params.id[0] : params?.id
+  const { supplier, isLoading } = useSupplier(supplierId || "")
+
   const [form, setForm] = useState({
     code: "",
     name: "",
@@ -35,8 +39,37 @@ export default function NewSupplierPage() {
     swiftCodeUsd: "",
   })
 
+  useEffect(() => {
+    if (!supplier) return
+
+    setForm({
+      code: supplier.code || "",
+      name: supplier.name || "",
+      taxId: supplier.rfc || "",
+      email: supplier.email || "",
+      phone: supplier.phone || "",
+      address: supplier.address || "",
+      contactName: supplier.contactName || "",
+      businessType: supplier.businessType || "",
+      supplierType: supplier.supplierType || "",
+      creditDays: supplier.paymentTerms?.toString?.() || "",
+      isActive: supplier.active ?? true,
+      bankNameMxn: (supplier as any).bankNameMxn || "",
+      accountNumberMxn: (supplier as any).accountNumberMxn || "",
+      clabeMxn: (supplier as any).clabeMxn || "",
+      bankNameUsd: (supplier as any).bankNameUsd || "",
+      accountNumberUsd: (supplier as any).accountNumberUsd || "",
+      swiftCodeUsd: (supplier as any).swiftCodeUsd || "",
+    })
+  }, [supplier?.id])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!supplierId) {
+      toast.error("No se pudo identificar el proveedor")
+      return
+    }
 
     if (!form.name.trim() || !form.taxId.trim() || !form.supplierType.trim()) {
       toast.error("Los campos 'Nombre', 'RFC/Tax ID' y 'Tipo de proveedor' son obligatorios")
@@ -45,8 +78,8 @@ export default function NewSupplierPage() {
 
     let loadingId: string | number | undefined
     try {
-      loadingId = toast.loading("Creando proveedor...")
-      await apiPost("/suppliers", {
+      loadingId = toast.loading("Actualizando proveedor...")
+      const payload: any = {
         code: form.code,
         name: form.name,
         taxId: form.taxId,
@@ -64,16 +97,15 @@ export default function NewSupplierPage() {
         bankNameUsd: form.bankNameUsd || undefined,
         accountNumberUsd: form.accountNumberUsd || undefined,
         swiftCodeUsd: form.swiftCodeUsd || undefined,
-      })
+      }
+
+      await updateSupplier(supplierId, payload)
       if (loadingId) toast.dismiss(loadingId)
-      toast.success("Proveedor creado")
+      toast.success("Proveedor actualizado")
       router.push("/suppliers")
     } catch (err: any) {
-      // Evitar mostrar en consola errores esperados (registro ya existe)
-      const isDuplicateError = typeof err?.message === 'string' && err.message.includes('Este registro ya existe')
-      if (!isDuplicateError) console.error(err)
       if (loadingId) toast.dismiss(loadingId)
-      const message = err?.message || (err?.statusCode ? `Error ${err.statusCode}` : "Error creando proveedor")
+      const message = err?.message || (err?.statusCode ? `Error ${err.statusCode}` : "Error actualizando proveedor")
       toast.error(message)
     }
   }
@@ -87,8 +119,8 @@ export default function NewSupplierPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Nuevo Proveedor</h1>
-          <p className="text-muted-foreground">Agregar un proveedor al catálogo</p>
+          <h1 className="text-3xl font-bold tracking-tight">Editar Proveedor</h1>
+          <p className="text-muted-foreground">Modificar un proveedor del catálogo</p>
         </div>
       </div>
 
@@ -139,10 +171,7 @@ export default function NewSupplierPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="supplierType">Tipo de proveedor *</Label>
-                    <Select
-                      value={form.supplierType}
-                      onValueChange={(value) => setForm({ ...form, supplierType: value })}
-                    >
+                    <Select value={form.supplierType} onValueChange={(value) => setForm({ ...form, supplierType: value })}>
                       <SelectTrigger id="supplierType">
                         <SelectValue placeholder="Selecciona un tipo" />
                       </SelectTrigger>
@@ -176,30 +205,30 @@ export default function NewSupplierPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="bankNameMxn">Banco</Label>
-                  <Input 
-                    id="bankNameMxn" 
-                    value={form.bankNameMxn} 
-                    onChange={(e) => setForm({ ...form, bankNameMxn: e.target.value })} 
+                  <Input
+                    id="bankNameMxn"
+                    value={form.bankNameMxn}
+                    onChange={(e) => setForm({ ...form, bankNameMxn: e.target.value })}
                     placeholder="BBVA, Banamex, Santander, etc."
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="accountNumberMxn">Número de Cuenta</Label>
-                  <Input 
-                    id="accountNumberMxn" 
-                    value={form.accountNumberMxn} 
-                    onChange={(e) => setForm({ ...form, accountNumberMxn: e.target.value })} 
+                  <Input
+                    id="accountNumberMxn"
+                    value={form.accountNumberMxn}
+                    onChange={(e) => setForm({ ...form, accountNumberMxn: e.target.value })}
                     placeholder="1234567890"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="clabeMxn">CLABE Interbancaria</Label>
-                  <Input 
-                    id="clabeMxn" 
-                    value={form.clabeMxn} 
-                    onChange={(e) => setForm({ ...form, clabeMxn: e.target.value })} 
+                  <Input
+                    id="clabeMxn"
+                    value={form.clabeMxn}
+                    onChange={(e) => setForm({ ...form, clabeMxn: e.target.value })}
                     placeholder="012345678901234567"
                     maxLength={18}
                   />
@@ -215,30 +244,30 @@ export default function NewSupplierPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="bankNameUsd">Banco</Label>
-                  <Input 
-                    id="bankNameUsd" 
-                    value={form.bankNameUsd} 
-                    onChange={(e) => setForm({ ...form, bankNameUsd: e.target.value })} 
+                  <Input
+                    id="bankNameUsd"
+                    value={form.bankNameUsd}
+                    onChange={(e) => setForm({ ...form, bankNameUsd: e.target.value })}
                     placeholder="Bank of America, Citibank, etc."
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="accountNumberUsd">Número de Cuenta</Label>
-                  <Input 
-                    id="accountNumberUsd" 
-                    value={form.accountNumberUsd} 
-                    onChange={(e) => setForm({ ...form, accountNumberUsd: e.target.value })} 
+                  <Input
+                    id="accountNumberUsd"
+                    value={form.accountNumberUsd}
+                    onChange={(e) => setForm({ ...form, accountNumberUsd: e.target.value })}
                     placeholder="9876543210"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="swiftCodeUsd">Código SWIFT</Label>
-                  <Input 
-                    id="swiftCodeUsd" 
-                    value={form.swiftCodeUsd} 
-                    onChange={(e) => setForm({ ...form, swiftCodeUsd: e.target.value })} 
+                  <Input
+                    id="swiftCodeUsd"
+                    value={form.swiftCodeUsd}
+                    onChange={(e) => setForm({ ...form, swiftCodeUsd: e.target.value })}
                     placeholder="BOFAUS3N"
                     maxLength={11}
                   />
@@ -254,9 +283,9 @@ export default function NewSupplierPage() {
                 <CardDescription>Guardar o cancelar</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
-                <Button type="submit" className="w-full">
+                <Button type="submit" className="w-full" disabled={isLoading}>
                   <Save className="mr-2 h-4 w-4" />
-                  Crear Proveedor
+                  Guardar Cambios
                 </Button>
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/suppliers">Cancelar</Link>

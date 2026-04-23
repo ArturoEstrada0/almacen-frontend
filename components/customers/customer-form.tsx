@@ -19,7 +19,9 @@ import { Customer } from "@/lib/hooks/use-customers"
 import { Switch } from "@/components/ui/switch"
 
 export interface CustomerFormData {
-  rfc: string
+  customerCode: string
+  customerType: "nacional" | "extranjero"
+  rfc?: string
   name: string
   businessType?: string
   street: string
@@ -27,6 +29,7 @@ export interface CustomerFormData {
   neighborhood?: string
   city: string
   state: string
+  country?: string
   postalCode: string
   phone: string
   email: string
@@ -81,6 +84,8 @@ const MEXICAN_STATES = [
   "Zacatecas",
 ]
 
+const CUSTOMER_DRAFT_KEY = "customer-form-draft-v3"
+
 export function CustomerForm({ initialData, onSubmit, isLoading = false, error }: CustomerFormProps) {
   const [showPaymentFields, setShowPaymentFields] = useState<boolean>(
     Boolean(
@@ -91,6 +96,8 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
     ),
   )
   const buildInitialForm = (data?: Customer): CustomerFormData => ({
+    customerCode: data?.customerCode ?? "",
+    customerType: (data as any)?.customerType ?? "nacional",
     rfc: data?.rfc ?? "",
     name: data?.name ?? "",
     businessType: data?.businessType ?? "",
@@ -99,6 +106,7 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
     neighborhood: data?.neighborhood ?? "",
     city: data?.city ?? "",
     state: data?.state ?? "",
+    country: (data as any)?.country ?? "México",
     postalCode: data?.postalCode ?? "",
     phone: data?.phone ?? "",
     email: data?.email ?? "",
@@ -130,6 +138,34 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
       )
     }
   }, [initialData])
+
+  useEffect(() => {
+    if (initialData || typeof window === "undefined") return
+
+    const draft = window.localStorage.getItem(CUSTOMER_DRAFT_KEY)
+    if (!draft) return
+
+    try {
+      const parsed = JSON.parse(draft)
+      if (parsed?.formData) {
+        setFormData((prev) => ({ ...prev, ...parsed.formData }))
+      }
+      if (typeof parsed?.showPaymentFields === "boolean") {
+        setShowPaymentFields(parsed.showPaymentFields)
+      }
+    } catch {
+      window.localStorage.removeItem(CUSTOMER_DRAFT_KEY)
+    }
+  }, [initialData])
+
+  useEffect(() => {
+    if (initialData || typeof window === "undefined") return
+
+    window.localStorage.setItem(
+      CUSTOMER_DRAFT_KEY,
+      JSON.stringify({ formData, showPaymentFields }),
+    )
+  }, [formData, showPaymentFields, initialData])
 
   const validateRFC = (rfc: string): boolean => {
     const rfcRegex = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/
@@ -172,7 +208,19 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
   }
 
   const handleFieldChange = (field: keyof CustomerFormData, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value }
+
+      if (field === "customerType") {
+        if (value === "nacional") {
+          next.country = "México"
+        } else if (!next.country) {
+          next.country = ""
+        }
+      }
+
+      return next
+    })
 
     // Limpiar error de validación del campo al escribir
     if (validationErrors[field]) {
@@ -186,14 +234,20 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
 
-    if (!formData.rfc) {
-      errors.rfc = "RFC es requerido"
-    } else if (!validateRFC(formData.rfc)) {
+    if (!formData.customerCode) {
+      errors.customerCode = "ID de cliente es requerido"
+    }
+
+    if (formData.rfc && !validateRFC(formData.rfc)) {
       errors.rfc = "RFC inválido. Formato: XXXXXX######XXX (12-13 caracteres)"
     }
 
     if (!formData.name) {
       errors.name = "Nombre o Razón Social es requerido"
+    }
+
+    if (!formData.customerType) {
+      errors.customerType = "Debe seleccionar si el cliente es nacional o extranjero"
     }
 
     if (!formData.street) {
@@ -208,14 +262,20 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
       errors.city = "Ciudad es requerida"
     }
 
-    if (!formData.state) {
-      errors.state = "Estado es requerido"
-    }
+    if (formData.customerType === "nacional") {
+      if (!formData.state) {
+        errors.state = "Estado es requerido"
+      }
 
-    if (!formData.postalCode) {
-      errors.postalCode = "Código postal es requerido"
-    } else if (!validatePostalCode(formData.postalCode)) {
-      errors.postalCode = "Código postal inválido (debe ser 5 dígitos)"
+      if (!formData.postalCode) {
+        errors.postalCode = "Código postal es requerido"
+      } else if (!validatePostalCode(formData.postalCode)) {
+        errors.postalCode = "Código postal inválido (debe ser 5 dígitos)"
+      }
+    } else {
+      if (!formData.country) {
+        errors.country = "País es requerido para clientes extranjeros"
+      }
     }
 
     if (!formData.phone) {
@@ -265,8 +325,30 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
         : { ...formData, paymentMethod: "cash", bankName: "", accountNumber: "", clabe: "", creditDays: 0 }
 
       await onSubmit(payload)
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(CUSTOMER_DRAFT_KEY)
+      }
     } catch (err: any) {
       setSubmitError(err.message || "Error al guardar cliente")
+    }
+  }
+
+  const handleReset = () => {
+    const initial = buildInitialForm(initialData)
+    setFormData(initial)
+    setValidationErrors({})
+    setSubmitError(null)
+    setShowPaymentFields(
+      Boolean(
+        initialData?.bankName ||
+          initialData?.clabe ||
+          initialData?.accountNumber ||
+          (initialData?.paymentMethod && initialData.paymentMethod !== "cash"),
+      ),
+    )
+
+    if (typeof window !== "undefined" && !initialData) {
+      window.localStorage.removeItem(CUSTOMER_DRAFT_KEY)
     }
   }
 
@@ -288,17 +370,38 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="rfc">RFC *</Label>
+              <Label htmlFor="customerType">Tipo de Cliente *</Label>
+              <Select
+                value={formData.customerType}
+                onValueChange={(value: any) => handleFieldChange("customerType", value)}
+              >
+                <SelectTrigger className={validationErrors.customerType ? "border-red-500" : ""}>
+                  <SelectValue placeholder="Seleccionar tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nacional">Nacional</SelectItem>
+                  <SelectItem value="extranjero">Extranjero</SelectItem>
+                </SelectContent>
+              </Select>
+              {validationErrors.customerType && (
+                <p className="text-sm text-red-500 mt-1">{validationErrors.customerType}</p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="customerCode">ID de Cliente *</Label>
               <Input
-                id="rfc"
-                placeholder="ABC123456XYZ"
-                value={formData.rfc}
-                onChange={(e) => handleFieldChange("rfc", e.target.value.toUpperCase())}
-                className={validationErrors.rfc ? "border-red-500" : ""}
-                maxLength={13}
+                id="customerCode"
+                placeholder="CLI-0001"
+                value={formData.customerCode}
+                onChange={(e) => handleFieldChange("customerCode", e.target.value.toUpperCase())}
+                className={validationErrors.customerCode ? "border-red-500" : ""}
+                maxLength={20}
               />
-              {validationErrors.rfc && <p className="text-sm text-red-500 mt-1">{validationErrors.rfc}</p>}
-              <p className="text-xs text-gray-500 mt-1">Formato: XXXXXX######XXX (12-13 caracteres)</p>
+              {validationErrors.customerCode && (
+                <p className="text-sm text-red-500 mt-1">{validationErrors.customerCode}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Identificador interno del cliente</p>
             </div>
 
             <div>
@@ -321,6 +424,20 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
                 value={formData.businessType}
                 onChange={(e) => handleFieldChange("businessType", e.target.value)}
               />
+            </div>
+
+            <div>
+              <Label htmlFor="rfc">RFC</Label>
+              <Input
+                id="rfc"
+                placeholder="ABC123456XYZ"
+                value={formData.rfc}
+                onChange={(e) => handleFieldChange("rfc", e.target.value.toUpperCase())}
+                className={validationErrors.rfc ? "border-red-500" : ""}
+                maxLength={13}
+              />
+              {validationErrors.rfc && <p className="text-sm text-red-500 mt-1">{validationErrors.rfc}</p>}
+              <p className="text-xs text-gray-500 mt-1">Opcional. Formato: XXXXXX######XXX (12-13 caracteres)</p>
             </div>
           </div>
         </CardContent>
@@ -374,7 +491,7 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
               <Label htmlFor="city">Ciudad *</Label>
               <Input
                 id="city"
-                placeholder="México"
+                placeholder={formData.customerType === "extranjero" ? "Los Ángeles" : "México"}
                 value={formData.city}
                 onChange={(e) => handleFieldChange("city", e.target.value)}
                 className={validationErrors.city ? "border-red-500" : ""}
@@ -382,37 +499,65 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
               {validationErrors.city && <p className="text-sm text-red-500 mt-1">{validationErrors.city}</p>}
             </div>
 
-            <div>
-              <Label htmlFor="state">Estado *</Label>
-              <Select value={formData.state} onValueChange={(value) => handleFieldChange("state", value)}>
-                <SelectTrigger className={validationErrors.state ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Seleccionar estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MEXICAN_STATES.map((state) => (
-                    <SelectItem key={state} value={state}>
-                      {state}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {validationErrors.state && <p className="text-sm text-red-500 mt-1">{validationErrors.state}</p>}
-            </div>
+            {formData.customerType === "nacional" ? (
+              <>
+                <div>
+                  <Label htmlFor="state">Estado *</Label>
+                  <Select value={formData.state} onValueChange={(value) => handleFieldChange("state", value)}>
+                    <SelectTrigger className={validationErrors.state ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MEXICAN_STATES.map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {validationErrors.state && <p className="text-sm text-red-500 mt-1">{validationErrors.state}</p>}
+                </div>
 
-            <div>
-              <Label htmlFor="postalCode">Código Postal *</Label>
-              <Input
-                id="postalCode"
-                placeholder="06500"
-                value={formData.postalCode}
-                onChange={(e) => handleFieldChange("postalCode", e.target.value)}
-                className={validationErrors.postalCode ? "border-red-500" : ""}
-                maxLength={5}
-              />
-              {validationErrors.postalCode && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.postalCode}</p>
-              )}
-            </div>
+                <div>
+                  <Label htmlFor="postalCode">Código Postal *</Label>
+                  <Input
+                    id="postalCode"
+                    placeholder="06500"
+                    value={formData.postalCode}
+                    onChange={(e) => handleFieldChange("postalCode", e.target.value)}
+                    className={validationErrors.postalCode ? "border-red-500" : ""}
+                    maxLength={5}
+                  />
+                  {validationErrors.postalCode && (
+                    <p className="text-sm text-red-500 mt-1">{validationErrors.postalCode}</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <Label htmlFor="country">País *</Label>
+                  <Input
+                    id="country"
+                    placeholder="Estados Unidos"
+                    value={formData.country}
+                    onChange={(e) => handleFieldChange("country", e.target.value)}
+                    className={validationErrors.country ? "border-red-500" : ""}
+                  />
+                  {validationErrors.country && <p className="text-sm text-red-500 mt-1">{validationErrors.country}</p>}
+                </div>
+
+                <div>
+                  <Label htmlFor="postalCode">Código Postal</Label>
+                  <Input
+                    id="postalCode"
+                    placeholder="Opcional"
+                    value={formData.postalCode}
+                    onChange={(e) => handleFieldChange("postalCode", e.target.value)}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -583,7 +728,7 @@ export function CustomerForm({ initialData, onSubmit, isLoading = false, error }
       </Card>
 
       <div className="flex gap-2 justify-end">
-        <Button variant="outline" type="reset">
+        <Button variant="outline" type="button" onClick={handleReset}>
           Limpiar
         </Button>
         <Button type="submit" disabled={isLoading}>

@@ -5,7 +5,9 @@ import { useAuth } from "@/lib/context/auth-context"
 
 export interface Customer {
   id: string
-  rfc: string
+  customerCode: string
+  customerType: "nacional" | "extranjero"
+  rfc?: string
   name: string
   businessType?: string
   street: string
@@ -13,6 +15,7 @@ export interface Customer {
   neighborhood?: string
   city: string
   state: string
+  country?: string
   postalCode: string
   fullAddress?: string
   phone: string

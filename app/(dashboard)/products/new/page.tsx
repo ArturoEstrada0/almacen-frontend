@@ -62,6 +62,7 @@ export default function NewProductPage() {
 
     // Map front-end types to backend enum (backend accepts 'insumo' or 'fruta')
     const mappedType = formData.type === "fruta" ? "fruta" : "insumo"
+    let loadingToast: string | number | undefined
 
     const payload: any = {
       sku: formData.sku || undefined,
@@ -79,7 +80,7 @@ export default function NewProductPage() {
     }
 
     try {
-      const loadingToast = toast.loading("Creando producto...")
+      loadingToast = toast.loading("Creando producto...")
       log("Payload enviado al backend:", payload)
       const created = await apiPost(`/products`, payload)
       log("Producto creado:", created)
@@ -135,7 +136,6 @@ export default function NewProductPage() {
         }
       }
 
-      toast.dismiss(loadingToast)
       toast.dismiss(loadingToast)
       toast.success("Producto creado correctamente")
       router.push("/products")
@@ -242,23 +242,13 @@ export default function NewProductPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Descripción detallada del producto"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="type">Tipo de Producto *</Label>
                     <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Seleccionar tipo" />
                       </SelectTrigger>
                       <SelectContent>
                         {productTypes.map((type) => (
@@ -275,19 +265,30 @@ export default function NewProductPage() {
                       value={formData.categoryId || "none"}
                       onValueChange={(value) => setFormData({ ...formData, categoryId: value === "none" ? "" : value })}
                     >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar categoría" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Sin categoría</SelectItem>
-                          {categories.map((cat: any) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Seleccionar categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin categoría</SelectItem>
+                        {categories.map((cat: any) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descripción</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Descripción detallada del producto"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                  />
                 </div>
 
                 <div className="space-y-2">

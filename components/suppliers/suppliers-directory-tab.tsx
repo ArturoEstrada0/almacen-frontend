@@ -24,18 +24,21 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SUPPLIER_TYPE_OPTIONS, getSupplierTypeLabel } from "@/lib/constants/supplier-types"
+import Link from "next/link"
 
 export function SuppliersDirectoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [selectedSupplierType, setSelectedSupplierType] = useState("all")
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null)
   const [emailSubject, setEmailSubject] = useState("")
   const [emailBody, setEmailBody] = useState("")
 
-  const { suppliers: apiSuppliers, isLoading, isError, mutate } = useSuppliers()
+  const { suppliers: apiSuppliers, isLoading, isError, mutate } = useSuppliers(
+    selectedSupplierType === "all" ? undefined : selectedSupplierType,
+  )
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editingSupplier, setEditingSupplier] = useState<any | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
   const { toast } = useToast()
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
   const [detailsSupplier, setDetailsSupplier] = useState<any | null>(null)
@@ -47,6 +50,7 @@ export function SuppliersDirectoryTab() {
     businessName: s.name || "",
     rfc: s.rfc || s.taxId || "",
     businessType: s.businessType || "",
+    supplierType: s.supplierType || "",
     contactName: s.contactName || "",
     phone: s.phone || "",
     email: s.email || "",
@@ -57,10 +61,14 @@ export function SuppliersDirectoryTab() {
   }))
 
   const filteredSuppliers = mappedSuppliers.filter((supplier) => {
+    const matchesType = selectedSupplierType === "all" || supplier.supplierType === selectedSupplierType
+    if (!matchesType) return false
+
     return (
       supplier.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       supplier.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.rfc.toLowerCase().includes(searchTerm.toLowerCase())
+      supplier.rfc.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getSupplierTypeLabel(supplier.supplierType).toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
 
@@ -100,66 +108,6 @@ export function SuppliersDirectoryTab() {
     setDeleteDialogOpen(true)
   }
 
-  const handleEditClick = (supplier: any) => {
-    // Map supplier shape to the edit form shape used in new supplier page
-    setEditingSupplier({
-      id: supplier.id,
-      code: supplier.code || "",
-      name: supplier.businessName || "",
-      taxId: supplier.rfc || "",
-      businessType: supplier.businessType || "",
-      contactName: supplier.contactName || "",
-      phone: supplier.phone || "",
-      email: supplier.email || "",
-      address: "",
-      creditDays: supplier.creditDays ?? "",
-      isActive: !!supplier.isActive,
-      bankNameMxn: "",
-      accountNumberMxn: "",
-      clabeMxn: "",
-      bankNameUsd: "",
-      accountNumberUsd: "",
-      swiftCodeUsd: "",
-    })
-    setEditDialogOpen(true)
-  }
-
-  const handleSaveEdit = async () => {
-    if (!editingSupplier) return
-    setIsSaving(true)
-    try {
-      const payload = {
-        code: editingSupplier.code,
-        name: editingSupplier.name,
-        taxId: editingSupplier.taxId || undefined,
-        email: editingSupplier.email || undefined,
-        phone: editingSupplier.phone || undefined,
-        address: editingSupplier.address || undefined,
-        contactName: editingSupplier.contactName || undefined,
-        businessType: editingSupplier.businessType || undefined,
-        creditDays: editingSupplier.creditDays ? Number(editingSupplier.creditDays) : undefined,
-        isActive: !!editingSupplier.isActive,
-        bankNameMxn: editingSupplier.bankNameMxn || undefined,
-        accountNumberMxn: editingSupplier.accountNumberMxn || undefined,
-        clabeMxn: editingSupplier.clabeMxn || undefined,
-        bankNameUsd: editingSupplier.bankNameUsd || undefined,
-        accountNumberUsd: editingSupplier.accountNumberUsd || undefined,
-        swiftCodeUsd: editingSupplier.swiftCodeUsd || undefined,
-      }
-
-      await updateSupplier(editingSupplier.id, payload)
-      mutate()
-      setEditDialogOpen(false)
-      setEditingSupplier(null)
-      toast({ title: "Proveedor actualizado", description: "Los datos del proveedor se guardaron correctamente." })
-    } catch (error) {
-      console.error("Error actualizando proveedor:", error)
-      toast({ title: "Error", description: "No se pudo actualizar el proveedor. Revisa la consola para más detalles." })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return
     setIsDeleting(true)
@@ -185,14 +133,31 @@ export function SuppliersDirectoryTab() {
       {/* Search */}
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre, código o RFC..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="relative md:col-span-2">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nombre, código, RFC o tipo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div>
+              <Select value={selectedSupplierType} onValueChange={setSelectedSupplierType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los tipos</SelectItem>
+                  {SUPPLIER_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -220,111 +185,6 @@ export function SuppliersDirectoryTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit supplier dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Editar Proveedor</DialogTitle>
-            <DialogDescription>Modifica los datos del proveedor y guarda los cambios.</DialogDescription>
-          </DialogHeader>
-          {editingSupplier && (
-            <div className="space-y-4 mt-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="code">Código</Label>
-                  <Input id="code" value={editingSupplier.code} onChange={(e) => setEditingSupplier({ ...editingSupplier, code: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="name">Razón Social</Label>
-                  <Input id="name" value={editingSupplier.name} onChange={(e) => setEditingSupplier({ ...editingSupplier, name: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="taxId">RFC / Tax ID</Label>
-                  <Input id="taxId" value={editingSupplier.taxId} onChange={(e) => setEditingSupplier({ ...editingSupplier, taxId: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="businessType">Giro</Label>
-                  <Input id="businessType" value={editingSupplier.businessType} onChange={(e) => setEditingSupplier({ ...editingSupplier, businessType: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="contactName">Contacto</Label>
-                  <Input id="contactName" value={editingSupplier.contactName} onChange={(e) => setEditingSupplier({ ...editingSupplier, contactName: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="creditDays">Días de Crédito</Label>
-                  <Input id="creditDays" type="number" value={String(editingSupplier.creditDays ?? "")} onChange={(e) => setEditingSupplier({ ...editingSupplier, creditDays: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" value={editingSupplier.email} onChange={(e) => setEditingSupplier({ ...editingSupplier, email: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Teléfono</Label>
-                  <Input id="phone" value={editingSupplier.phone} onChange={(e) => setEditingSupplier({ ...editingSupplier, phone: e.target.value })} />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="address">Dirección</Label>
-                  <Input id="address" value={editingSupplier.address} onChange={(e) => setEditingSupplier({ ...editingSupplier, address: e.target.value })} />
-                </div>
-
-                <div className="md:col-span-2">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Cuenta Bancaria - Pesos (MXN)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div>
-                        <Label htmlFor="bankNameMxn">Banco</Label>
-                        <Input id="bankNameMxn" value={editingSupplier.bankNameMxn} onChange={(e) => setEditingSupplier({ ...editingSupplier, bankNameMxn: e.target.value })} />
-                      </div>
-                      <div>
-                        <Label htmlFor="accountNumberMxn">Número de Cuenta</Label>
-                        <Input id="accountNumberMxn" value={editingSupplier.accountNumberMxn} onChange={(e) => setEditingSupplier({ ...editingSupplier, accountNumberMxn: e.target.value })} />
-                      </div>
-                      <div>
-                        <Label htmlFor="clabeMxn">CLABE</Label>
-                        <Input id="clabeMxn" value={editingSupplier.clabeMxn} onChange={(e) => setEditingSupplier({ ...editingSupplier, clabeMxn: e.target.value })} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="md:col-span-2">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Cuenta Bancaria - Dólares (USD)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div>
-                        <Label htmlFor="bankNameUsd">Banco</Label>
-                        <Input id="bankNameUsd" value={editingSupplier.bankNameUsd} onChange={(e) => setEditingSupplier({ ...editingSupplier, bankNameUsd: e.target.value })} />
-                      </div>
-                      <div>
-                        <Label htmlFor="accountNumberUsd">Número de Cuenta</Label>
-                        <Input id="accountNumberUsd" value={editingSupplier.accountNumberUsd} onChange={(e) => setEditingSupplier({ ...editingSupplier, accountNumberUsd: e.target.value })} />
-                      </div>
-                      <div>
-                        <Label htmlFor="swiftCodeUsd">Código SWIFT</Label>
-                        <Input id="swiftCodeUsd" value={editingSupplier.swiftCodeUsd} onChange={(e) => setEditingSupplier({ ...editingSupplier, swiftCodeUsd: e.target.value })} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Switch id="isActive" checked={editingSupplier.isActive} onCheckedChange={(checked) => setEditingSupplier({ ...editingSupplier, isActive: checked })} />
-                  <Label className="mb-0">Activo</Label>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setEditDialogOpen(false); setEditingSupplier(null) }} disabled={isSaving}>Cancelar</Button>
-                <Button onClick={handleSaveEdit} disabled={isSaving}>{isSaving ? "Guardando..." : "Guardar cambios"}</Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* Details dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
         <DialogContent className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -346,6 +206,10 @@ export function SuppliersDirectoryTab() {
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground uppercase">RFC / Tax ID</p>
                   <p className="text-sm text-foreground mt-1">{detailsSupplier.taxId || detailsSupplier.rfc}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-muted-foreground uppercase">Tipo de proveedor</p>
+                  <p className="text-sm text-foreground mt-1">{getSupplierTypeLabel(detailsSupplier.supplierType)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground uppercase">Giro</p>
@@ -448,6 +312,7 @@ export function SuppliersDirectoryTab() {
                 <TableHead>Código</TableHead>
                 <TableHead>Razón Social</TableHead>
                 <TableHead>RFC</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead>Giro</TableHead>
                 <TableHead>Contacto</TableHead>
                 <TableHead>Crédito</TableHead>
@@ -458,7 +323,7 @@ export function SuppliersDirectoryTab() {
             <TableBody>
               {isError ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-sm text-destructive">Error al cargar proveedores</TableCell>
+                  <TableCell colSpan={9} className="text-center text-sm text-destructive">Error al cargar proveedores</TableCell>
                 </TableRow>
               ) : (
                 filteredSuppliers.map((supplier) => (
@@ -478,6 +343,9 @@ export function SuppliersDirectoryTab() {
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{supplier.rfc}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{getSupplierTypeLabel(supplier.supplierType)}</Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">{supplier.businessType}</Badge>
                   </TableCell>
@@ -557,8 +425,10 @@ export function SuppliersDirectoryTab() {
                         <Eye className="h-4 w-4" />
                       </Button>
                       <ProtectedUpdate module="suppliers">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(supplier)}>
-                          <Edit className="h-4 w-4" />
+                        <Button asChild variant="ghost" size="icon">
+                          <Link href={`/suppliers/${supplier.id}/edit`} title="Editar proveedor">
+                            <Edit className="h-4 w-4" />
+                          </Link>
                         </Button>
                       </ProtectedUpdate>
                       <ProtectedDelete module="suppliers">

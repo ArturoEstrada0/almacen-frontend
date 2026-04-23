@@ -50,7 +50,8 @@ export const API_ENDPOINTS = {
 
   // Suppliers
   suppliers: {
-    list: () => `${API_BASE_URL}/api/suppliers`,
+    list: (supplierType?: string) =>
+      `${API_BASE_URL}/api/suppliers${supplierType ? `?supplierType=${encodeURIComponent(supplierType)}` : ""}`,
     get: (id: string) => `${API_BASE_URL}/api/suppliers/${id}`,
     create: () => `${API_BASE_URL}/api/suppliers`,
     update: (id: string) => `${API_BASE_URL}/api/suppliers/${id}`,

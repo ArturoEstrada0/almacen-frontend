@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Plus } from "lucide-react"
+import { Pencil, Plus } from "lucide-react"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 
@@ -41,7 +41,9 @@ export default function WarehousesPage() {
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Código</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Dirección</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -49,7 +51,16 @@ export default function WarehousesPage() {
                     <TableRow key={wh.id}>
                         <TableCell>{wh.name}</TableCell>
                         <TableCell className="font-mono text-sm">{wh.code}</TableCell>
+                        <TableCell className="capitalize">{(wh as any).type || "insumo"}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{((wh as any).address as string) || (wh as any).location || "-"}</TableCell>
+                        <TableCell className="text-right">
+                          <Link href={`/warehouses/${wh.id}/edit`}>
+                            <Button variant="outline" size="sm">
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Editar
+                            </Button>
+                          </Link>
+                        </TableCell>
                       </TableRow>
                 ))}
               </TableBody>

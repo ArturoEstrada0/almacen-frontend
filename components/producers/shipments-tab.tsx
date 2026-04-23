@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -108,11 +109,13 @@ export function ShipmentsTab() {
   const [pendingCreatePayload, setPendingCreatePayload] = useState<any | null>(null)
   const [pendingEditPayload, setPendingEditPayload] = useState<any | null>(null)
   const [pendingEditId, setPendingEditId] = useState<string | null>(null)
+  const [isShipmentErrorDialogOpen, setIsShipmentErrorDialogOpen] = useState(false)
+  const [shipmentErrorMessage, setShipmentErrorMessage] = useState("")
 
   const { fruitReceptions } = useFruitReceptions()
   const { shipments, mutate: mutateShipments, isLoading } = useShipments()
   const { producers } = useProducers()
-  const { suppliers } = useSuppliers()
+  const { suppliers } = useSuppliers("transporte")
   const { customers, fetchCustomers } = useCustomers()
 
   const pendingReceptions = (fruitReceptions || []).filter((r) => r.shipmentStatus === "pendiente")
@@ -166,6 +169,11 @@ export function ShipmentsTab() {
     if (compressedFile) {
       form.append(fieldName, compressedFile)
     }
+  }
+
+  const openShipmentErrorDialog = (message: string) => {
+    setShipmentErrorMessage(message || "Ocurrió un error al procesar el embarque")
+    setIsShipmentErrorDialogOpen(true)
   }
 
   const sortedShipments = [...(shipments || [])].sort((a, b) => {
@@ -244,7 +252,7 @@ export function ShipmentsTab() {
         // Normalize and validate receptionIds
         payload.receptionIds = Array.isArray(payload.receptionIds) ? payload.receptionIds.map(String) : []
         if (!payload.receptionIds || payload.receptionIds.length === 0) {
-          alert("Seleccione al menos una recepción antes de crear el embarque")
+          openShipmentErrorDialog("Seleccione al menos una recepción antes de crear el embarque")
           return
         }
         if (shipmentInvoiceFile || carrierInvoiceFile || waybillFile) {
@@ -311,7 +319,7 @@ export function ShipmentsTab() {
         if (e.errors) msg += "\nErrors: " + JSON.stringify(e.errors)
         if (e.technicalDetails) msg += "\nDetails: " + JSON.stringify(e.technicalDetails)
         if (e.raw && typeof e.raw === 'string' && e.raw.trim()) msg += "\nResponse: " + e.raw
-        alert("Error al crear embarque: " + msg)
+        openShipmentErrorDialog(`Error al crear embarque: ${msg}`)
       }
     })()
   }
@@ -349,7 +357,7 @@ export function ShipmentsTab() {
         setIsUpdateDialogOpen(false)
         console.log("Updated shipment", updated)
       } catch (err) {
-        console.error("Failed updating shipment", err)
+        console.warn("Failed updating shipment", err)
         alert("Error al actualizar embarque: " + (err as any)?.message || err)
       }
     })()
@@ -396,7 +404,7 @@ export function ShipmentsTab() {
       await mutateShipments()
       await globalMutate("fruit-receptions")
     } catch (err) {
-      console.error("Error deleting shipment:", err)
+      console.warn("Error deleting shipment:", err)
       alert("Error al eliminar: " + (err as any)?.message || String(err))
     }
   }
@@ -424,8 +432,8 @@ export function ShipmentsTab() {
       setIsCreateDialogOpen(false)
       console.log("Created shipment", created)
     } catch (err) {
-      console.error("Failed creating shipment", err)
-      alert("Error al crear embarque: " + (err as any)?.message || String(err))
+      console.warn("Failed creating shipment", err)
+      openShipmentErrorDialog(`Error al crear embarque: ${(err as any)?.message || String(err)}`)
     } finally {
       setPendingCreatePayload(null)
       setIsFilesNotSupportedDialogOpen(false)
@@ -444,8 +452,8 @@ export function ShipmentsTab() {
       setIsEditDialogOpen(false)
       setEditingShipmentId(null)
     } catch (err) {
-      console.error("Error updating shipment:", err)
-      alert("Error al actualizar: " + (err as any)?.message || String(err))
+      console.warn("Error updating shipment:", err)
+      openShipmentErrorDialog(`Error al actualizar embarque: ${(err as any)?.message || String(err)}`)
     } finally {
       setPendingEditPayload(null)
       setPendingEditId(null)
@@ -618,6 +626,22 @@ export function ShipmentsTab() {
                     </DialogContent>
                   </Dialog>
 
+                  <Dialog open={isShipmentErrorDialogOpen} onOpenChange={setIsShipmentErrorDialogOpen}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Error al procesar embarque</DialogTitle>
+                        <DialogDescription className="whitespace-pre-line">
+                          {shipmentErrorMessage}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <div className="flex justify-end">
+                          <Button onClick={() => setIsShipmentErrorDialogOpen(false)}>Aceptar</Button>
+                        </div>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
                 <div className="flex-1 overflow-y-auto px-6 pb-4">
                 <div className="grid gap-6 py-4">
                   {selectedReceptions.length > 0 && (
@@ -637,7 +661,9 @@ export function ShipmentsTab() {
                             </div>
                             <div className="flex flex-col space-y-0.5">
                               <span className="text-blue-600 font-medium text-xs">Cajas Totales</span>
-                              <span className="text-2xl font-bold text-blue-900">{totalBoxes}</span>
+                              <span className="text-2xl font-bold text-blue-900">
+                                {Number(totalBoxes || 0).toLocaleString("es-MX", { maximumFractionDigits: 0 })}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -664,14 +690,14 @@ export function ShipmentsTab() {
                                   }}
                                 />
                               </TableHead>
-                              <TableHead className="w-28 font-semibold text-sm">Número</TableHead>
-                              <TableHead className="w-32 font-semibold text-sm">Folio</TableHead>
-                              <TableHead className="min-w-40 font-semibold text-sm">Productor</TableHead>
-                              <TableHead className="min-w-44 font-semibold text-sm">Producto</TableHead>
-                              <TableHead className="w-24 font-semibold text-sm text-right">Cajas</TableHead>
-                              <TableHead className="w-28 font-semibold text-sm text-right">Peso/Caja</TableHead>
-                              <TableHead className="w-28 font-semibold text-sm text-right">Peso Total</TableHead>
-                              <TableHead className="w-36 font-semibold text-sm">Fecha</TableHead>
+                              <TableHead className="w-24 font-semibold text-sm">Productor</TableHead>
+                              <TableHead className="w-24 font-semibold text-sm">Número</TableHead>
+                              <TableHead className="w-20 font-semibold text-sm">Folio</TableHead>
+                              <TableHead className="w-36 font-semibold text-sm">Producto</TableHead>
+                              <TableHead className="w-16 font-semibold text-sm text-right">Cajas</TableHead>
+                              <TableHead className="w-20 font-semibold text-sm text-right">Peso/Caja</TableHead>
+                              <TableHead className="w-20 font-semibold text-sm text-right">Peso Total</TableHead>
+                              <TableHead className="w-24 font-semibold text-sm">Fecha</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -699,6 +725,7 @@ export function ShipmentsTab() {
                                         onCheckedChange={() => handleToggleReception(reception.id)}
                                       />
                                     </TableCell>
+                                    <TableCell className="font-medium text-sm">{producer?.name || "-"}</TableCell>
                                     <TableCell className="text-sm font-mono">{receptionNumber || <span className="text-muted-foreground">-</span>}</TableCell>
                                     <TableCell className="text-sm">
                                       {(reception as any).trackingFolio ? (
@@ -707,9 +734,50 @@ export function ShipmentsTab() {
                                         <span className="text-muted-foreground">-</span>
                                       )}
                                     </TableCell>
-                                    <TableCell className="font-medium text-sm">{producer?.name || "-"}</TableCell>
-                                    <TableCell className="text-sm">{(reception as any).product?.name || "-"}</TableCell>
-                                    <TableCell className="text-right font-semibold text-sm">{reception.boxes}</TableCell>
+                                    <TableCell className="text-sm overflow-hidden">
+                                      {(() => {
+                                        const product = (reception as any).product || {}
+                                        const full = String(product.name || "-")
+                                        const sku = String(product.sku || product.code || "").trim()
+                                        const presentation = String(product.presentation || "").trim()
+
+                                        // Start with words from the full name
+                                        const nameWords = full.split(/\s+/).filter(Boolean)
+                                        const previewParts: string[] = []
+                                        // take up to two words from name
+                                        for (let i = 0; i < Math.min(2, nameWords.length); i++) previewParts.push(nameWords[i])
+
+                                        // fill remaining slots with SKU / presentation / code / id
+                                        const fallbacks = [sku, presentation, String(product.variety || ""), String(product.packaging || ""), String(product.code || ""), String(product.id || "")]
+                                        for (const f of fallbacks) {
+                                          if (previewParts.length >= 2) break
+                                          if (!f) continue
+                                          // if fallback contains multiple words, take first token only to avoid overflow
+                                          const tok = String(f).split(/\s+/).filter(Boolean)[0]
+                                          if (tok && !previewParts.includes(tok)) previewParts.push(tok)
+                                        }
+
+                                        const previewLine1 = previewParts[0] || "-"
+                                        const previewLine2 = previewParts[1] || ""
+
+                                        return (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <div className="w-full max-w-36 text-sm leading-4">
+                                                  <div className="truncate">{previewLine1}</div>
+                                                  <div className="truncate">{previewLine2 || "-"}</div>
+                                                </div>
+                                              </TooltipTrigger>
+                                              <TooltipContent>{full}</TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )
+                                      })()}
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold text-sm">
+                                      {Number(reception.boxes || 0).toLocaleString("es-MX", { maximumFractionDigits: 0 })}
+                                    </TableCell>
                                     <TableCell className="text-right text-sm">{reception.weightPerBox ? `${reception.weightPerBox} kg` : "-"}</TableCell>
                                     <TableCell className="text-right font-semibold text-sm">{reception.totalWeight ? `${reception.totalWeight} kg` : "-"}</TableCell>
                                     <TableCell className="whitespace-nowrap text-sm">{formatDate(receptionDate)}</TableCell>
