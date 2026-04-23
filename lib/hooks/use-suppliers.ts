@@ -4,9 +4,10 @@ import useSWR from "swr"
 import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import type { Supplier } from "@/lib/types"
 
-export function useSuppliers() {
-  const { data, error, isLoading, mutate } = useSWR<Supplier[]>("suppliers", () =>
-    ApiClient.get<Supplier[]>(API_ENDPOINTS.suppliers.list()),
+export function useSuppliers(supplierType?: string) {
+  const cacheKey = supplierType ? `suppliers-${supplierType}` : "suppliers"
+  const { data, error, isLoading, mutate } = useSWR<Supplier[]>(cacheKey, () =>
+    ApiClient.get<Supplier[]>(API_ENDPOINTS.suppliers.list(supplierType)),
   )
 
   return {

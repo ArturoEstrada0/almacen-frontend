@@ -52,7 +52,8 @@ export default function AccountsPage() {
     if (!q) return true
     return (
       c.name.toLowerCase().includes(q) ||
-      c.rfc.toLowerCase().includes(q) ||
+      (c.customerCode || "").toLowerCase().includes(q) ||
+      (c.rfc || "").toLowerCase().includes(q) ||
       c.email.toLowerCase().includes(q) ||
       (c.contactName || "").toLowerCase().includes(q)
     )
@@ -129,7 +130,7 @@ export default function AccountsPage() {
                     <TableBody>
                       {filteredCustomers.map((c) => (
                         <TableRow key={c.id}>
-                          <TableCell className="font-mono text-sm">{c.rfc}</TableCell>
+                          <TableCell className="font-mono text-sm">{c.rfc || "-"}</TableCell>
                           <TableCell>{c.name}</TableCell>
                           <TableCell>{c.contactName || "-"}</TableCell>
                           <TableCell>{c.email}</TableCell>

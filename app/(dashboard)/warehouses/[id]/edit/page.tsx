@@ -1,19 +1,25 @@
-"use client"
+ "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Save } from "lucide-react"
-import { createWarehouse, useWarehouses } from "@/lib/hooks/use-warehouses"
+import { updateWarehouse, useWarehouse, useWarehouses } from "@/lib/hooks/use-warehouses"
 import { toast } from "@/lib/utils/toast"
 
-export default function NewWarehousePage() {
+export default function EditWarehousePage() {
   const router = useRouter()
+  const params = useParams<{ id: string }>()
+  const id = params?.id || ""
+
+  const { warehouse, isLoading } = useWarehouse(id)
+  const { mutate } = useWarehouses()
+
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -22,7 +28,34 @@ export default function NewWarehousePage() {
     description: "",
     isActive: true,
   })
-  const { mutate } = useWarehouses()
+
+  useEffect(() => {
+    if (!warehouse) return
+
+    const nextForm = {
+      name: warehouse.name || "",
+      code: warehouse.code || "",
+      type: (warehouse.type as "insumo" | "fruta") || "insumo",
+      address: (warehouse as any).address || warehouse.location || "",
+      description: warehouse.description || "",
+      isActive: (warehouse as any).isActive !== undefined ? Boolean((warehouse as any).isActive) : Boolean((warehouse as any).active),
+    }
+
+    setForm((prev) => {
+      if (
+        prev.name === nextForm.name &&
+        prev.code === nextForm.code &&
+        prev.type === nextForm.type &&
+        prev.address === nextForm.address &&
+        prev.description === nextForm.description &&
+        prev.isActive === nextForm.isActive
+      ) {
+        return prev
+      }
+
+      return nextForm
+    })
+  }, [warehouse])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,23 +65,26 @@ export default function NewWarehousePage() {
     }
 
     try {
-      toast.loading("Creando almacén...")
-      await createWarehouse({
+      toast.loading("Actualizando almacén...")
+      await updateWarehouse(id, {
         name: form.name,
         code: form.code,
         type: form.type,
         address: form.address || undefined,
         description: form.description || undefined,
         active: form.isActive,
-      })
-      toast.success("Almacén creado")
-      // refresh list
-      mutate()
+      } as any)
+      await mutate()
+      toast.success("Almacén actualizado")
       router.push("/inventory")
     } catch (err: any) {
       console.error(err)
-      toast.error(err?.message || "Error creando almacén")
+      toast.error(err?.message || "Error actualizando almacén")
     }
+  }
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Cargando almacén...</p>
   }
 
   return (
@@ -60,8 +96,8 @@ export default function NewWarehousePage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Nuevo Almacén</h1>
-          <p className="text-muted-foreground">Crear un nuevo almacén</p>
+          <h1 className="text-3xl font-bold tracking-tight">Editar Almacén</h1>
+          <p className="text-muted-foreground">Actualiza la información del almacén</p>
         </div>
       </div>
 
@@ -115,7 +151,7 @@ export default function NewWarehousePage() {
               <CardContent className="flex flex-col gap-2">
                 <Button type="submit" className="w-full">
                   <Save className="mr-2 h-4 w-4" />
-                  Crear Almacén
+                  Guardar Cambios
                 </Button>
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/inventory">Cancelar</Link>

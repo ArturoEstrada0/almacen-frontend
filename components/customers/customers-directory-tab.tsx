@@ -17,6 +17,7 @@ import {
 import { Search, Building2, Edit, Trash2, Mail, Phone, Plus, Eye, AlertCircle, CalendarClock, Wallet } from "lucide-react"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -92,7 +93,8 @@ export function CustomersDirectoryTab() {
         const searchLower = searchTerm.toLowerCase()
         return (
           customer.name.toLowerCase().includes(searchLower) ||
-          customer.rfc.toLowerCase().includes(searchLower) ||
+          (customer.customerCode || "").toLowerCase().includes(searchLower) ||
+          (customer.rfc || "").toLowerCase().includes(searchLower) ||
           customer.email.toLowerCase().includes(searchLower) ||
           (customer.contactName && customer.contactName.toLowerCase().includes(searchLower))
         )
@@ -245,6 +247,12 @@ export function CustomersDirectoryTab() {
     return "outline"
   }
 
+  const getCustomerTypeLabel = (customerType?: string) => {
+    if (customerType === "nacional") return "Nacional"
+    if (customerType === "extranjero") return "Extranjero"
+    return customerType || "-"
+  }
+
   const openReceivableDialog = () => {
     const today = getLocalDateInputValue()
     setReceivableForm({
@@ -301,28 +309,16 @@ export function CustomersDirectoryTab() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Catálogo de Clientes</h2>
-          <p className="text-gray-600 text-sm">Gestiona y consulta la información de los clientes</p>
+          <h1 className="text-3xl font-bold tracking-tight">Catálogo de Clientes</h1>
+          <p className="text-muted-foreground">Gestiona y consulta la información de los clientes</p>
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Nuevo Cliente
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Cliente</DialogTitle>
-              <DialogDescription>Completa el formulario para crear un nuevo cliente</DialogDescription>
-            </DialogHeader>
-            <CustomerForm onSubmit={handleCreateCustomer} isLoading={isSubmitting} />
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => setCreateDialogOpen(true)} className="gap-2 bg-black text-white hover:bg-black/90">
+          <Plus className="h-4 w-4" />
+          Nuevo Cliente
+        </Button>
       </div>
 
       {/* Search Bar */}
@@ -331,7 +327,7 @@ export function CustomersDirectoryTab() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Buscar por nombre, RFC, email o contacto..."
+              placeholder="Buscar por nombre, ID, RFC, email o contacto..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -339,6 +335,17 @@ export function CustomersDirectoryTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Create Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nuevo Cliente</DialogTitle>
+            <DialogDescription>Agrega un nuevo cliente al catálogo</DialogDescription>
+          </DialogHeader>
+          <CustomerForm onSubmit={handleCreateCustomer} isLoading={isSubmitting} />
+        </DialogContent>
+      </Dialog>
 
       {/* Error Alert */}
       {isError && (
@@ -365,6 +372,8 @@ export function CustomersDirectoryTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>ID Cliente</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>RFC</TableHead>
                     <TableHead>Nombre / Razón Social</TableHead>
                     <TableHead>Contacto</TableHead>
@@ -377,7 +386,13 @@ export function CustomersDirectoryTab() {
                 <TableBody>
                   {filteredCustomers.map((customer) => (
                     <TableRow key={customer.id}>
-                      <TableCell className="font-mono text-sm">{customer.rfc}</TableCell>
+                      <TableCell className="font-mono text-sm">{customer.customerCode || "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant={customer.customerType === "extranjero" ? "secondary" : "outline"}>
+                          {getCustomerTypeLabel(customer.customerType)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{customer.rfc || "-"}</TableCell>
                       <TableCell className="font-semibold">{customer.name}</TableCell>
                       <TableCell>{customer.contactName || "-"}</TableCell>
                       <TableCell className="flex items-center gap-2">
@@ -460,8 +475,16 @@ export function CustomersDirectoryTab() {
           }
         }}
       >
-        <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] p-0">
+        <DialogContent className="w-[90vw] max-w-3xl max-h-[90vh] p-4 overflow-hidden" showCloseButton={false}>
           <div className="sticky top-0 z-20 border-b bg-background px-4 py-4 sm:px-6">
+            <div className="absolute top-3 right-3">
+              <DialogClose asChild>
+                <button aria-label="Cerrar" className="cursor-pointer rounded-md p-1 hover:bg-accent/10">
+                  <span className="sr-only">Cerrar</span>
+                  ✕
+                </button>
+              </DialogClose>
+            </div>
             <DialogHeader>
               <DialogTitle>Detalles del Cliente</DialogTitle>
               <DialogDescription>{selectedCustomer?.name}</DialogDescription>
@@ -478,8 +501,16 @@ export function CustomersDirectoryTab() {
                 <CardContent className="space-y-2">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
+                      <p className="text-xs text-gray-500">ID de Cliente</p>
+                      <p className="font-mono break-all">{selectedCustomer.customerCode || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Tipo de Cliente</p>
+                      <p>{getCustomerTypeLabel(selectedCustomer.customerType)}</p>
+                    </div>
+                    <div>
                       <p className="text-xs text-gray-500">RFC</p>
-                      <p className="font-mono break-all">{selectedCustomer.rfc}</p>
+                      <p className="font-mono break-all">{selectedCustomer.rfc || "-"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Razón Social</p>
@@ -509,9 +540,17 @@ export function CustomersDirectoryTab() {
                 <CardContent>
                   <p className="text-sm wrap-break-word">{selectedCustomer.street} {selectedCustomer.streetNumber}</p>
                   {selectedCustomer.neighborhood && <p className="text-sm wrap-break-word">{selectedCustomer.neighborhood}</p>}
-                  <p className="text-sm">
-                    {selectedCustomer.city}, {selectedCustomer.state} {selectedCustomer.postalCode}
-                  </p>
+                  {selectedCustomer.customerType === "extranjero" ? (
+                    <>
+                      <p className="text-sm">{selectedCustomer.city}</p>
+                      <p className="text-sm">{selectedCustomer.country || "-"}</p>
+                      <p className="text-sm text-gray-600">{selectedCustomer.fullAddress || "-"}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm">
+                      {selectedCustomer.city}, {selectedCustomer.state} {selectedCustomer.postalCode}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -787,7 +826,7 @@ export function CustomersDirectoryTab() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="w-auto max-w-md">
           <DialogHeader>
             <DialogTitle>Confirmar Eliminación</DialogTitle>
             <DialogDescription>

@@ -17,9 +17,12 @@ export interface Warehouse {
   id: string
   name: string
   code: string
+  type?: "insumo" | "fruta"
   location: string
+  address?: string
   description?: string
   isActive: boolean
+  active?: boolean
   zones?: WarehouseZone[]
   createdAt: Date
   updatedAt: Date
@@ -129,6 +132,7 @@ export interface Supplier {
   email: string
   contactName?: string
   businessType?: string
+  supplierType?: string
   paymentTerms: number
   active: boolean
   products?: ProductSupplier[]

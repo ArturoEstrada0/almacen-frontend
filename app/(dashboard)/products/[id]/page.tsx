@@ -207,22 +207,27 @@ export default function EditProductPage({ params }: Params) {
                   <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} />
-                </div>
-
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="type">Tipo de Producto *</Label>
-                    <select id="type" className="input" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })}>
+                    <select
+                      id="type"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    >
                       <option value="insumo">Insumo</option>
                       <option value="fruta">Fruta</option>
                     </select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Categoría *</Label>
-                    <select id="category" className="input" value={formData.categoryId || ""} onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}>
+                    <select
+                      id="category"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={formData.categoryId || ""}
+                      onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                    >
                       <option value="">Sin categoría</option>
                       {categories.map((cat: any) => (
                         <option key={cat.id} value={cat.id}>
@@ -231,6 +236,11 @@ export default function EditProductPage({ params }: Params) {
                       ))}
                     </select>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descripción</Label>
+                  <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} />
                 </div>
               </CardContent>
             </Card>

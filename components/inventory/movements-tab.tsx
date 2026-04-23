@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { ComboBox } from "@/components/ui/combobox"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useMovements, createMovement } from "@/lib/hooks/use-inventory"
 import { useInventoryByWarehouse } from "@/lib/hooks/use-inventory"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { Search, Plus, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft } from "lucide-react"
+import { Search, Plus, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft, X } from "lucide-react"
 import { motion } from "framer-motion"
 import { toast } from "@/lib/utils/toast"
 import { mutate as globalMutate } from "swr"
@@ -36,12 +37,18 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
   const { warehouses } = useWarehouses()
   const { mutate: mutateInventory } = useInventoryByWarehouse(warehouseId || null)
 
+  const currentWarehouse = (warehouses || []).find((warehouse: any) => warehouse.id === warehouseId)
+  const currentWarehouseType = (currentWarehouse as any)?.type as "insumo" | "fruta" | undefined
+  const availableWarehouses = currentWarehouseType
+    ? (warehouses || []).filter((warehouse: any) => warehouse.type === currentWarehouseType)
+    : warehouses || []
+
   // Pre-fill warehouseId with the first available warehouse (helps UX)
   useEffect(() => {
-    if ((!form.warehouseId || form.warehouseId === "") && warehouses && warehouses.length > 0) {
-      setForm((f) => ({ ...f, warehouseId: warehouses[0].id }))
+    if ((!form.warehouseId || form.warehouseId === "") && availableWarehouses.length > 0) {
+      setForm((f) => ({ ...f, warehouseId: availableWarehouses[0].id }))
     }
-  }, [warehouses])
+  }, [availableWarehouses])
 
   const filteredMovements = (movements || []).filter((movement) => {
     const mv: any = movement
@@ -104,19 +111,17 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
     }
   }
 
-  // New movement form state
+  // New movement form state (supports multiple items)
   const [form, setForm] = useState({
     type: "entrada",
     warehouseId: warehouseId || "",
-    productId: "",
-    quantity: 0,
-    lotNumber: "",
-    unitCost: 0,
     notes: "",
   })
-  // String inputs for decimal handling
-  const [quantityInput, setQuantityInput] = useState<string>("")
-  const [unitCostInput, setUnitCostInput] = useState<string>("")
+
+  // Movement items: each row contains a product + quantity + unitCost + lotNumber
+  const [movementItems, setMovementItems] = useState<Array<{ id: string; productId: string; quantityInput: string; unitCostInput: string; lotNumber: string }>>([
+    { id: "i-0", productId: "", quantityInput: "", unitCostInput: "", lotNumber: "" },
+  ])
 
   // Transfer form state (controlled)
   const [transferFrom, setTransferFrom] = useState<string>("")
@@ -129,11 +134,50 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
   // Prefill transfer defaults when warehouses load
   useEffect(() => {
-    if (warehouses && warehouses.length > 0) {
-      setTransferFrom((v) => (v ? v : warehouses[0].id))
-      setTransferTo((v) => (v ? v : warehouses.length > 1 ? warehouses[1].id : warehouses[0].id))
+    if (availableWarehouses.length > 0) {
+      setTransferFrom((v) =>
+        v ? v : warehouseId && availableWarehouses.some((warehouse) => warehouse.id === warehouseId) ? warehouseId : availableWarehouses[0].id
+      )
+      setTransferTo((v) => {
+        if (v) return v
+        const sourceId = warehouseId && availableWarehouses.some((warehouse) => warehouse.id === warehouseId) ? warehouseId : availableWarehouses[0].id
+        const nextWarehouse = availableWarehouses.find((warehouse) => warehouse.id !== sourceId)
+        return nextWarehouse ? nextWarehouse.id : sourceId
+      })
     }
-  }, [warehouses])
+  }, [availableWarehouses, warehouseId])
+
+  const selectedWarehouse = (warehouses || []).find((warehouse: any) => warehouse.id === form.warehouseId)
+  const selectedWarehouseType = (selectedWarehouse as any)?.type as "insumo" | "fruta" | undefined
+  const availableProductsForMovement = selectedWarehouseType
+    ? products.filter((product: any) => product.type === selectedWarehouseType)
+    : products
+
+  const transferSourceWarehouse = (warehouses || []).find((warehouse: any) => warehouse.id === transferFrom)
+  const transferSourceType = (transferSourceWarehouse as any)?.type as "insumo" | "fruta" | undefined
+  const availableProductsForTransfer = transferSourceType
+    ? products.filter((product: any) => product.type === transferSourceType)
+    : products
+
+  useEffect(() => {
+    // if warehouse type changes, drop any selected products that are no longer available
+    setMovementItems((items) =>
+      items.map((it) => {
+        if (!it.productId) return it
+        if (!availableProductsForMovement.some((product: any) => product.id === it.productId)) {
+          return { ...it, productId: "" }
+        }
+        return it
+      })
+    )
+  }, [form.warehouseId, selectedWarehouseType])
+
+  useEffect(() => {
+    if (!transferProduct) return
+    if (!availableProductsForTransfer.some((product: any) => product.id === transferProduct)) {
+      setTransferProduct("")
+    }
+  }, [transferFrom, transferSourceType, transferProduct])
 
   const handleCreateMovement = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -143,18 +187,24 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
         console.error("Warehouse is required")
         return
       }
-      if (!form.productId) {
-        console.error("Product is required")
+      // validate movementItems: at least one valid item
+      const validItems = movementItems.filter((it) => it.productId && it.quantityInput && Number(it.quantityInput) > 0)
+      if (validItems.length === 0) {
+        toast.error("Debe agregar al menos un producto con cantidad válida")
         return
       }
-      // simple UUID-ish check
-      if (!/^[0-9a-fA-F-]{36}$/.test(form.productId)) {
-        console.error("Product ID must be a valid UUID", form.productId)
-        return
-      }
-      if (!form.quantity || Number(form.quantity) <= 0) {
-        console.error("Quantity must be greater than zero")
-        return
+
+      // type/product compatibility checks
+      for (const it of validItems) {
+        const selectedProduct: any = products.find((product) => product.id === it.productId)
+        if (selectedWarehouseType && selectedProduct?.type && selectedProduct.type !== selectedWarehouseType) {
+          toast.error(`El producto ${selectedProduct?.name || it.productId} es tipo ${selectedProduct.type} y el almacén acepta ${selectedWarehouseType}`)
+          return
+        }
+        if (!/^[0-9a-fA-F-]{36}$/.test(it.productId)) {
+          console.error("Product ID must be a valid UUID", it.productId)
+          return
+        }
       }
 
       const loading = toast.loading("Registrando movimiento...")
@@ -162,19 +212,16 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
         await createMovement({
           type: form.type as any,
           warehouseId: form.warehouseId,
-          referenceNumber: form.lotNumber,
           notes: form.notes,
-          items: [
-            {
-              productId: form.productId,
-              quantity: Number(form.quantity),
-              unitId: "",
-              fromLocationId: undefined,
-              toLocationId: undefined,
-              lotNumber: form.lotNumber,
-              unitCost: form.unitCost,
-            },
-          ],
+          items: validItems.map((it) => ({
+            productId: it.productId,
+            quantity: Number(it.quantityInput),
+            unitId: "",
+            fromLocationId: undefined,
+            toLocationId: undefined,
+            lotNumber: it.lotNumber || undefined,
+            unitCost: it.unitCostInput ? Number(it.unitCostInput) : undefined,
+          })),
         })
 
       // refresh movements and inventory, wait for completion
@@ -197,12 +244,12 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
       // might not be rendering new rows. The user can paste these logs if needed.
       try {
         if (form.warehouseId) {
-          const inv = await api.get(`/inventory/warehouse/${form.warehouseId}`)
+          const inv = await api.get(`/api/inventory?warehouseId=${form.warehouseId}`)
           console.debug("[debug] inventory response:", inv)
-          const mov = await api.get(`/inventory/movements?warehouseId=${form.warehouseId}`)
+          const mov = await api.get(`/api/inventory/movements?warehouseId=${form.warehouseId}`)
           console.debug("[debug] movements response:", mov)
         } else {
-          const movAll = await api.get(`/inventory/movements?`)
+          const movAll = await api.get(`/api/inventory/movements?`)
           console.debug("[debug] movements response:", movAll)
         }
       } catch (err) {
@@ -211,10 +258,9 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
       toast.success("Movimiento registrado")
 
-  // reset minimal fields
-  setForm((f) => ({ ...f, productId: "", quantity: 0, lotNumber: "", notes: "" }))
-  setQuantityInput("")
-  setUnitCostInput("")
+  // reset minimal fields and items
+  setForm((f) => ({ ...f, notes: "" }))
+  setMovementItems([{ id: `i-${Date.now()}`, productId: "", quantityInput: "", unitCostInput: "", lotNumber: "" }])
       } catch (err: any) {
         const msg = err?.message || "Error al crear movimiento"
         toast.error("Error creando movimiento", String(msg))
@@ -335,7 +381,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   </Button>
 
                   <Select value={String(pageSize)} onValueChange={(v) => setPageSize(parseInt(v))}>
-                    <SelectTrigger className="w-[80px]">
+                    <SelectTrigger className="w-20">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -382,7 +428,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue placeholder="Seleccionar almacén" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any, index: number) => (
+                      {availableWarehouses.map((warehouse: any, index: number) => (
                         <SelectItem key={`new-wh-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>
@@ -391,63 +437,82 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="product">Producto</Label>
-                  <Select value={form.productId} onValueChange={(v) => setForm((f) => ({ ...f, productId: v }))}>
-                    <SelectTrigger id="product">
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name} ({product.sku})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Dynamic list of product items */}
+                {movementItems.map((it, idx) => (
+                  <div key={it.id} className="md:col-span-2 space-y-2 border rounded p-3">
+                    <div className="flex items-start justify-between">
+                      <Label>Producto {idx + 1}</Label>
+                      <div className="flex items-center gap-2">
+                        {movementItems.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => setMovementItems((prev) => prev.filter((p) => p.id !== it.id))}>
+                            <X className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Cantidad</Label>
-                  <Input 
-                    id="quantity" 
-                    type="text" 
-                    inputMode="decimal"
-                    placeholder="0" 
-                    value={quantityInput} 
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      // Permitir números, punto decimal y entrada vacía
-                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                        setQuantityInput(value)
-                        setForm((f) => ({ ...f, quantity: value === '' ? 0 : parseFloat(value) || 0 }))
-                      }
-                    }} 
-                  />
-                </div>
+                    <ComboBox
+                      value={it.productId}
+                      onChange={(v) => setMovementItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, productId: v } : p)))}
+                      options={availableProductsForMovement.map((product) => ({
+                        value: String(product.id),
+                        label: `${product.name}`,
+                        subtitle: product.sku || product.type,
+                      }))}
+                      placeholder="Seleccionar producto"
+                      searchPlaceholder="Buscar producto..."
+                      emptyMessage="No hay productos para este tipo de almacén"
+                    />
 
-                <div className="space-y-2">
-                  <Label htmlFor="lot">Número de Lote</Label>
-                  <Input id="lot" placeholder="LOT-2024-001" value={form.lotNumber} onChange={(e) => setForm((f) => ({ ...f, lotNumber: e.target.value }))} />
-                </div>
+                    <div className="grid gap-4 md:grid-cols-3 mt-2">
+                      <div className="space-y-2">
+                        <Label>Cantidad</Label>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={it.quantityInput}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                              setMovementItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, quantityInput: value } : p)))
+                            }
+                          }}
+                        />
+                      </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="unit-cost">Costo Unitario</Label>
-                  <Input 
-                    id="unit-cost" 
-                    type="text" 
-                    inputMode="decimal"
-                    placeholder="0.00" 
-                    value={unitCostInput} 
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      // Permitir números, punto decimal y entrada vacía
-                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                        setUnitCostInput(value)
-                        setForm((f) => ({ ...f, unitCost: value === '' ? 0 : parseFloat(value) || 0 }))
-                      }
-                    }} 
-                  />
+                      <div className="space-y-2">
+                        <Label>Número de Lote</Label>
+                        <Input
+                          placeholder="LOT-2024-001"
+                          value={it.lotNumber}
+                          onChange={(e) => setMovementItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, lotNumber: e.target.value } : p)))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Costo Unitario</Label>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          value={it.unitCostInput}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                              setMovementItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, unitCostInput: value } : p)))
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="md:col-span-2">
+                  <Button variant="outline" type="button" onClick={() => setMovementItems((prev) => [...prev, { id: `i-${Date.now()}`, productId: "", quantityInput: "", unitCostInput: "", lotNumber: "" }])}>
+                    Agregar otro producto
+                  </Button>
                 </div>
               </div>
 
@@ -456,17 +521,21 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                 <Textarea id="notes" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Información adicional sobre el movimiento..." />
               </div>
 
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" type="button" onClick={() => {
-                  setForm({ type: "entrada", warehouseId: warehouseId || "", productId: "", quantity: 0, lotNumber: "", unitCost: 0, notes: "" })
-                  setQuantityInput("")
-                  setUnitCostInput("")
-                }}>Cancelar</Button>
-                <Button type="submit">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Registrar Movimiento
-                </Button>
+              <div className="flex justify-between items-center">
+                <div>
+                  <Button variant="ghost" type="button" onClick={() => {
+                    setForm({ type: "entrada", warehouseId: warehouseId || "", notes: "" })
+                    setMovementItems([{ id: `i-${Date.now()}`, productId: "", quantityInput: "", unitCostInput: "", lotNumber: "" }])
+                  }}>Cancelar</Button>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="submit">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Registrar Movimiento
+                  </Button>
+                </div>
               </div>
+              
             </form>
           </CardContent>
         </Card>
@@ -493,6 +562,20 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                 }
                 if (!transferProduct) {
                   toast.error("Debe seleccionar un producto")
+                  return
+                }
+
+                const sourceType = (transferSourceWarehouse as any)?.type
+                const destinationType = (warehouses || []).find((warehouse: any) => warehouse.id === transferTo)?.type
+                const transferSelectedProduct = products.find((product) => product.id === transferProduct)
+
+                if (sourceType && destinationType && sourceType !== destinationType) {
+                  toast.error("Origen y destino deben ser del mismo tipo")
+                  return
+                }
+
+                if (sourceType && transferSelectedProduct?.type && transferSelectedProduct.type !== sourceType) {
+                  toast.error(`El producto es tipo ${transferSelectedProduct.type} y el almacén origen acepta ${sourceType}`)
                   return
                 }
                 if (!transferQuantity || Number(transferQuantity) <= 0) {
@@ -549,7 +632,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any, index: number) => (
+                      {availableWarehouses.map((warehouse: any, index: number) => (
                         <SelectItem key={`from-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>
@@ -565,7 +648,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any, index: number) => (
+                      {availableWarehouses.map((warehouse: any, index: number) => (
                         <SelectItem key={`to-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>
@@ -576,18 +659,18 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="transfer-product">Producto</Label>
-                  <Select value={transferProduct} onValueChange={(v) => setTransferProduct(v)}>
-                    <SelectTrigger id="transfer-product">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name} ({product.sku})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ComboBox
+                    value={transferProduct}
+                    onChange={(v) => setTransferProduct(v)}
+                    options={availableProductsForTransfer.map((product) => ({
+                      value: String(product.id),
+                      label: `${product.name}`,
+                      subtitle: product.sku || product.type,
+                    }))}
+                    placeholder="Seleccionar producto"
+                    searchPlaceholder="Buscar producto..."
+                    emptyMessage="No hay productos para este tipo de almacén"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -659,7 +742,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                       <SelectValue placeholder="Seleccionar almacén" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(warehouses || []).map((warehouse: any, index: number) => (
+                      {availableWarehouses.map((warehouse: any, index: number) => (
                         <SelectItem key={`adj-${warehouse.id || index}`} value={warehouse.id}>
                           {warehouse.name}
                         </SelectItem>

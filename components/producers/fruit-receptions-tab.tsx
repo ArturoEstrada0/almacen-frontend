@@ -76,6 +76,7 @@ export function FruitReceptionsTab() {
   // Filtrar productos por tipo - definir antes de los handlers
   const fruitProducts = products.filter((p) => p.type === "fruta")
   const insumoProducts = products.filter((p) => p.type === "insumo")
+  const fruitWarehouses = warehouses.filter((warehouse) => warehouse.type === "fruta")
 
   useEffect(() => {
     let mounted = true
@@ -159,7 +160,7 @@ export function FruitReceptionsTab() {
   const totalWeight = boxes && weightPerBox ? Number(boxes) * Number(weightPerBox) : 0
 
   const addReturnedItem = () =>
-    setReturnedItems((s) => [...s, { id: Date.now(), productId: "", quantity: "", unitPrice: "" }])
+    setReturnedItems((s) => [...s, { id: Date.now(), productId: "", quantity: "1", unitPrice: "" }])
   
   const removeReturnedItem = (id: number) => setReturnedItems((s) => s.filter((it) => it.id !== id))
   
@@ -168,8 +169,8 @@ export function FruitReceptionsTab() {
     if (patch.productId !== undefined) {
       const selectedProductItem = products.find(p => String(p.id) === patch.productId)
       if (selectedProductItem) {
-        // Usar el campo 'price' del producto de la BD
-        const productPrice = Number(selectedProductItem.price) || Number(selectedProductItem.salePrice) || 0
+        // Usar el costo/precio configurado del producto de la BD
+        const productPrice = Number(selectedProductItem.cost) || Number(selectedProductItem.price) || Number(selectedProductItem.salePrice) || 0
         patch.unitPrice = productPrice.toString()
       }
     }
@@ -177,7 +178,7 @@ export function FruitReceptionsTab() {
   }
 
   const calculateReturnedTotal = () => 
-    returnedItems.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)), 0)
+    returnedItems.reduce((sum, item) => sum + ((Math.trunc(Number(item.quantity) || 0)) * (parseFloat(item.unitPrice) || 0)), 0)
 
   const handleSave = async () => {
     try {
@@ -200,7 +201,7 @@ export function FruitReceptionsTab() {
         payload.returnedBoxesValue = returnedTotal
         payload.returnedItems = returnedItems.map(item => ({
           productId: item.productId,
-          quantity: parseFloat(item.quantity) || 0,
+          quantity: Math.trunc(Number(item.quantity) || 0),
           unitPrice: parseFloat(item.unitPrice) || 0
         }))
       } else {
@@ -263,7 +264,7 @@ export function FruitReceptionsTab() {
       const items = reception.returnedItems.map((item: any) => ({
         id: item.id || Date.now() + Math.random(),
         productId: String(item.productId),
-        quantity: String(item.quantity || 0),
+        quantity: String(Math.trunc(Number(item.quantity || 0))),
         unitPrice: String(item.unitPrice || item.price || 0),
       }))
       setReturnedItems(items)
@@ -500,7 +501,7 @@ export function FruitReceptionsTab() {
                     <ComboBox
                       value={selectedWarehouse}
                       onChange={setSelectedWarehouse}
-                      options={warehouses.map((warehouse) => ({
+                      options={fruitWarehouses.map((warehouse) => ({
                         value: warehouse.id,
                         label: `${warehouse.code || warehouse.id} - ${warehouse.name}`,
                         subtitle: warehouse.code || warehouse.id
@@ -589,14 +590,14 @@ export function FruitReceptionsTab() {
                           <div className="col-span-2">
                             <Label className="text-xs mb-1 block">Cantidad</Label>
                             <Input
-                              type="text"
-                              inputMode="decimal"
+                              type="number"
+                              inputMode="numeric"
+                              step="1"
+                              min="1"
                               value={item.quantity}
                               onChange={(e) => {
-                                const value = e.target.value
-                                if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                                  updateReturnedItem(item.id, { quantity: value })
-                                }
+                                const value = e.target.value.replace(/\D/g, "")
+                                updateReturnedItem(item.id, { quantity: value })
                               }}
                               placeholder="0"
                               className="text-sm"
@@ -878,7 +879,7 @@ export function FruitReceptionsTab() {
                     <div className="space-y-3">
                       {selectedReception.returnedItems.map((item: any, index: number) => {
                         const product = products.find(p => String(p.id) === String(item.productId))
-                        const quantity = Number(item.quantity || 0)
+                        const quantity = Math.trunc(Number(item.quantity || 0))
                         const unitPrice = Number(item.unitPrice || 0)
                         const total = quantity * unitPrice
                         
@@ -908,7 +909,7 @@ export function FruitReceptionsTab() {
                         <span className="text-xl font-bold text-blue-700">
                           {formatCurrency(
                             selectedReception.returnedItems.reduce((sum: number, item: any) => 
-                              sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0
+                              sum + (Math.trunc(Number(item.quantity || 0)) * Number(item.unitPrice || 0)), 0
                             )
                           )}
                         </span>
