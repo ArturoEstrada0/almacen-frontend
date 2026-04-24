@@ -1,14 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useProducts } from "@/lib/hooks/use-products"
-import { useCategories } from "@/lib/hooks/use-categories"
 import { formatCurrency } from "@/lib/utils/format"
-import { Plus, Search, Edit, Trash2, ImageIcon } from "lucide-react"
+import { Plus, Search, Edit, Trash2, ImageIcon, ListTree } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -19,6 +18,8 @@ import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/
 import { extractErrorMessage } from "@/lib/utils/error-handler"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import Spinner2 from "@/components/ui/spinner2"
+import { useCategories } from "@/lib/hooks/use-categories"
+import { useProductTypes } from "@/lib/hooks/use-product-types"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,13 +39,15 @@ export default function ProductsPage() {
   const [productToDelete, setProductToDelete] = useState<string | null>(null)
 
   const { products, isLoading, mutate } = useProducts()
-  const { categories } = useCategories()
+  const { categories: catalogCategories } = useCategories()
+  const { productTypes } = useProductTypes()
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.sku.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesType = filterType === "all" || product.type === filterType
+    const matchesType =
+      filterType === "all" || String(product.type || "").toLowerCase() === String(filterType).toLowerCase()
     const matchesCategory = filterCategory === "all" || product.categoryId === filterCategory
     return matchesSearch && matchesType && matchesCategory
   })
@@ -77,10 +80,9 @@ export default function ProductsPage() {
     }
   }
 
-  const productTypes = [
+  const productTypeOptions = [
     { value: "all", label: "Todos los tipos" },
-    { value: "insumo", label: "Insumo" },
-    { value: "fruta", label: "Fruta" },
+    ...productTypes.map((typeItem: any) => ({ value: typeItem.name, label: typeItem.name })),
   ]
 
   if (isLoading) {
@@ -98,14 +100,22 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Productos</h1>
           <p className="text-muted-foreground">Gestión completa del catálogo de productos</p>
         </div>
-        <ProtectedCreate module="products">
-          <Link href="/products/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Producto
-            </Button>
-          </Link>
-        </ProtectedCreate>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/product-catalog">
+              <ListTree className="mr-2 h-4 w-4" />
+              Administrar tipos y categorías
+            </Link>
+          </Button>
+          <ProtectedCreate module="products">
+            <Link href="/products/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Producto
+              </Button>
+            </Link>
+          </ProtectedCreate>
+        </div>
       </div>
 
       {/* Filters */}
@@ -126,7 +136,7 @@ export default function ProductsPage() {
                 <SelectValue placeholder="Tipo de producto" />
               </SelectTrigger>
               <SelectContent>
-                {productTypes.map((type) => (
+                {productTypeOptions.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     {type.label}
                   </SelectItem>
@@ -139,7 +149,7 @@ export default function ProductsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas las categorías</SelectItem>
-                {categories.map((cat) => (
+                {catalogCategories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
                     {cat.name}
                   </SelectItem>

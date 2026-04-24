@@ -112,6 +112,9 @@ export function ShipmentsTab() {
   const [isShipmentErrorDialogOpen, setIsShipmentErrorDialogOpen] = useState(false)
   const [shipmentErrorMessage, setShipmentErrorMessage] = useState("")
   const [isCreatingShipment, setIsCreatingShipment] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [shipmentToDelete, setShipmentToDelete] = useState<any | null>(null)
+  const [isDeletingShipment, setIsDeletingShipment] = useState(false)
 
   const { fruitReceptions } = useFruitReceptions()
   const { shipments, mutate: mutateShipments, isLoading } = useShipments()
@@ -400,17 +403,25 @@ export function ShipmentsTab() {
       return
     }
 
-    if (!confirm(`¿Estás seguro de eliminar el embarque ${shipment.code || shipment.shipmentNumber}? Las recepciones volverán al estado pendiente.`)) {
-      return
-    }
+    setShipmentToDelete(shipment)
+    setIsDeleteDialogOpen(true)
+  }
 
+  const handleConfirmDeleteShipment = async () => {
+    if (!shipmentToDelete || isDeletingShipment) return
+
+    setIsDeletingShipment(true)
     try {
-      await apiDeleteShipment(shipment.id)
+      await apiDeleteShipment(shipmentToDelete.id)
       await mutateShipments()
       await globalMutate("fruit-receptions")
+      setIsDeleteDialogOpen(false)
+      setShipmentToDelete(null)
     } catch (err) {
       console.warn("Error deleting shipment:", err)
       alert("Error al eliminar: " + (err as any)?.message || String(err))
+    } finally {
+      setIsDeletingShipment(false)
     }
   }
 
@@ -1794,6 +1805,41 @@ export function ShipmentsTab() {
                 }
               >
                 Actualizar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Shipment Dialog */}
+        <Dialog
+          open={isDeleteDialogOpen}
+          onOpenChange={(open) => {
+            setIsDeleteDialogOpen(open)
+            if (!open) setShipmentToDelete(null)
+          }}
+        >
+          <DialogContent className="w-full max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Confirmar eliminación</DialogTitle>
+              <DialogDescription>
+                {shipmentToDelete
+                  ? `¿Estás seguro de eliminar el embarque ${shipmentToDelete.code || shipmentToDelete.shipmentNumber}? Las recepciones volverán al estado pendiente.`
+                  : "¿Estás seguro de eliminar este embarque? Las recepciones volverán al estado pendiente."}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 gap-2 sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDeleteDialogOpen(false)
+                  setShipmentToDelete(null)
+                }}
+                disabled={isDeletingShipment}
+              >
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmDeleteShipment} disabled={isDeletingShipment}>
+                {isDeletingShipment ? "Eliminando..." : "Eliminar embarque"}
               </Button>
             </DialogFooter>
           </DialogContent>

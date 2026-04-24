@@ -1,15 +1,7 @@
 // Core Types for Warehouse Management System
 
 export type MovementType = "entrada" | "salida" | "ajuste" | "traspaso" | "transformacion"
-export type ProductType =
-  | "insumo"
-  | "fruta"
-  | "agua"
-  | "polvos"
-  | "materia-prima"
-  | "producto-terminado"
-  | "empaque"
-  | "otro"
+export type ProductType = string
 export type OrderStatus = "pendiente" | "parcial" | "completada" | "cancelada"
 export type PaymentStatus = "pendiente" | "pagado" | "vencido" | "parcial"
 

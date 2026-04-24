@@ -1,190 +1,78 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { ArrowLeft, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useWarehouses } from "@/lib/hooks/use-warehouses"
-import { useCategories } from "@/lib/hooks/use-categories"
-import { ArrowLeft, Save, Upload, Plus } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { apiPost, apiPatch } from "@/lib/db/localApi"
-import { toast } from "@/lib/utils/toast"
-import { log, error } from '@/lib/utils/logger'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-
-interface WarehouseInventory {
-  warehouseId: string
-  minStock: string
-  maxStock: string
-  currentStock: string
-  reorderPoint: string
-}
+import { apiPost } from "@/lib/db/localApi"
+import { toast } from "@/lib/utils/toast"
+import { useCategories } from "@/lib/hooks/use-categories"
+import { useProductTypes } from "@/lib/hooks/use-product-types"
 
 export default function NewProductPage() {
   const router = useRouter()
+  const { categories } = useCategories()
+  const { productTypes } = useProductTypes()
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     sku: "",
     name: "",
     description: "",
-    type: "insumo",
-  categoryId: "",
-  barcode: "",
+    type: "",
+    categoryId: "",
+    barcode: "",
     unitOfMeasure: "Pieza",
     costPrice: "",
     salePrice: "",
     isActive: true,
   })
 
-  const { warehouses } = useWarehouses()
-  const { categories } = useCategories()
-
-  const [warehouseInventories, setWarehouseInventories] = useState<WarehouseInventory[]>([])
-
   useEffect(() => {
-    if (!warehouses || warehouses.length === 0) return
-    setWarehouseInventories(
-      warehouses.map((wh: any) => ({ warehouseId: wh.id, minStock: "", maxStock: "", reorderPoint: "", currentStock: "" })),
-    )
-  }, [warehouses?.length])
+    if (!productTypes.length) return
 
-  const updateWarehouseInventory = (warehouseId: string, field: keyof WarehouseInventory, value: string) => {
-    setWarehouseInventories((prev) => prev.map((inv) => (inv.warehouseId === warehouseId ? { ...inv, [field]: value } : inv)))
-  }
+    setFormData((current) => {
+      const currentMatches = productTypes.some((typeItem: any) => String(typeItem.name).toLowerCase() === String(current.type || "").toLowerCase())
+      return currentMatches ? current : { ...current, type: productTypes[0].name }
+    })
+  }, [productTypes])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
 
-    // Map front-end types to backend enum (backend accepts 'insumo' or 'fruta')
-    const mappedType = formData.type === "fruta" ? "fruta" : "insumo"
-    let loadingToast: string | number | undefined
-
-    const payload: any = {
-      sku: formData.sku || undefined,
-      name: formData.name,
-      description: formData.description || undefined,
-      type: mappedType,
-      categoryId: formData.categoryId || undefined,
-      barcode: formData.barcode || undefined,
-  // backend expects `unitId` (UUID) if provided. We don't have unitId from free-text input,
-  // so omit the free-text `unit` field to avoid validation errors.
-      // Backend espera 'cost' y 'price', no 'costPrice' y 'salePrice'
-      cost: formData.costPrice ? Number(formData.costPrice) : undefined,
-      price: formData.salePrice ? Number(formData.salePrice) : undefined,
-      active: formData.isActive,
-    }
+    setLoading(true)
+    const loadingToast = toast.loading("Creando producto...")
 
     try {
-      loadingToast = toast.loading("Creando producto...")
-      log("Payload enviado al backend:", payload)
-      const created = await apiPost(`/products`, payload)
-      log("Producto creado:", created)
-
-      // Persist per-warehouse inventory defaults (min/max/reorder) and create 'ajuste' movements for initial stock
-      for (const inv of warehouseInventories) {
-        const hasInventorySettings = inv.minStock !== "" || inv.maxStock !== "" || inv.reorderPoint !== ""
-        if (hasInventorySettings) {
-          try {
-            await apiPatch(`/inventory/${(created as any).id}`, {
-              warehouseId: inv.warehouseId,
-              minStock: inv.minStock !== "" ? Number(inv.minStock) : undefined,
-              maxStock: inv.maxStock !== "" ? Number(inv.maxStock) : undefined,
-              reorderPoint: inv.reorderPoint !== "" ? Number(inv.reorderPoint) : undefined,
-            })
-                } catch (cfgErr: any) {
-            // If backend doesn't have the exact route yet (404), try the compat route
-            const isNotFound = cfgErr?.message?.includes("404") || cfgErr?.message?.includes("Not Found")
-            if (isNotFound) {
-              try {
-                await apiPatch(`/inventory/product/${(created as any).id}`, {
-                  warehouseId: inv.warehouseId,
-                  minStock: inv.minStock !== "" ? Number(inv.minStock) : undefined,
-                  maxStock: inv.maxStock !== "" ? Number(inv.maxStock) : undefined,
-                  reorderPoint: inv.reorderPoint !== "" ? Number(inv.reorderPoint) : undefined,
-                })
-              } catch (compatErr) {
-                error("Error guardando settings de inventario (compat):", compatErr)
-              }
-            } else {
-              error("Error guardando settings de inventario:", cfgErr)
-            }
-          }
-        }
-
-        const qty = Number(inv.currentStock || "0")
-        if (qty > 0) {
-          try {
-            await apiPost(`/inventory/movements`, {
-              type: "ajuste",
-              warehouseId: inv.warehouseId,
-              items: [
-                {
-                  productId: (created as any).id,
-                  quantity: qty,
-                },
-              ],
-            })
-          } catch (movErr) {
-            // non-fatal: log and continue
-            error("Error creando movimiento de ajuste:", movErr)
-          }
-        }
+      const payload = {
+        sku: formData.sku.trim() || undefined,
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        type: formData.type,
+        categoryId: formData.categoryId || undefined,
+        barcode: formData.barcode.trim() || undefined,
+        cost: formData.costPrice ? Number(formData.costPrice) : undefined,
+        price: formData.salePrice ? Number(formData.salePrice) : undefined,
+        active: formData.isActive,
       }
 
+      await apiPost("/products", payload)
       toast.dismiss(loadingToast)
       toast.success("Producto creado correctamente")
       router.push("/products")
-    } catch (err: any) {
+    } catch (error: any) {
       toast.dismiss(loadingToast)
-      error("Error completo:", err)
-      error("Error creando producto:", {
-        message: err?.message,
-        statusCode: err?.statusCode,
-        errors: err?.errors,
-        technicalDetails: err?.technicalDetails
-      })
-      
-      // Log detallado de los errores
-      if (err?.errors) {
-        error("Detalles de errores de validación:", JSON.stringify(err.errors, null, 2))
-      }
-      
-      let errorMessage = "Error creando producto"
-      if (err?.statusCode === 400 && err?.errors) {
-        // Si es un array, convertirlo a string
-        if (Array.isArray(err.errors)) {
-          errorMessage = err.errors.join("; ")
-        } else if (typeof err.errors === 'object') {
-          // Si es un objeto, mostrar cada campo con sus errores
-          errorMessage = Object.entries(err.errors)
-            .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(", ") : msgs}`)
-            .join("; ")
-        } else {
-          errorMessage = String(err.errors)
-        }
-      } else if (err?.message && err.message !== '. ') {
-        errorMessage = err.message
-      }
-      
-      toast.error(errorMessage)
+      toast.error(error?.message || "Error creando producto")
+    } finally {
+      setLoading(false)
     }
   }
-
-  const productTypes = [
-    { value: "insumo", label: "Insumo" },
-    { value: "fruta", label: "Fruta" },
-    { value: "agua", label: "Agua" },
-    { value: "polvos", label: "Polvos" },
-    { value: "materia-prima", label: "Materia Prima" },
-    { value: "producto-terminado", label: "Producto Terminado" },
-    { value: "empaque", label: "Empaque" },
-    { value: "otro", label: "Otro" },
-  ]
 
   return (
     <div className="space-y-6">
@@ -242,25 +130,24 @@ export default function NewProductPage() {
                   />
                 </div>
 
-
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="type">Tipo de Producto *</Label>
-                    <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                      <Select value={formData.type || productTypes[0]?.name || ""} onValueChange={(value) => setFormData({ ...formData, type: value })}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Seleccionar tipo" />
                       </SelectTrigger>
                       <SelectContent>
-                        {productTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
+                        {productTypes.map((typeItem: any) => (
+                          <SelectItem key={typeItem.id} value={typeItem.name}>
+                            {typeItem.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="category">Categoría *</Label>
+                    <Label htmlFor="category">Categoría</Label>
                     <Select
                       value={formData.categoryId || "none"}
                       onValueChange={(value) => setFormData({ ...formData, categoryId: value === "none" ? "" : value })}
@@ -270,9 +157,9 @@ export default function NewProductPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Sin categoría</SelectItem>
-                        {categories.map((cat: any) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
+                        {categories.map((category: any) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -304,7 +191,7 @@ export default function NewProductPage() {
               </CardContent>
             </Card>
 
-            {/* <Card>
+            <Card>
               <CardHeader>
                 <CardTitle>Precios</CardTitle>
                 <CardDescription>Configuración de precios del producto</CardDescription>
@@ -312,7 +199,7 @@ export default function NewProductPage() {
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="costPrice">Precio de Costo *</Label>
+                    <Label htmlFor="costPrice">Precio de Costo</Label>
                     <Input
                       id="costPrice"
                       type="number"
@@ -323,7 +210,7 @@ export default function NewProductPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="salePrice">Precio de Venta *</Label>
+                    <Label htmlFor="salePrice">Precio de Venta</Label>
                     <Input
                       id="salePrice"
                       type="number"
@@ -335,129 +222,36 @@ export default function NewProductPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card> */}
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Configuración de Inventario por Almacén</CardTitle>
-                <CardDescription>
-                  Define los niveles de stock mínimo, máximo y punto de reorden para cada almacén
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-end mb-4">
-                  <Link href="/warehouses/new">
-                    <Button size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Crear Almacén
-                    </Button>
-                  </Link>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Almacén</TableHead>
-                      <TableHead>Stock Mínimo</TableHead>
-                      <TableHead>Stock Máximo</TableHead>
-                      <TableHead>Punto de Reorden</TableHead>
-                      <TableHead>Stock Actual</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(warehouses || []).map((warehouse: any) => {
-                      const inventory = warehouseInventories.find((inv) => inv.warehouseId === warehouse.id)
-                      return (
-                        <TableRow key={warehouse.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{warehouse.name}</p>
-                              <p className="text-xs text-muted-foreground">{warehouse.code}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={inventory?.minStock || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "minStock", e.target.value)}
-                              className="w-24"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={inventory?.maxStock || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "maxStock", e.target.value)}
-                              className="w-24"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={inventory?.reorderPoint || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "reorderPoint", e.target.value)}
-                              className="w-24"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={inventory?.currentStock || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "currentStock", e.target.value)}
-                              className="w-24"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
             </Card>
           </div>
 
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Imagen del Producto</CardTitle>
-                <CardDescription>Sube una imagen del producto</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center">
-                  <Upload className="h-10 w-10 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground mb-2">Arrastra una imagen o haz clic para seleccionar</p>
-                  <Button type="button" variant="outline" size="sm">
-                    Seleccionar Archivo
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
                 <CardTitle>Estado</CardTitle>
                 <CardDescription>Configuración de disponibilidad</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="isActive">Producto Activo</Label>
-                    <p className="text-sm text-muted-foreground">El producto estará disponible en el sistema</p>
-                  </div>
-                  <Switch
-                    id="isActive"
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                  />
+                <div className="space-y-2">
+                  <Label htmlFor="isActive">Producto Activo</Label>
+                  <Select
+                    value={formData.isActive ? "active" : "inactive"}
+                    onValueChange={(value) => setFormData({ ...formData, isActive: value === "active" })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Activo</SelectItem>
+                      <SelectItem value="inactive">Inactivo</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
 
             <div className="flex flex-col gap-2">
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full" disabled={loading}>
                 <Save className="mr-2 h-4 w-4" />
                 Guardar Producto
               </Button>

@@ -43,7 +43,7 @@ export function useProducts() {
   }
 }
 
-export function useProductsByType(type: "insumo" | "fruta") {
+export function useProductsByType(type: string) {
   const { data, error, isLoading, mutate } = useSWR<any[]>(`products-${type}`, async () => {
     const products = await ApiClient.get<any[]>(API_ENDPOINTS.products.list())
     return products.filter((p) => p.type === type).map(mapBackendProduct)

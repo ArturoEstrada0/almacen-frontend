@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useProduct, updateProduct } from "@/lib/hooks/use-products"
-import { useCategories } from "@/lib/hooks/use-categories"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useInventoryByWarehouse } from "@/lib/hooks/use-inventory"
 import { Button } from "@/components/ui/button"
@@ -17,6 +16,8 @@ import { Switch } from "@/components/ui/switch"
 import { Save, ArrowLeft, Upload } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "@/lib/utils/toast"
+import { useCategories } from "@/lib/hooks/use-categories"
+import { useProductTypes } from "@/lib/hooks/use-product-types"
 
 interface Params {
   params: any
@@ -38,9 +39,10 @@ export default function EditProductPage({ params }: Params) {
 
   const routerRef = router
   const { product, isLoading, mutate } = useProduct(resolvedId ?? null)
-  const { categories } = useCategories()
   const { warehouses } = useWarehouses()
   const { inventory } = useInventoryByWarehouse(null)
+  const { categories: catalogCategories } = useCategories()
+  const { productTypes } = useProductTypes()
 
   const [formData, setFormData] = useState<any>({
     sku: "",
@@ -70,7 +72,7 @@ export default function EditProductPage({ params }: Params) {
       sku: product.sku || "",
       name: product.name || "",
       description: product.description || "",
-      type: product.type || "insumo",
+      type: String(product.type || ""),
       categoryId: product.categoryId || "",
       barcode: product.barcode || "",
       unitOfMeasure: product.unitOfMeasure || "Pieza",
@@ -79,6 +81,15 @@ export default function EditProductPage({ params }: Params) {
       isActive: (product as any).isActive !== undefined ? (product as any).isActive : true,
     })
   }, [product?.id])
+
+  useEffect(() => {
+    if (!productTypes.length) return
+
+    setFormData((current) => {
+      const currentMatches = productTypes.some((typeItem: any) => String(typeItem.name).toLowerCase() === String(current.type || "").toLowerCase())
+      return currentMatches ? current : { ...current, type: productTypes[0].name }
+    })
+  }, [productTypes])
 
   // Cargar inventario existente cuando se cargan los datos
   useEffect(() => {
@@ -216,8 +227,11 @@ export default function EditProductPage({ params }: Params) {
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                     >
-                      <option value="insumo">Insumo</option>
-                      <option value="fruta">Fruta</option>
+                      {productTypes.map((typeItem: any) => (
+                        <option key={typeItem.id} value={typeItem.name}>
+                          {typeItem.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -229,7 +243,7 @@ export default function EditProductPage({ params }: Params) {
                       onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                     >
                       <option value="">Sin categoría</option>
-                      {categories.map((cat: any) => (
+                      {catalogCategories.map((cat: any) => (
                         <option key={cat.id} value={cat.id}>
                           {cat.name}
                         </option>

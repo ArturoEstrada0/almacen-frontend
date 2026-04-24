@@ -77,7 +77,7 @@ export async function createProduct(product: Partial<Product>) {
       sku: product.sku,
       name: product.name,
       description: product.description || undefined,
-      type: (product.type === "fruta" ? "fruta" : "insumo"),
+      type: product.type,
       // backend expects `cost` and `price`
       cost: product.costPrice !== undefined ? Number(product.costPrice) : undefined,
       price: product.salePrice !== undefined ? Number(product.salePrice) : undefined,
@@ -134,7 +134,7 @@ export async function deleteProduct(id: string) {
   }
 }
 
-export async function getProductsByType(type: "insumo" | "fruta") {
+export async function getProductsByType(type: string) {
   try {
     const data = await apiGet(`/products?type=${type}&is_active=true&order=name&select=*,category:categories(id,name),unit:units(id,name,abbreviation)`)
     return { data, error: null }
