@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Save } from "lucide-react"
@@ -20,6 +20,7 @@ export default function NewProductPage() {
   const { categories } = useCategories()
   const { productTypes } = useProductTypes()
   const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     sku: "",
     name: "",
@@ -33,18 +34,33 @@ export default function NewProductPage() {
     isActive: true,
   })
 
-  useEffect(() => {
-    if (!productTypes.length) return
-
-    setFormData((current) => {
-      const currentMatches = productTypes.some((typeItem: any) => String(typeItem.name).toLowerCase() === String(current.type || "").toLowerCase())
-      return currentMatches ? current : { ...current, type: productTypes[0].name }
+  const clearFieldError = (field: string) => {
+    setFieldErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
     })
-  }, [productTypes])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (loading) return
+
+    const nextErrors: Record<string, string> = {}
+    if (!formData.sku.trim()) nextErrors.sku = "El SKU es obligatorio"
+    if (!formData.name.trim()) nextErrors.name = "El nombre es obligatorio"
+    if (!formData.type) nextErrors.type = "Selecciona un tipo de producto"
+    if (!formData.categoryId) nextErrors.categoryId = "Selecciona una categoría"
+    if (!formData.unitOfMeasure.trim()) nextErrors.unitOfMeasure = "La unidad de medida es obligatoria"
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors)
+      toast.error("Completa los campos marcados")
+      return
+    }
+
+    setFieldErrors({})
 
     setLoading(true)
     const loadingToast = toast.loading("Creando producto...")
@@ -55,7 +71,7 @@ export default function NewProductPage() {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         type: formData.type,
-        categoryId: formData.categoryId || undefined,
+        categoryId: formData.categoryId,
         barcode: formData.barcode.trim() || undefined,
         cost: formData.costPrice ? Number(formData.costPrice) : undefined,
         price: formData.salePrice ? Number(formData.salePrice) : undefined,
@@ -104,9 +120,13 @@ export default function NewProductPage() {
                       id="sku"
                       placeholder="PRO-001"
                       value={formData.sku}
-                      onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                      required
+                      onChange={(e) => {
+                        setFormData({ ...formData, sku: e.target.value })
+                        clearFieldError("sku")
+                      }}
+                      className={fieldErrors.sku ? "border-red-500 focus-visible:ring-red-500" : ""}
                     />
+                    {fieldErrors.sku ? <p className="text-sm text-red-600">{fieldErrors.sku}</p> : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="barcode">Código de Barras</Label>
@@ -125,17 +145,27 @@ export default function NewProductPage() {
                     id="name"
                     placeholder="Nombre del producto"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value })
+                      clearFieldError("name")
+                    }}
+                    className={fieldErrors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
                   />
+                  {fieldErrors.name ? <p className="text-sm text-red-600">{fieldErrors.name}</p> : null}
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="type">Tipo de Producto *</Label>
-                      <Select value={formData.type || productTypes[0]?.name || ""} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Seleccionar tipo" />
+                      <Select
+                        value={formData.type}
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, type: value })
+                          clearFieldError("type")
+                        }}
+                      >
+                      <SelectTrigger className={`w-full ${fieldErrors.type ? "border-red-500 ring-red-500" : ""}`}>
+                        <SelectValue placeholder="Sin tipo" />
                       </SelectTrigger>
                       <SelectContent>
                         {productTypes.map((typeItem: any) => (
@@ -145,18 +175,21 @@ export default function NewProductPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {fieldErrors.type ? <p className="text-sm text-red-600">{fieldErrors.type}</p> : null}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="category">Categoría</Label>
+                    <Label htmlFor="category">Categoría *</Label>
                     <Select
-                      value={formData.categoryId || "none"}
-                      onValueChange={(value) => setFormData({ ...formData, categoryId: value === "none" ? "" : value })}
+                      value={formData.categoryId}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, categoryId: value })
+                        clearFieldError("categoryId")
+                      }}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className={`w-full ${fieldErrors.categoryId ? "border-red-500 ring-red-500" : ""}`}>
                         <SelectValue placeholder="Seleccionar categoría" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Sin categoría</SelectItem>
                         {categories.map((category: any) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}
@@ -164,6 +197,7 @@ export default function NewProductPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {fieldErrors.categoryId ? <p className="text-sm text-red-600">{fieldErrors.categoryId}</p> : null}
                   </div>
                 </div>
 
@@ -184,9 +218,13 @@ export default function NewProductPage() {
                     id="unitOfMeasure"
                     placeholder="Pieza, Kg, Litro, etc."
                     value={formData.unitOfMeasure}
-                    onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value })}
-                    required
+                    onChange={(e) => {
+                      setFormData({ ...formData, unitOfMeasure: e.target.value })
+                      clearFieldError("unitOfMeasure")
+                    }}
+                    className={fieldErrors.unitOfMeasure ? "border-red-500 focus-visible:ring-red-500" : ""}
                   />
+                  {fieldErrors.unitOfMeasure ? <p className="text-sm text-red-600">{fieldErrors.unitOfMeasure}</p> : null}
                 </div>
               </CardContent>
             </Card>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useProduct, updateProduct } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
-import { useInventoryByWarehouse } from "@/lib/hooks/use-inventory"
+import { useInventoryByWarehouse, updateInventoryStock } from "@/lib/hooks/use-inventory"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -43,12 +43,13 @@ export default function EditProductPage({ params }: Params) {
   const { inventory } = useInventoryByWarehouse(null)
   const { categories: catalogCategories } = useCategories()
   const { productTypes } = useProductTypes()
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const [formData, setFormData] = useState<any>({
     sku: "",
     name: "",
     description: "",
-    type: "insumo",
+    type: "",
     categoryId: "",
     barcode: "",
     unitOfMeasure: "Pieza",
@@ -57,6 +58,11 @@ export default function EditProductPage({ params }: Params) {
     isActive: true,
   })
 
+  const typeExistsInCatalog = productTypes.some(
+    (typeItem: any) => String(typeItem.name || "").trim().toLowerCase() === String(formData?.type || "").trim().toLowerCase(),
+  )
+  const showLegacyTypeOption = Boolean(formData?.type) && !typeExistsInCatalog
+
   // Estado para configuración de inventario por almacén
   const [warehouseInventory, setWarehouseInventory] = useState<Record<string, {
     minStock: string
@@ -64,6 +70,21 @@ export default function EditProductPage({ params }: Params) {
     reorderPoint: string
     currentStock: string
   }>>({})
+  const [initialWarehouseInventory, setInitialWarehouseInventory] = useState<Record<string, {
+    minStock: string
+    maxStock: string
+    reorderPoint: string
+    currentStock: string
+  }>>({})
+
+  const clearFieldError = (field: string) => {
+    setFieldErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!product) return
@@ -83,13 +104,29 @@ export default function EditProductPage({ params }: Params) {
   }, [product?.id])
 
   useEffect(() => {
-    if (!productTypes.length) return
+    if (!formData.type || !productTypes.length) return
 
-    setFormData((current) => {
-      const currentMatches = productTypes.some((typeItem: any) => String(typeItem.name).toLowerCase() === String(current.type || "").toLowerCase())
-      return currentMatches ? current : { ...current, type: productTypes[0].name }
-    })
-  }, [productTypes])
+    const matchedType = productTypes.find(
+      (typeItem: any) => String(typeItem.name || "").trim().toLowerCase() === String(formData.type || "").trim().toLowerCase(),
+    )
+
+    if (matchedType && matchedType.name !== formData.type) {
+      setFormData((current: any) => ({ ...current, type: matchedType.name }))
+    }
+  }, [productTypes, formData.type])
+
+  useEffect(() => {
+    if (!formData.categoryId || !catalogCategories.length) return
+
+    const categoryExists = catalogCategories.some((category: any) => String(category.id) === String(formData.categoryId))
+    if (!categoryExists) {
+      setFormData((current: any) => ({ ...current, categoryId: "" }))
+      setFieldErrors((current) => ({
+        ...current,
+        categoryId: "La categoría anterior ya no existe. Selecciona una categoría válida",
+      }))
+    }
+  }, [catalogCategories, formData.categoryId])
 
   // Cargar inventario existente cuando se cargan los datos
   useEffect(() => {
@@ -110,7 +147,24 @@ export default function EditProductPage({ params }: Params) {
     })
     
     setWarehouseInventory(inventoryByWarehouse)
+    setInitialWarehouseInventory(inventoryByWarehouse)
   }, [resolvedId, inventory, warehouses])
+
+  const isSameInventoryValue = (left?: string, right?: string) => String(left ?? "").trim() === String(right ?? "").trim()
+
+  const hasInventoryRowChanges = (warehouseId: string) => {
+    const current = warehouseInventory[warehouseId]
+    const initial = initialWarehouseInventory[warehouseId]
+
+    if (!current || !initial) return false
+
+    return (
+      !isSameInventoryValue(current.currentStock, initial.currentStock) ||
+      !isSameInventoryValue(current.minStock, initial.minStock) ||
+      !isSameInventoryValue(current.maxStock, initial.maxStock) ||
+      !isSameInventoryValue(current.reorderPoint, initial.reorderPoint)
+    )
+  }
 
   const updateWarehouseInventory = (warehouseId: string, field: string, value: string) => {
     setWarehouseInventory(prev => ({
@@ -124,6 +178,20 @@ export default function EditProductPage({ params }: Params) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    const nextErrors: Record<string, string> = {}
+    if (!formData.sku?.trim()) nextErrors.sku = "El SKU es obligatorio"
+    if (!formData.name?.trim()) nextErrors.name = "El nombre es obligatorio"
+    if (!formData.type) nextErrors.type = "Selecciona un tipo de producto"
+    if (!formData.categoryId) nextErrors.categoryId = "Selecciona una categoría"
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors)
+      toast.error("Completa los campos marcados")
+      return
+    }
+
+    setFieldErrors({})
     
     const loadingToast = toast.loading("Actualizando producto...")
     
@@ -137,7 +205,7 @@ export default function EditProductPage({ params }: Params) {
         name: formData.name,
         description: formData.description,
         type: formData.type,
-        categoryId: formData.categoryId || undefined,
+        categoryId: formData.categoryId,
         barcode: formData.barcode || undefined,
         // backend DTO uses `unitId` and `active` fields. We don't have unitId selected yet,
         // so omit unit-related field. Map costPrice/salePrice to cost/price in hook.
@@ -152,16 +220,17 @@ export default function EditProductPage({ params }: Params) {
       // Actualizar inventario por almacén
       for (const warehouseId in warehouseInventory) {
         const invData = warehouseInventory[warehouseId]
-        
-        // Solo actualizar si hay algún valor
-        if (invData.currentStock || invData.minStock || invData.maxStock || invData.reorderPoint) {
-          const inventoryPayload: any = {
+
+        // Solo actualizar si el usuario cambió esta fila
+        if (hasInventoryRowChanges(warehouseId)) {
+          await updateInventoryStock({
+            productId: id,
             warehouseId,
-            currentStock: invData.currentStock ? Number(invData.currentStock) : undefined,
-          }
-          
-          // Actualizar el producto con el stock actual de este almacén
-          await updateProduct(id, inventoryPayload)
+            quantity: invData.currentStock !== "" ? Number(invData.currentStock) : undefined,
+            minStock: invData.minStock !== "" ? Number(invData.minStock) : undefined,
+            maxStock: invData.maxStock !== "" ? Number(invData.maxStock) : undefined,
+            reorderPoint: invData.reorderPoint !== "" ? Number(invData.reorderPoint) : undefined,
+          })
         }
       }
       
@@ -205,7 +274,16 @@ export default function EditProductPage({ params }: Params) {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="sku">SKU *</Label>
-                    <Input id="sku" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} />
+                    <Input
+                      id="sku"
+                      value={formData.sku}
+                      onChange={(e) => {
+                        setFormData({ ...formData, sku: e.target.value })
+                        clearFieldError("sku")
+                      }}
+                      className={fieldErrors.sku ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    />
+                    {fieldErrors.sku ? <p className="text-sm text-red-600">{fieldErrors.sku}</p> : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="barcode">Código de Barras</Label>
@@ -215,7 +293,16 @@ export default function EditProductPage({ params }: Params) {
 
                 <div className="space-y-2">
                   <Label htmlFor="name">Nombre del Producto *</Label>
-                  <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value })
+                      clearFieldError("name")
+                    }}
+                    className={fieldErrors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
+                  />
+                  {fieldErrors.name ? <p className="text-sm text-red-600">{fieldErrors.name}</p> : null}
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -223,32 +310,42 @@ export default function EditProductPage({ params }: Params) {
                     <Label htmlFor="type">Tipo de Producto *</Label>
                     <select
                       id="type"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${fieldErrors.type ? "border-red-500 focus-visible:ring-red-500" : "border-input"}`}
                       value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, type: e.target.value })
+                        clearFieldError("type")
+                      }}
                     >
+                      <option value="">Sin tipo</option>
+                      {showLegacyTypeOption ? <option value={formData.type}>{formData.type} (actual)</option> : null}
                       {productTypes.map((typeItem: any) => (
                         <option key={typeItem.id} value={typeItem.name}>
                           {typeItem.name}
                         </option>
                       ))}
                     </select>
+                    {fieldErrors.type ? <p className="text-sm text-red-600">{fieldErrors.type}</p> : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Categoría *</Label>
                     <select
                       id="category"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${fieldErrors.categoryId ? "border-red-500 focus-visible:ring-red-500" : "border-input"}`}
                       value={formData.categoryId || ""}
-                      onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, categoryId: e.target.value })
+                        clearFieldError("categoryId")
+                      }}
                     >
-                      <option value="">Sin categoría</option>
+                      <option value="">Seleccionar categoría</option>
                       {catalogCategories.map((cat: any) => (
                         <option key={cat.id} value={cat.id}>
                           {cat.name}
                         </option>
                       ))}
                     </select>
+                    {fieldErrors.categoryId ? <p className="text-sm text-red-600">{fieldErrors.categoryId}</p> : null}
                   </div>
                 </div>
 
