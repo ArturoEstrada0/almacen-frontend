@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "Sistema modular de gestión de almacén para empresas",
   generator: 'SOFTURE'
 }
-//leo client
+//leo leo
 export default function RootLayout({
   children,
 }: {
