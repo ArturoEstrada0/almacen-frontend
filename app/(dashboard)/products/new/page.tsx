@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Save } from "lucide-react"
@@ -10,17 +10,26 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ComboBox } from "@/components/ui/combobox"
 import { apiPost } from "@/lib/db/localApi"
 import { toast } from "@/lib/utils/toast"
 import { useCategories } from "@/lib/hooks/use-categories"
 import { useProductTypes } from "@/lib/hooks/use-product-types"
+import { useSuppliers } from "@/lib/hooks/use-suppliers"
+import { useWarehouses } from "@/lib/hooks/use-warehouses"
+import { addProductSupplier } from "@/lib/hooks/use-products"
+import { updateInventoryStock } from "@/lib/hooks/use-inventory"
 
 export default function NewProductPage() {
   const router = useRouter()
   const { categories } = useCategories()
   const { productTypes } = useProductTypes()
+  const { suppliers } = useSuppliers()
+  const { warehouses } = useWarehouses()
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [warehouseSearch, setWarehouseSearch] = useState("")
   const [formData, setFormData] = useState({
     sku: "",
     name: "",
@@ -29,10 +38,41 @@ export default function NewProductPage() {
     categoryId: "",
     barcode: "",
     unitOfMeasure: "Pieza",
-    costPrice: "",
-    salePrice: "",
     isActive: true,
   })
+  const [supplierForm, setSupplierForm] = useState({ supplierId: "", price: "", preferred: true })
+  const [warehouseInventory, setWarehouseInventory] = useState<Record<string, {
+    minStock: string
+    maxStock: string
+    reorderPoint: string
+    currentStock: string
+  }>>({})
+
+  const normalizeType = (value: string) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+
+  const productTypeNormalized = normalizeType(formData.type)
+
+  const warehousesByProductType = useMemo(() => {
+    if (!productTypeNormalized) return []
+
+    return (warehouses || []).filter((warehouse: any) =>
+      normalizeType(warehouse.type) === productTypeNormalized,
+    )
+  }, [warehouses, productTypeNormalized])
+
+  const filteredWarehouses = useMemo(() => {
+    return warehousesByProductType.filter((warehouse: any) => {
+      const matchesSearch =
+        String(warehouse.name || "").toLowerCase().includes(warehouseSearch.toLowerCase()) ||
+        String(warehouse.code || "").toLowerCase().includes(warehouseSearch.toLowerCase())
+      return matchesSearch
+    })
+  }, [warehousesByProductType, warehouseSearch])
 
   const clearFieldError = (field: string) => {
     setFieldErrors((current) => {
@@ -73,12 +113,44 @@ export default function NewProductPage() {
         type: formData.type,
         categoryId: formData.categoryId,
         barcode: formData.barcode.trim() || undefined,
-        cost: formData.costPrice ? Number(formData.costPrice) : undefined,
-        price: formData.salePrice ? Number(formData.salePrice) : undefined,
         active: formData.isActive,
       }
 
-      await apiPost("/products", payload)
+      const created: any = await apiPost("/products", payload)
+
+      // Guardar inventario por almacén
+      for (const warehouseId in warehouseInventory) {
+        const invData = warehouseInventory[warehouseId]
+        const hasData = invData.currentStock || invData.minStock || invData.maxStock || invData.reorderPoint
+
+        if (hasData) {
+          try {
+            await updateInventoryStock({
+              productId: created.id,
+              warehouseId,
+              quantity: invData.currentStock !== "" ? Number(invData.currentStock) : undefined,
+              minStock: invData.minStock !== "" ? Number(invData.minStock) : undefined,
+              maxStock: invData.maxStock !== "" ? Number(invData.maxStock) : undefined,
+              reorderPoint: invData.reorderPoint !== "" ? Number(invData.reorderPoint) : undefined,
+            })
+          } catch (err) {
+            console.error("Error actualizando inventario para almacén " + warehouseId, err)
+          }
+        }
+      }
+
+      if (supplierForm.supplierId && supplierForm.price && created?.id) {
+        try {
+          await addProductSupplier(created.id, {
+            supplierId: supplierForm.supplierId,
+            price: Number(supplierForm.price),
+            preferred: supplierForm.preferred,
+          })
+        } catch {
+          // El producto fue creado; la asociación de proveedor puede hacerse desde la edición
+        }
+      }
+
       toast.dismiss(loadingToast)
       toast.success("Producto creado correctamente")
       router.push("/products")
@@ -229,35 +301,152 @@ export default function NewProductPage() {
               </CardContent>
             </Card>
 
+            
+
             <Card>
               <CardHeader>
-                <CardTitle>Precios</CardTitle>
-                <CardDescription>Configuración de precios del producto</CardDescription>
+                <CardTitle>Proveedor</CardTitle>
+                <CardDescription>Proveedor preferido para este insumo (opcional)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="costPrice">Precio de Costo</Label>
-                    <Input
-                      id="costPrice"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.costPrice}
-                      onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="supplierId">Proveedor</Label>
+                    <ComboBox
+                      options={suppliers.map((s: any) => ({ value: s.id, label: s.name }))}
+                      value={supplierForm.supplierId}
+                      onChange={(v) => setSupplierForm({ ...supplierForm, supplierId: v })}
+                      placeholder="Sin proveedor (se puede asignar después)"
+                      searchPlaceholder="Buscar proveedor..."
                     />
                   </div>
+                  {supplierForm.supplierId && (
+                    <div className="space-y-2">
+                      <Label htmlFor="supplierPrice">Precio del proveedor *</Label>
+                      <Input
+                        id="supplierPrice"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={supplierForm.price}
+                        onChange={(e) => setSupplierForm({ ...supplierForm, price: e.target.value })}
+                      />
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración de Inventario por Almacén</CardTitle>
+                <CardDescription>Define los niveles de stock mínimo, máximo, punto de reorden y stock actual para cada almacén</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-1">
                   <div className="space-y-2">
-                    <Label htmlFor="salePrice">Precio de Venta</Label>
+                    <Label htmlFor="warehouseSearch">Buscar Almacén</Label>
                     <Input
-                      id="salePrice"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.salePrice}
-                      onChange={(e) => setFormData({ ...formData, salePrice: e.target.value })}
+                      id="warehouseSearch"
+                      placeholder="Buscar por nombre o código..."
+                      value={warehouseSearch}
+                      onChange={(e) => setWarehouseSearch(e.target.value)}
                     />
                   </div>
+                </div>
+                <div className="w-full max-h-[420px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Almacén</TableHead>
+                        <TableHead>Stock Actual</TableHead>
+                        <TableHead>Stock Mínimo</TableHead>
+                        <TableHead>Stock Máximo</TableHead>
+                        <TableHead>Punto de Reorden</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {filteredWarehouses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                          No hay almacenes que coincidan con los filtros
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredWarehouses.map((warehouse: any) => (
+                        <TableRow key={warehouse.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{warehouse.name}</p>
+                              <p className="text-xs text-muted-foreground">{warehouse.code}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Input 
+                              type="number"
+                              step="0.01"
+                              className="w-24" 
+                              value={warehouseInventory[warehouse.id]?.currentStock || ""}
+                              onChange={(e) => setWarehouseInventory(prev => ({
+                                ...prev,
+                                [warehouse.id]: {
+                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                  currentStock: e.target.value
+                                }
+                              }))}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input 
+                              type="number"
+                              step="0.01"
+                              className="w-24" 
+                              value={warehouseInventory[warehouse.id]?.minStock || ""}
+                              onChange={(e) => setWarehouseInventory(prev => ({
+                                ...prev,
+                                [warehouse.id]: {
+                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                  minStock: e.target.value
+                                }
+                              }))}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input 
+                              type="number"
+                              step="0.01"
+                              className="w-24" 
+                              value={warehouseInventory[warehouse.id]?.maxStock || ""}
+                              onChange={(e) => setWarehouseInventory(prev => ({
+                                ...prev,
+                                [warehouse.id]: {
+                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                  maxStock: e.target.value
+                                }
+                              }))}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input 
+                              type="number"
+                              step="0.01"
+                              className="w-24" 
+                              value={warehouseInventory[warehouse.id]?.reorderPoint || ""}
+                              onChange={(e) => setWarehouseInventory(prev => ({
+                                ...prev,
+                                [warehouse.id]: {
+                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                  reorderPoint: e.target.value
+                                }
+                              }))}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
                 </div>
               </CardContent>
             </Card>

@@ -56,6 +56,17 @@ export const API_ENDPOINTS = {
     create: () => `${API_BASE_URL}/api/suppliers`,
     update: (id: string) => `${API_BASE_URL}/api/suppliers/${id}`,
     delete: (id: string) => `${API_BASE_URL}/api/suppliers/${id}`,
+    products: (supplierId: string) => `${API_BASE_URL}/api/suppliers/${supplierId}/products`,
+  },
+
+  // Product-Supplier associations
+  productSuppliers: {
+    list: (productId: string) => `${API_BASE_URL}/api/products/${productId}/suppliers`,
+    add: (productId: string) => `${API_BASE_URL}/api/products/${productId}/suppliers`,
+    update: (productId: string, productSupplierId: string) =>
+      `${API_BASE_URL}/api/products/${productId}/suppliers/${productSupplierId}`,
+    remove: (productId: string, productSupplierId: string) =>
+      `${API_BASE_URL}/api/products/${productId}/suppliers/${productSupplierId}`,
   },
 
   // Customers

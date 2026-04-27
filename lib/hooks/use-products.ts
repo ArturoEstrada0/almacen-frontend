@@ -104,3 +104,38 @@ export async function updateProduct(id: string, data: Partial<Product>) {
 export async function deleteProduct(id: string) {
   return ApiClient.patch(API_ENDPOINTS.products.delete(id), { is_active: false })
 }
+
+// Product-Supplier association hooks and functions
+
+export function useProductSuppliers(productId: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<any[]>(
+    productId ? `product-suppliers-${productId}` : null,
+    () => ApiClient.get<any[]>(API_ENDPOINTS.productSuppliers.list(productId as string)),
+  )
+
+  return {
+    productSuppliers: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+  }
+}
+
+export async function addProductSupplier(
+  productId: string,
+  data: { supplierId: string; price: number; supplierSku?: string; leadTimeDays?: number; minimumOrder?: number; preferred?: boolean },
+) {
+  return ApiClient.post<any>(API_ENDPOINTS.productSuppliers.add(productId), data)
+}
+
+export async function updateProductSupplier(
+  productId: string,
+  productSupplierId: string,
+  data: { price?: number; supplierSku?: string; leadTimeDays?: number; minimumOrder?: number; preferred?: boolean },
+) {
+  return ApiClient.patch<any>(API_ENDPOINTS.productSuppliers.update(productId, productSupplierId), data)
+}
+
+export async function removeProductSupplier(productId: string, productSupplierId: string) {
+  return ApiClient.delete(API_ENDPOINTS.productSuppliers.remove(productId, productSupplierId))
+}
