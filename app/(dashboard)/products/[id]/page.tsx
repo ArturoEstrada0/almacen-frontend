@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useProduct, updateProduct, addProductSupplier } from "@/lib/hooks/use-products"
+import { useProduct, updateProduct, addProductSupplier, useProductSuppliers, removeProductSupplier } from "@/lib/hooks/use-products"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useInventoryByWarehouse, updateInventoryStock } from "@/lib/hooks/use-inventory"
@@ -14,9 +14,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { ComboBox } from "@/components/ui/combobox"
 // Use native selects here to avoid runtime update loop from the custom Select component
-import { Save, ArrowLeft } from "lucide-react"
+import { Save, ArrowLeft, Plus, Trash2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "@/lib/utils/toast"
 import { useCategories } from "@/lib/hooks/use-categories"
@@ -61,7 +62,36 @@ export default function EditProductPage({ params }: Params) {
     isActive: true,
   })
 
-  const [newSupplierForm, setNewSupplierForm] = useState({ supplierId: "", price: "", supplierSku: "", leadTimeDays: "", minimumOrder: "", preferred: false })
+  const [pendingSuppliers, setPendingSuppliers] = useState<{ supplierId: string; price: string; supplierSku: string; leadTimeDays: string; minimumOrder: string; preferred: boolean }[]>([])
+
+  const { productSuppliers, mutate: mutateSuppliers } = useProductSuppliers(resolvedId)
+
+  const addPendingSupplier = () => {
+    setPendingSuppliers(prev => [...prev, { supplierId: "", price: "", supplierSku: "", leadTimeDays: "", minimumOrder: "", preferred: false }])
+  }
+
+  const removePendingSupplier = (index: number) => {
+    setPendingSuppliers(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const updatePendingSupplier = (index: number, field: string, value: any) => {
+    setPendingSuppliers(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s))
+  }
+
+  const [supplierToDelete, setSupplierToDelete] = useState<{ id: string; name: string } | null>(null)
+
+  const confirmRemoveSupplier = async () => {
+    if (!resolvedId || !supplierToDelete) return
+    try {
+      await removeProductSupplier(resolvedId, supplierToDelete.id)
+      mutateSuppliers()
+      toast.success("Proveedor eliminado")
+    } catch {
+      toast.error("Error eliminando proveedor")
+    } finally {
+      setSupplierToDelete(null)
+    }
+  }
 
   const normalizeType = (value: string) =>
     String(value || "")
@@ -285,22 +315,24 @@ export default function EditProductPage({ params }: Params) {
         }
       }
       
-      // If a supplier was filled in the simple supplier panel, associate it
-      if (newSupplierForm.supplierId && newSupplierForm.price && id) {
-        try {
-          await addProductSupplier(id, {
-            supplierId: newSupplierForm.supplierId,
-            price: Number(newSupplierForm.price),
-            preferred: newSupplierForm.preferred,
-            supplierSku: newSupplierForm.supplierSku || undefined,
-            leadTimeDays: newSupplierForm.leadTimeDays ? Number(newSupplierForm.leadTimeDays) : undefined,
-            minimumOrder: newSupplierForm.minimumOrder ? Number(newSupplierForm.minimumOrder) : undefined,
-          })
-        } catch (err) {
-          // non-fatal: product updated but supplier association failed
-          console.error("Error asociando proveedor después de actualizar producto", err)
+      // Add all pending suppliers
+      for (const ps of pendingSuppliers) {
+        if (ps.supplierId) {
+          try {
+            await addProductSupplier(id, {
+              supplierId: ps.supplierId,
+              price: ps.price ? Number(ps.price) : 0,
+              preferred: ps.preferred,
+              supplierSku: ps.supplierSku || undefined,
+              leadTimeDays: ps.leadTimeDays ? Number(ps.leadTimeDays) : undefined,
+              minimumOrder: ps.minimumOrder ? Number(ps.minimumOrder) : undefined,
+            })
+          } catch (err) {
+            console.error("Error asociando proveedor", err)
+          }
         }
       }
+      mutateSuppliers()
 
       toast.dismiss(loadingToast)
       toast.success("Producto actualizado")
@@ -454,36 +486,63 @@ export default function EditProductPage({ params }: Params) {
 
             <Card>
               <CardHeader>
-                <CardTitle>Proveedor</CardTitle>
-                <CardDescription>Proveedor preferido para este insumo (opcional)</CardDescription>
+                <CardTitle>Proveedores</CardTitle>
+                <CardDescription>Proveedores asociados a este producto (opcional)</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="supplierId">Proveedor</Label>
-                    <ComboBox
-                      options={allSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
-                      value={newSupplierForm.supplierId}
-                      onChange={(v) => setNewSupplierForm({ ...newSupplierForm, supplierId: v })}
-                      placeholder="Sin proveedor (se puede asignar después)"
-                      searchPlaceholder="Buscar proveedor..."
-                    />
-                  </div>
-                  {newSupplierForm.supplierId && (
-                    <div className="space-y-2">
-                      <Label htmlFor="supplierPrice">Precio del proveedor *</Label>
-                      <Input
-                        id="supplierPrice"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        value={newSupplierForm.price}
-                        onChange={(e) => setNewSupplierForm({ ...newSupplierForm, price: e.target.value })}
-                      />
+              <CardContent className="space-y-3">
+                <div className="max-h-[300px] overflow-y-auto space-y-3 pr-1">
+                  {/* Existing suppliers */}
+                  {productSuppliers.map((ps: any) => {
+                    const supplierName = ps.supplier?.name || allSuppliers.find((s: any) => s.id === ps.supplierId)?.name || ps.supplierId
+                    return (
+                      <div key={ps.id} className="flex items-center gap-3 rounded-md border p-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{supplierName}</p>
+                          {ps.preferred && <p className="text-xs text-muted-foreground">Preferido</p>}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-destructive hover:text-destructive"
+                          onClick={() => setSupplierToDelete({ id: ps.id, name: supplierName })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+
+                  {/* Pending new suppliers */}
+                  {pendingSuppliers.map((ps, index) => (
+                    <div key={index} className="flex items-center gap-3 rounded-md border border-dashed p-3">
+                      <div className="flex-1">
+                        <Label className="mb-1 block">Proveedor</Label>
+                        <ComboBox
+                          options={allSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
+                          value={ps.supplierId}
+                          onChange={(v) => updatePendingSupplier(index, "supplierId", v)}
+                          placeholder="Seleccionar proveedor..."
+                          searchPlaceholder="Buscar proveedor..."
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 mt-5 text-destructive hover:text-destructive"
+                        onClick={() => removePendingSupplier(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  )}
+                  ))}
                 </div>
+
+                <Button type="button" variant="outline" size="sm" onClick={addPendingSupplier} className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar proveedor
+                </Button>
               </CardContent>
             </Card>
 
@@ -630,6 +689,23 @@ export default function EditProductPage({ params }: Params) {
           </div>
         </div>
       </form>
+
+      <AlertDialog open={!!supplierToDelete} onOpenChange={(open) => { if (!open) setSupplierToDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar proveedor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará la asociación con <strong>{supplierToDelete?.name}</strong>. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveSupplier} className="bg-red-600 text-white hover:bg-red-700">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

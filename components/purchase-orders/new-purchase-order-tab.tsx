@@ -7,7 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { ComboBox } from "@/components/ui/combobox"
-import { useSuppliers } from "@/lib/hooks/use-suppliers"
+import { useSuppliers, useSupplierProducts } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { cancelPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
@@ -107,6 +107,7 @@ export function NewPurchaseOrderTab({
   const { suppliers } = useSuppliers()
   const { products } = useProducts()
   const { warehouses } = useWarehouses()
+  const { supplierProducts } = useSupplierProducts(supplierId || null)
 
   const normalizeType = (value: string | null | undefined) =>
     String(value || "")
@@ -123,7 +124,20 @@ export function NewPurchaseOrderTab({
   const productOptions = useMemo(() => {
     const selectedWarehouseType = normalizeType((selectedWarehouse as any)?.type)
 
-    return products
+    // If a supplier is selected, only show products associated with that supplier
+    let baseProducts: any[]
+    if (supplierId && supplierProducts.length > 0) {
+      baseProducts = supplierProducts
+        .map((sp: any) => sp.product)
+        .filter(Boolean)
+    } else if (supplierId && supplierProducts.length === 0) {
+      // Supplier selected but no associated products yet
+      baseProducts = []
+    } else {
+      baseProducts = products
+    }
+
+    return baseProducts
       .filter((product: any) => product?.isActive !== false)
       .filter((product: any) => {
         if (!selectedWarehouseType) return true
@@ -136,7 +150,7 @@ export function NewPurchaseOrderTab({
         label: `${product.name} (${product.sku})`,
         subtitle: product.sku,
       }))
-  }, [products, selectedWarehouse])
+  }, [products, supplierProducts, supplierId, selectedWarehouse])
 
   useEffect(() => {
     if (mode !== "edit" || !initialOrder) {
@@ -232,8 +246,10 @@ export function NewPurchaseOrderTab({
 
   const supplier = suppliers.find((s) => s.id === supplierId)
   
-  // Actualizar creditDays cuando se selecciona un proveedor
   const handleSupplierChange = (value: string) => {
+    if (value !== supplierId) {
+      setItems([])
+    }
     setSupplierId(value)
     const selectedSupplier = suppliers.find((s) => s.id === value)
     if (selectedSupplier) {
@@ -340,13 +356,13 @@ export function NewPurchaseOrderTab({
               <CardDescription>Agrega los productos a la orden de compra</CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline">
+              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline" disabled={!supplierId}>
                 Importar XML
               </Button>
-              <Button onClick={addItem} size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Agregar Producto
-            </Button>
+              <Button onClick={addItem} size="sm" disabled={!supplierId}>
+                <Plus className="mr-2 h-4 w-4" />
+                Agregar Producto
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -358,76 +374,86 @@ export function NewPurchaseOrderTab({
           )}
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <p className="text-sm text-muted-foreground">No hay productos agregados</p>
-              <Button onClick={addItem} variant="outline" className="mt-4 bg-transparent">
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Primer Producto
-              </Button>
+              {!supplierId ? (
+                <p className="text-sm text-muted-foreground">Selecciona un proveedor para agregar productos</p>
+              ) : supplierProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Este proveedor no tiene productos asociados</p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">No hay productos agregados</p>
+                  <Button onClick={addItem} variant="outline" className="mt-4 bg-transparent">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Agregar Primer Producto
+                  </Button>
+                </>
+              )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Cantidad</TableHead>
-                  <TableHead>Precio Unitario</TableHead>
-                  <TableHead>IVA</TableHead>
-                  <TableHead>Subtotal</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <div className="max-h-[460px] overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead>Precio Unitario</TableHead>
+                    <TableHead>IVA</TableHead>
+                    <TableHead>Subtotal</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {items.map((item, index) => {
-                  const product = products.find((p) => p.id === item.productId)
-                  return (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <ComboBox
-                          options={productOptions}
-                          value={item.productId}
-                          onChange={(value) => updateItem(index, "productId", value)}
-                          placeholder="Selecciona un producto"
-                          searchPlaceholder="Buscar producto..."
-                          className="w-full"
-                        />
-                        {product && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Stock actual: {product.minStock} • Precio sugerido: {formatCurrency(product.costPrice)}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, "quantity", Number.parseInt(e.target.value) || 0)}
-                          className="w-24"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={item.unitPrice}
-                          onChange={(e) => updateItem(index, "unitPrice", Number.parseFloat(e.target.value) || 0)}
-                          className="w-32"
-                          placeholder="0.00"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(calculateItemTax(item))}</TableCell>
-                      <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+                    const product = products.find((p) => p.id === item.productId)
+                    return (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <ComboBox
+                            options={productOptions}
+                            value={item.productId}
+                            onChange={(value) => updateItem(index, "productId", value)}
+                            placeholder="Selecciona un producto"
+                            searchPlaceholder="Buscar producto..."
+                            className="w-full"
+                          />
+                          {product && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Stock actual: {product.minStock} • Precio sugerido: {formatCurrency(product.costPrice)}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, "quantity", Number.parseInt(e.target.value) || 0)}
+                            className="w-24"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={item.unitPrice}
+                            onChange={(e) => updateItem(index, "unitPrice", Number.parseFloat(e.target.value) || 0)}
+                            className="w-32"
+                            placeholder="0.00"
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{formatCurrency(calculateItemTax(item))}</TableCell>
+                        <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
 
           {items.length > 0 && (
