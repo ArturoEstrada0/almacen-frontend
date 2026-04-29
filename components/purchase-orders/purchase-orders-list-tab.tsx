@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { usePurchaseOrder, usePurchaseOrders, receivePurchaseOrder } from "@/lib/hooks/use-purchase-orders"
@@ -10,7 +11,7 @@ import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useProducts } from "@/lib/hooks/use-products"
 import { formatCurrency } from "@/lib/utils/format"
-import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil } from "lucide-react"
+import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -31,6 +32,7 @@ export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrde
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>("all")
+  const [filterDateRange, setFilterDateRange] = useState<any | undefined>(undefined)
 
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
@@ -64,10 +66,32 @@ export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrde
   }
 
   const filteredOrders = (purchaseOrders || []).filter((order) => {
-    const matchesSearch = (order.orderNumber || "").toLowerCase().includes(searchTerm.toLowerCase())
+    const term = searchTerm.toLowerCase().trim()
+    const supplierObj = suppliers.find((s) => s.id === order.supplierId)
+    const warehouseObj = warehouses.find((w) => w.id === order.warehouseId)
+    const matchesSearch =
+      term === "" ||
+      (order.orderNumber || "").toLowerCase().includes(term) ||
+      (supplierObj?.name || "").toLowerCase().includes(term) ||
+      (warehouseObj?.name || "").toLowerCase().includes(term)
     const matchesStatus = filterStatus === "all" || order.status === filterStatus
     const matchesPayment = filterPaymentStatus === "all" || order.paymentStatus === filterPaymentStatus
-    return matchesSearch && matchesStatus && matchesPayment
+
+    let matchesDateRange = true
+    if (filterDateRange && filterDateRange.from) {
+      const from = filterDateRange.from
+      const to = filterDateRange.to || filterDateRange.from
+      const od = order.orderDate ? new Date(order.orderDate) : null
+      if (!od) matchesDateRange = false
+      else {
+        // compare only date part
+        const odDay = new Date(od.getFullYear(), od.getMonth(), od.getDate())
+        const fromDay = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+        const toDay = new Date(to.getFullYear(), to.getMonth(), to.getDate())
+        matchesDateRange = odDay >= fromDay && odDay <= toDay
+      }
+    }
+    return matchesSearch && matchesStatus && matchesPayment && matchesDateRange
   })
 
   const { pagedItems: pagedOrders, paginationProps } = usePagination(filteredOrders, 20)
@@ -141,19 +165,22 @@ export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrde
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col gap-4 md:flex-row">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por número de orden..."
+                placeholder="Buscar por número, proveedor o almacén..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="pl-9 w-full"
               />
             </div>
+
+            <DateRangePicker value={filterDateRange} onChange={setFilterDateRange} />
+
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Estado de orden" />
+                <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
@@ -163,9 +190,10 @@ export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrde
                 <SelectItem value="cancelada">Cancelada</SelectItem>
               </SelectContent>
             </Select>
+
             <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
               <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Estado de pago" />
+                <SelectValue placeholder="Pago" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los pagos</SelectItem>
@@ -175,6 +203,21 @@ export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrde
                 <SelectItem value="vencido">Vencido</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchTerm("")
+                setFilterStatus("all")
+                setFilterPaymentStatus("all")
+                setFilterDateRange(undefined)
+              }}
+              className="w-full md:w-auto whitespace-nowrap"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Limpiar
+            </Button>
           </div>
         </CardContent>
       </Card>

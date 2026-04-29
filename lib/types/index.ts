@@ -54,6 +54,7 @@ export interface Product {
   minStock: number
   maxStock: number
   reorderPoint: number
+  hasIva16: boolean
   isActive: boolean
   createdAt: Date
   updatedAt: Date

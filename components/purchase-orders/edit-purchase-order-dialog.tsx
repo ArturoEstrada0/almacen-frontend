@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ComboBox } from "@/components/ui/combobox"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
@@ -41,6 +42,36 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
   const [items, setItems] = useState<Item[]>([])
   const [notes, setNotes] = useState("")
 
+  const normalizeType = (value: string | null | undefined) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+
+  const selectedWarehouse = useMemo(
+    () => warehouses.find((warehouse: any) => String(warehouse.id) === String(warehouseId)),
+    [warehouses, warehouseId],
+  )
+
+  const productOptions = useMemo(() => {
+    const selectedWarehouseType = normalizeType((selectedWarehouse as any)?.type)
+
+    return products
+      .filter((product: any) => product?.isActive !== false)
+      .filter((product: any) => {
+        if (!selectedWarehouseType) return true
+        const productType = normalizeType(product?.type)
+        if (!productType) return true
+        return productType === selectedWarehouseType
+      })
+      .map((product: any) => ({
+        value: product.id,
+        label: `${product.name} (${product.sku})`,
+        subtitle: product.sku,
+      }))
+  }, [products, selectedWarehouse])
+
   useEffect(() => {
     if (!order) return
     setSupplierId(order.supplierId)
@@ -60,7 +91,14 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
   }
 
   const calculateSubtotal = () => items.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
-  const calculateTax = () => calculateSubtotal() * 0.16
+  const calculateItemTax = (item: Item) => {
+    const product = products.find((p) => p.id === item.productId)
+    const appliesIva = product ? product.hasIva16 !== false : true
+    if (!appliesIva) return 0
+    return item.quantity * item.unitPrice * 0.16
+  }
+  const calculateTax = () =>
+    items.reduce((sum, item) => sum + calculateItemTax(item), 0)
   const calculateTotal = () => calculateSubtotal() + calculateTax()
 
   const handleSubmit = async () => {
@@ -124,21 +162,18 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
 
             <div className="space-y-2">
               <Label>Almacén de Destino *</Label>
-              <Select value={warehouseId} onValueChange={setWarehouseId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ComboBox
+                options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                value={warehouseId}
+                onChange={setWarehouseId}
+                placeholder="Selecciona un almacén"
+                searchPlaceholder="Buscar almacén..."
+              />
             </div>
 
             <div className="space-y-2">
               <Label>Fecha de Entrega Esperada</Label>
-              <Input type="date" value={expectedDeliveryDate} onChange={(e) => setExpectedDeliveryDate(e.target.value)} />
+              <DatePicker value={expectedDeliveryDate} onChange={(v) => setExpectedDeliveryDate(v)} />
             </div>
 
             <div className="space-y-2">
@@ -183,6 +218,7 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
                   <TableHead>Producto</TableHead>
                   <TableHead>Cantidad</TableHead>
                   <TableHead>Precio Unitario</TableHead>
+                  <TableHead>IVA</TableHead>
                   <TableHead>Subtotal</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -193,24 +229,22 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
                   return (
                     <TableRow key={idx}>
                       <TableCell>
-                        <Select value={item.productId} onValueChange={(v) => updateItem(idx, "productId", v)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products.filter((p) => p.type === "insumo").map((p) => (
-                              <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <ComboBox
+                          options={productOptions}
+                          value={item.productId}
+                          onChange={(v) => updateItem(idx, "productId", v)}
+                          placeholder="Selecciona un producto"
+                          searchPlaceholder="Buscar producto..."
+                        />
                         {product && <p className="text-xs text-muted-foreground mt-1">Stock: {product.minStock}</p>}
                       </TableCell>
                       <TableCell>
                         <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number.parseInt(e.target.value || "0"))} className="w-24" />
                       </TableCell>
                       <TableCell>
-                        <Input type="number" min={0} step={0.01} value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", Number.parseFloat(e.target.value || "0"))} className="w-32" />
+                        <Input type="number" min={0} step={0.01} value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", Number.parseFloat(e.target.value || "0"))} className="w-32" placeholder="0.00" />
                       </TableCell>
+                      <TableCell className="font-medium">{formatCurrency(calculateItemTax(item))}</TableCell>
                       <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
                       <TableCell>
                         <Button variant="ghost" size="icon" onClick={() => removeItem(idx)}>

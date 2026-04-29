@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useProduct, updateProduct, useProductSuppliers, addProductSupplier, updateProductSupplier, removeProductSupplier } from "@/lib/hooks/use-products"
+import { useProduct, updateProduct, addProductSupplier } from "@/lib/hooks/use-products"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useInventoryByWarehouse, updateInventoryStock } from "@/lib/hooks/use-inventory"
@@ -11,12 +11,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { ComboBox } from "@/components/ui/combobox"
 // Use native selects here to avoid runtime update loop from the custom Select component
-import { Switch } from "@/components/ui/switch"
-import { Save, ArrowLeft, Upload, Plus, Trash2, Star } from "lucide-react"
+import { Save, ArrowLeft } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "@/lib/utils/toast"
 import { useCategories } from "@/lib/hooks/use-categories"
@@ -42,7 +42,6 @@ export default function EditProductPage({ params }: Params) {
 
   const routerRef = router
   const { product, isLoading, mutate } = useProduct(resolvedId ?? null)
-  const { productSuppliers, mutate: mutateSuppliers } = useProductSuppliers(resolvedId)
   const { suppliers: allSuppliers } = useSuppliers()
   const { warehouses } = useWarehouses()
   const { inventory } = useInventoryByWarehouse(null)
@@ -58,16 +57,11 @@ export default function EditProductPage({ params }: Params) {
     categoryId: "",
     barcode: "",
     unitOfMeasure: "Pieza",
+    hasIva16: true,
     isActive: true,
   })
 
   const [newSupplierForm, setNewSupplierForm] = useState({ supplierId: "", price: "", supplierSku: "", leadTimeDays: "", minimumOrder: "", preferred: false })
-  const [showAddSupplier, setShowAddSupplier] = useState(false)
-  const [savingSupplier, setSavingSupplier] = useState(false)
-
-  const availableSuppliers = allSuppliers.filter(
-    (s: any) => !productSuppliers.some((ps: any) => ps.supplierId === s.id),
-  )
 
   const normalizeType = (value: string) =>
     String(value || "")
@@ -95,62 +89,34 @@ export default function EditProductPage({ params }: Params) {
     })
   }, [warehousesByProductType, warehouseSearch])
 
-  const handleAddSupplier = async () => {
-    if (!resolvedId || !newSupplierForm.supplierId) {
-      toast.error("Selecciona un proveedor")
-      return
-    }
-    if (!newSupplierForm.price || Number(newSupplierForm.price) < 0) {
-      toast.error("Ingresa un precio válido")
-      return
-    }
-    setSavingSupplier(true)
-    try {
-      await addProductSupplier(resolvedId, {
-        supplierId: newSupplierForm.supplierId,
-        price: Number(newSupplierForm.price),
-        supplierSku: newSupplierForm.supplierSku || undefined,
-        leadTimeDays: newSupplierForm.leadTimeDays ? Number(newSupplierForm.leadTimeDays) : undefined,
-        minimumOrder: newSupplierForm.minimumOrder ? Number(newSupplierForm.minimumOrder) : undefined,
-        preferred: newSupplierForm.preferred,
-      })
-      toast.success("Proveedor asociado correctamente")
-      setNewSupplierForm({ supplierId: "", price: "", supplierSku: "", leadTimeDays: "", minimumOrder: "", preferred: false })
-      setShowAddSupplier(false)
-      mutateSuppliers()
-    } catch (err: any) {
-      toast.error(err?.message || "Error al asociar proveedor")
-    } finally {
-      setSavingSupplier(false)
-    }
-  }
-
-  const handleSetPreferred = async (productSupplierId: string) => {
-    if (!resolvedId) return
-    try {
-      await updateProductSupplier(resolvedId, productSupplierId, { preferred: true })
-      toast.success("Proveedor preferido actualizado")
-      mutateSuppliers()
-    } catch (err: any) {
-      toast.error(err?.message || "Error al actualizar proveedor preferido")
-    }
-  }
-
-  const handleRemoveSupplier = async (productSupplierId: string) => {
-    if (!resolvedId) return
-    try {
-      await removeProductSupplier(resolvedId, productSupplierId)
-      toast.success("Proveedor desvinculado")
-      mutateSuppliers()
-    } catch (err: any) {
-      toast.error(err?.message || "Error al desvincular proveedor")
-    }
-  }
+  
 
   const typeExistsInCatalog = productTypes.some(
     (typeItem: any) => String(typeItem.name || "").trim().toLowerCase() === String(formData?.type || "").trim().toLowerCase(),
   )
   const showLegacyTypeOption = Boolean(formData?.type) && !typeExistsInCatalog
+
+  const categoryOptions = useMemo(() => {
+    const options = [...(catalogCategories || [])]
+    const productCategory: any = (product as any)?.category
+    const productCategoryId = (product as any)?.categoryId || productCategory?.id
+    const productCategoryName = typeof productCategory === "string" ? productCategory : productCategory?.name
+
+    if (
+      productCategoryName &&
+      !options.some(
+        (category: any) =>
+          String(category.id) === String(productCategoryId || "") ||
+          String(category.name || "").trim().toLowerCase() === String(productCategoryName || "").trim().toLowerCase(),
+      )
+    ) {
+      options.unshift({
+        id: String(productCategoryId || `legacy-${String(productCategoryName).trim().toLowerCase()}`),
+        name: String(productCategoryName),
+      })
+    }
+    return options
+  }, [catalogCategories, product?.category, product?.categoryId])
 
   // Estado para configuración de inventario por almacén
   const [warehouseInventory, setWarehouseInventory] = useState<Record<string, {
@@ -178,42 +144,41 @@ export default function EditProductPage({ params }: Params) {
   useEffect(() => {
     if (!product) return
     // only initialize when the product id changes to avoid repeated resets from unstable object references
-    setFormData({
+    const newFormData = {
       sku: product.sku || "",
       name: product.name || "",
       description: product.description || "",
-      type: String(product.type || ""),
-      categoryId: product.categoryId || "",
+      type: product.type ? String(product.type) : "",
+      categoryId: product.categoryId || product.category?.id || "",
       barcode: product.barcode || "",
       unitOfMeasure: product.unitOfMeasure || "Pieza",
+      hasIva16: (product as any).hasIva16 !== undefined ? Boolean((product as any).hasIva16) : true,
       isActive: (product as any).isActive !== undefined ? (product as any).isActive : true,
-    })
+    }
+    console.log('📥 [Edit] Producto cargado:', { id: product.id, hasIva16: newFormData.hasIva16, categoryId: newFormData.categoryId })
+    setFormData(newFormData)
   }, [product?.id])
 
   useEffect(() => {
-    if (!formData.type || !productTypes.length) return
+    if (!product) return
+    if (formData.categoryId) return
 
-    const matchedType = productTypes.find(
-      (typeItem: any) => String(typeItem.name || "").trim().toLowerCase() === String(formData.type || "").trim().toLowerCase(),
+    const productCategory: any = (product as any)?.category
+    const productCategoryName = typeof productCategory === "string" ? productCategory : productCategory?.name
+    if (!productCategoryName) return
+
+    const matchedCategory = (catalogCategories || []).find(
+      (category: any) =>
+        String(category.name || "").trim().toLowerCase() === String(productCategoryName).trim().toLowerCase(),
     )
 
-    if (matchedType && matchedType.name !== formData.type) {
-      setFormData((current: any) => ({ ...current, type: matchedType.name }))
+    if (matchedCategory?.id) {
+      setFormData((current: any) => {
+        if (current.categoryId) return current
+        return { ...current, categoryId: String(matchedCategory.id) }
+      })
     }
-  }, [productTypes, formData.type])
-
-  useEffect(() => {
-    if (!formData.categoryId || !catalogCategories.length) return
-
-    const categoryExists = catalogCategories.some((category: any) => String(category.id) === String(formData.categoryId))
-    if (!categoryExists) {
-      setFormData((current: any) => ({ ...current, categoryId: "" }))
-      setFieldErrors((current) => ({
-        ...current,
-        categoryId: "La categoría anterior ya no existe. Selecciona una categoría válida",
-      }))
-    }
-  }, [catalogCategories, formData.categoryId])
+  }, [product?.id, product?.category, catalogCategories, formData.categoryId])
 
   // Cargar inventario existente cuando se cargan los datos
   useEffect(() => {
@@ -224,12 +189,12 @@ export default function EditProductPage({ params }: Params) {
       const existingInventory = inventory.find(
         (inv: any) => inv.productId === resolvedId && inv.warehouseId === warehouse.id
       )
-      
+
       inventoryByWarehouse[warehouse.id] = {
         minStock: existingInventory?.minStock?.toString() || "",
         maxStock: existingInventory?.maxStock?.toString() || "",
         reorderPoint: existingInventory?.reorderPoint?.toString() || "",
-        currentStock: existingInventory?.currentStock?.toString() || "0",
+        currentStock: existingInventory?.currentStock?.toString() || "",
       }
     })
     
@@ -294,11 +259,14 @@ export default function EditProductPage({ params }: Params) {
         type: formData.type,
         categoryId: formData.categoryId,
         barcode: formData.barcode || undefined,
+        hasIva16: formData.hasIva16,
         active: formData.isActive,
       }
+      console.log('📤 [handleSubmit] Payload enviado:', { hasIva16: payload.hasIva16, categoryId: payload.categoryId, sku: payload.sku })
       
       // Actualizar producto base
-      await updateProduct(id, payload)
+      const response = await updateProduct(id, payload)
+      console.log('✅ [handleSubmit] Respuesta del servidor:', { id: response?.id, hasIva16: response?.hasIva16, categoryId: response?.categoryId })
       
       // Actualizar inventario por almacén
       for (const warehouseId in warehouseInventory) {
@@ -317,6 +285,23 @@ export default function EditProductPage({ params }: Params) {
         }
       }
       
+      // If a supplier was filled in the simple supplier panel, associate it
+      if (newSupplierForm.supplierId && newSupplierForm.price && id) {
+        try {
+          await addProductSupplier(id, {
+            supplierId: newSupplierForm.supplierId,
+            price: Number(newSupplierForm.price),
+            preferred: newSupplierForm.preferred,
+            supplierSku: newSupplierForm.supplierSku || undefined,
+            leadTimeDays: newSupplierForm.leadTimeDays ? Number(newSupplierForm.leadTimeDays) : undefined,
+            minimumOrder: newSupplierForm.minimumOrder ? Number(newSupplierForm.minimumOrder) : undefined,
+          })
+        } catch (err) {
+          // non-fatal: product updated but supplier association failed
+          console.error("Error asociando proveedor después de actualizar producto", err)
+        }
+      }
+
       toast.dismiss(loadingToast)
       toast.success("Producto actualizado")
       mutate()
@@ -328,8 +313,17 @@ export default function EditProductPage({ params }: Params) {
     }
   }
 
-  if (isLoading) return <div>Cargando producto...</div>
-  if (!product) return <div>Producto no encontrado</div>
+  if (isLoading || !resolvedId) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
+      <p className="text-muted-foreground text-sm">Cargando producto...</p>
+    </div>
+  )
+  if (!product) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <p className="text-muted-foreground">Producto no encontrado</p>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -391,43 +385,52 @@ export default function EditProductPage({ params }: Params) {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="type">Tipo de Producto *</Label>
-                    <select
-                      id="type"
-                      className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${fieldErrors.type ? "border-red-500 focus-visible:ring-red-500" : "border-input"}`}
-                      value={formData.type}
-                      onChange={(e) => {
-                        setFormData({ ...formData, type: e.target.value })
+                    <Select
+                      key={`type-${formData.type || "none"}-${productTypes.length > 0 ? "loaded" : "empty"}`}
+                      value={formData.type || undefined}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, type: value })
                         clearFieldError("type")
                       }}
                     >
-                      <option value="">Sin tipo</option>
-                      {showLegacyTypeOption ? <option value={formData.type}>{formData.type} (actual)</option> : null}
-                      {productTypes.map((typeItem: any) => (
-                        <option key={typeItem.id} value={typeItem.name}>
-                          {typeItem.name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className={`w-full ${fieldErrors.type ? "border-red-500 ring-red-500" : ""}`}>
+                        <SelectValue placeholder="Sin tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productTypes.map((typeItem: any) => (
+                          <SelectItem key={typeItem.id} value={typeItem.name}>
+                            {typeItem.name}
+                          </SelectItem>
+                        ))}
+                        {showLegacyTypeOption && (
+                          <SelectItem value={formData.type}>
+                            {formData.type} (no disponible)
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                     {fieldErrors.type ? <p className="text-sm text-red-600">{fieldErrors.type}</p> : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Categoría *</Label>
-                    <select
-                      id="category"
-                      className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${fieldErrors.categoryId ? "border-red-500 focus-visible:ring-red-500" : "border-input"}`}
-                      value={formData.categoryId || ""}
-                      onChange={(e) => {
-                        setFormData({ ...formData, categoryId: e.target.value })
+                    <Select
+                      value={formData.categoryId || undefined}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, categoryId: value })
                         clearFieldError("categoryId")
                       }}
                     >
-                      <option value="">Seleccionar categoría</option>
-                      {catalogCategories.map((cat: any) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className={`w-full ${fieldErrors.categoryId ? "border-red-500 ring-red-500" : ""}`}>
+                        <SelectValue placeholder="Seleccionar categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categoryOptions.map((category: any) => (
+                          <SelectItem key={category.id} value={String(category.id)}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {fieldErrors.categoryId ? <p className="text-sm text-red-600">{fieldErrors.categoryId}</p> : null}
                   </div>
                 </div>
@@ -436,27 +439,53 @@ export default function EditProductPage({ params }: Params) {
                   <Label htmlFor="description">Descripción</Label>
                   <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} />
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="unitOfMeasure">Unidad de Medida *</Label>
+                  <Input
+                    id="unitOfMeasure"
+                    placeholder="Pieza, Kg, Litro, etc."
+                    value={formData.unitOfMeasure}
+                    onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value })}
+                  />
+                </div>
               </CardContent>
             </Card>
 
-            {/* <Card>
+            <Card>
               <CardHeader>
-                <CardTitle>Precios</CardTitle>
-                <CardDescription>Configuración de precios del producto</CardDescription>
+                <CardTitle>Proveedor</CardTitle>
+                <CardDescription>Proveedor preferido para este insumo (opcional)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="costPrice">Precio de Costo *</Label>
-                    <Input id="costPrice" type="number" step="0.01" value={formData.costPrice} onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })} />
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="supplierId">Proveedor</Label>
+                    <ComboBox
+                      options={allSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
+                      value={newSupplierForm.supplierId}
+                      onChange={(v) => setNewSupplierForm({ ...newSupplierForm, supplierId: v })}
+                      placeholder="Sin proveedor (se puede asignar después)"
+                      searchPlaceholder="Buscar proveedor..."
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="salePrice">Precio de Venta *</Label>
-                    <Input id="salePrice" type="number" step="0.01" value={formData.salePrice} onChange={(e) => setFormData({ ...formData, salePrice: e.target.value })} />
-                  </div>
+                  {newSupplierForm.supplierId && (
+                    <div className="space-y-2">
+                      <Label htmlFor="supplierPrice">Precio del proveedor *</Label>
+                      <Input
+                        id="supplierPrice"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={newSupplierForm.price}
+                        onChange={(e) => setNewSupplierForm({ ...newSupplierForm, price: e.target.value })}
+                      />
+                    </div>
+                  )}
                 </div>
               </CardContent>
-            </Card> */}
+            </Card>
 
             <Card>
               <CardHeader>
@@ -503,39 +532,51 @@ export default function EditProductPage({ params }: Params) {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.currentStock || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "currentStock", e.target.value)}
+                              onChange={(e) => updateWarehouseInventory(warehouse.id, "currentStock", e.target.value.replace(/[^0-9]/g, ""))}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.minStock || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "minStock", e.target.value)}
+                              onChange={(e) => updateWarehouseInventory(warehouse.id, "minStock", e.target.value.replace(/[^0-9]/g, ""))}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.maxStock || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "maxStock", e.target.value)}
+                              onChange={(e) => updateWarehouseInventory(warehouse.id, "maxStock", e.target.value.replace(/[^0-9]/g, ""))}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.reorderPoint || ""}
-                              onChange={(e) => updateWarehouseInventory(warehouse.id, "reorderPoint", e.target.value)}
+                              onChange={(e) => updateWarehouseInventory(warehouse.id, "reorderPoint", e.target.value.replace(/[^0-9]/g, ""))}
                             />
                           </TableCell>
                         </TableRow>
@@ -546,142 +587,38 @@ export default function EditProductPage({ params }: Params) {
                 </div>
               </CardContent>
             </Card>
-            {/* Proveedores */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Proveedores</CardTitle>
-                    <CardDescription>Proveedores que suministran este insumo</CardDescription>
-                  </div>
-                  {!showAddSupplier && availableSuppliers.length > 0 && (
-                    <Button type="button" variant="outline" size="sm" onClick={() => setShowAddSupplier(true)}>
-                      <Plus className="mr-2 h-4 w-4" />Asociar Proveedor
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {showAddSupplier && (
-                  <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
-                    <p className="text-sm font-medium">Nuevo proveedor</p>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-1">
-                        <Label>Proveedor *</Label>
-                        <ComboBox
-                          options={availableSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
-                          value={newSupplierForm.supplierId}
-                          onChange={(v) => setNewSupplierForm({ ...newSupplierForm, supplierId: v })}
-                          placeholder="Seleccionar..."
-                          searchPlaceholder="Buscar proveedor..."
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Precio unitario *</Label>
-                        <Input type="number" step="0.01" min="0" placeholder="0.00" value={newSupplierForm.price} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, price: e.target.value })} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>SKU del proveedor</Label>
-                        <Input placeholder="SKU interno" value={newSupplierForm.supplierSku} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, supplierSku: e.target.value })} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Días de entrega</Label>
-                        <Input type="number" min="0" placeholder="0" value={newSupplierForm.leadTimeDays} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, leadTimeDays: e.target.value })} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Pedido mínimo</Label>
-                        <Input type="number" min="0" step="0.01" placeholder="1" value={newSupplierForm.minimumOrder} onChange={(e) => setNewSupplierForm({ ...newSupplierForm, minimumOrder: e.target.value })} />
-                      </div>
-                      <div className="flex items-center gap-2 pt-5">
-                        <Switch checked={newSupplierForm.preferred} onCheckedChange={(v) => setNewSupplierForm({ ...newSupplierForm, preferred: v })} id="preferred-new" />
-                        <Label htmlFor="preferred-new">Proveedor preferido</Label>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button type="button" size="sm" onClick={handleAddSupplier} disabled={savingSupplier}>
-                        {savingSupplier ? "Guardando..." : "Guardar"}
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => { setShowAddSupplier(false); setNewSupplierForm({ supplierId: "", price: "", supplierSku: "", leadTimeDays: "", minimumOrder: "", preferred: false }) }}>
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {productSuppliers.length === 0 && !showAddSupplier ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">Sin proveedores asociados. Usa "Asociar Proveedor" para vincular uno.</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Proveedor</TableHead>
-                        <TableHead>Precio</TableHead>
-                        <TableHead>SKU Prov.</TableHead>
-                        <TableHead>Entrega (días)</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {productSuppliers.map((ps: any) => (
-                        <TableRow key={ps.id}>
-                          <TableCell className="font-medium">{ps.supplier?.name || ps.supplierId}</TableCell>
-                          <TableCell>${Number(ps.price).toFixed(2)}</TableCell>
-                          <TableCell className="text-muted-foreground">{ps.supplierSku || "—"}</TableCell>
-                          <TableCell>{ps.leadTimeDays ?? 0}</TableCell>
-                          <TableCell>
-                            {ps.preferred
-                              ? <Badge className="gap-1"><Star className="h-3 w-3" />Preferido</Badge>
-                              : <Badge variant="secondary">Alternativo</Badge>}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              {!ps.preferred && (
-                                <Button type="button" variant="ghost" size="sm" onClick={() => handleSetPreferred(ps.id)} title="Marcar como preferido">
-                                  <Star className="h-4 w-4" />
-                                </Button>
-                              )}
-                              <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveSupplier(ps.id)} title="Desvincular proveedor" className="text-destructive hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Imagen del Producto</CardTitle>
-                <CardDescription>Sube una imagen del producto</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center">
-                  <Upload className="h-10 w-10 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground mb-2">Arrastra una imagen o haz clic para seleccionar</p>
-                  <Button type="button" variant="outline" size="sm">Seleccionar Archivo</Button>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle>Estado</CardTitle>
                 <CardDescription>Configuración de disponibilidad</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="isActive">Producto Activo</Label>
-                    <p className="text-sm text-muted-foreground">El producto estará disponible en el sistema</p>
-                  </div>
-                  <Switch id="isActive" checked={formData.isActive} onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })} />
+                <div className="space-y-3">
+                  <Label htmlFor="isActive">Producto Activo</Label>
+                  <Select
+                    value={formData.isActive ? "active" : "inactive"}
+                    onValueChange={(value) => setFormData({ ...formData, isActive: value === "active" })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Activo</SelectItem>
+                      <SelectItem value="inactive">Inactivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center space-x-2 pt-2">
+                  <Checkbox
+                    id="hasIva16"
+                    checked={formData.hasIva16}
+                    onCheckedChange={(checked) => setFormData({ ...formData, hasIva16: checked === true })}
+                  />
+                  <Label htmlFor="hasIva16" className="cursor-pointer">IVA 16%</Label>
                 </div>
               </CardContent>
             </Card>

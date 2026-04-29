@@ -89,6 +89,7 @@ export const API_ENDPOINTS = {
     cancel: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/cancel`,
     registerPayment: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/payment`,
     pending: () => `${API_BASE_URL}/api/purchase-orders/pending`,
+    payments: () => `${API_BASE_URL}/api/purchase-orders/payments`,
   },
 
   accounting: {

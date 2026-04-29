@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ComboBox } from "@/components/ui/combobox"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
@@ -86,8 +87,15 @@ export function NewPurchaseOrderTab({
     return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
   }
 
+  const calculateItemTax = (item: PurchaseOrderItem) => {
+    const product = products.find((p) => p.id === item.productId)
+    const appliesIva = product ? product.hasIva16 !== false : true
+    if (!appliesIva) return 0
+    return item.quantity * item.unitPrice * 0.16
+  }
+
   const calculateTax = () => {
-    return calculateSubtotal() * 0.16
+    return items.reduce((sum, item) => sum + calculateItemTax(item), 0)
   }
 
   const calculateTotal = () => {
@@ -99,6 +107,36 @@ export function NewPurchaseOrderTab({
   const { suppliers } = useSuppliers()
   const { products } = useProducts()
   const { warehouses } = useWarehouses()
+
+  const normalizeType = (value: string | null | undefined) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+
+  const selectedWarehouse = useMemo(
+    () => warehouses.find((warehouse: any) => String(warehouse.id) === String(warehouseId)),
+    [warehouses, warehouseId],
+  )
+
+  const productOptions = useMemo(() => {
+    const selectedWarehouseType = normalizeType((selectedWarehouse as any)?.type)
+
+    return products
+      .filter((product: any) => product?.isActive !== false)
+      .filter((product: any) => {
+        if (!selectedWarehouseType) return true
+        const productType = normalizeType(product?.type)
+        if (!productType) return true
+        return productType === selectedWarehouseType
+      })
+      .map((product: any) => ({
+        value: product.id,
+        label: `${product.name} (${product.sku})`,
+        subtitle: product.sku,
+      }))
+  }, [products, selectedWarehouse])
 
   useEffect(() => {
     if (mode !== "edit" || !initialOrder) {
@@ -227,18 +265,14 @@ export function NewPurchaseOrderTab({
                   <p className="text-xs text-muted-foreground">Para cambiar proveedor, cancela esta orden y crea una nueva</p>
                 </div>
               ) : (
-                <Select value={supplierId} onValueChange={handleSupplierChange}>
-                  <SelectTrigger className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}>
-                    <SelectValue placeholder="Selecciona un proveedor" />
-                  </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                </Select>
+                <ComboBox
+                  options={suppliers.map((s) => ({ value: s.id, label: s.name, subtitle: s.rfc }))}
+                  value={supplierId}
+                  onChange={handleSupplierChange}
+                  placeholder="Selecciona un proveedor"
+                  searchPlaceholder="Buscar proveedor..."
+                  className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}
+                />
               )}
               {submitted && !supplierId
                 ? <p className="text-xs text-red-500">Selecciona un proveedor para continuar</p>
@@ -248,18 +282,14 @@ export function NewPurchaseOrderTab({
 
             <div className="space-y-2">
               <Label>Almacén de Destino *</Label>
-              <Select value={warehouseId} onValueChange={setWarehouseId}>
-                <SelectTrigger className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}>
-                  <SelectValue placeholder="Selecciona un almacén" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ComboBox
+                options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                value={warehouseId}
+                onChange={setWarehouseId}
+                placeholder="Selecciona un almacén"
+                searchPlaceholder="Buscar almacén..."
+                className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}
+              />
               {submitted && !warehouseId && (
                 <p className="text-xs text-red-500">Selecciona un almacén de destino</p>
               )}
@@ -267,10 +297,9 @@ export function NewPurchaseOrderTab({
 
             <div className="space-y-2">
               <Label>Fecha de Entrega Esperada *</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={expectedDeliveryDate}
-                onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                onChange={(v) => setExpectedDeliveryDate(v)}
                 className={submitted && !expectedDeliveryDate ? 'border-red-500 ring-1 ring-red-500' : ''}
               />
               {submitted && !expectedDeliveryDate && (
@@ -342,6 +371,7 @@ export function NewPurchaseOrderTab({
                   <TableHead>Producto</TableHead>
                   <TableHead>Cantidad</TableHead>
                   <TableHead>Precio Unitario</TableHead>
+                  <TableHead>IVA</TableHead>
                   <TableHead>Subtotal</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -352,20 +382,14 @@ export function NewPurchaseOrderTab({
                   return (
                     <TableRow key={index}>
                       <TableCell>
-                        <Select value={item.productId} onValueChange={(value) => updateItem(index, "productId", value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un producto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products
-                              .filter((p) => p.type === "insumo")
-                              .map((product) => (
-                                <SelectItem key={product.id} value={product.id}>
-                                  {product.name} ({product.sku})
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
+                        <ComboBox
+                          options={productOptions}
+                          value={item.productId}
+                          onChange={(value) => updateItem(index, "productId", value)}
+                          placeholder="Selecciona un producto"
+                          searchPlaceholder="Buscar producto..."
+                          className="w-full"
+                        />
                         {product && (
                           <p className="text-xs text-muted-foreground mt-1">
                             Stock actual: {product.minStock} • Precio sugerido: {formatCurrency(product.costPrice)}
@@ -389,8 +413,10 @@ export function NewPurchaseOrderTab({
                           value={item.unitPrice}
                           onChange={(e) => updateItem(index, "unitPrice", Number.parseFloat(e.target.value) || 0)}
                           className="w-32"
+                          placeholder="0.00"
                         />
                       </TableCell>
+                      <TableCell className="font-medium">{formatCurrency(calculateItemTax(item))}</TableCell>
                       <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
                       <TableCell>
                         <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>

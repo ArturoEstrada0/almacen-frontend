@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { PurchaseOrdersListTab } from "@/components/purchase-orders/purchase-orders-list-tab"
 import { NewPurchaseOrderTab } from "@/components/purchase-orders/new-purchase-order-tab"
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
+import { PaymentsHistoryTab } from "@/components/purchase-orders/payments-history-tab"
 import { ProtectedCreate } from "@/components/auth/protected-action"
 import type { PurchaseOrder } from "@/lib/types"
 
@@ -15,11 +16,28 @@ export default function PurchaseOrdersPage() {
   const searchParams = useSearchParams()
   const initialTab = (searchParams?.get("tab") as string) || "list"
   const [activeTab, setActiveTab] = useState(initialTab)
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     const t = (searchParams?.get("tab") as string) || "list"
     setActiveTab(t)
   }, [searchParams])
+
+  // Keep URL in sync with active tab so reload preserves current tab
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(searchParams?.toString() || "")
+      if (activeTab) params.set("tab", activeTab)
+      else params.delete("tab")
+      const qs = params.toString()
+      const url = qs ? `${pathname}?${qs}` : pathname
+      // replace to avoid adding history entries on each tab change
+      router.replace(url)
+    } catch (e) {
+      // ignore
+    }
+  }, [activeTab, router, pathname, searchParams])
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null)
 
   return (
@@ -30,6 +48,10 @@ export default function PurchaseOrdersPage() {
             list: {
               title: "Órdenes de Compra",
               description: "Gestiona y recibe órdenes de compra",
+            },
+            payments: {
+              title: "Histórico de Pagos",
+              description: "Consulta el historial de pagos realizados a proveedores",
             },
             new: {
               title: "Nueva Orden de Compra",
@@ -63,6 +85,7 @@ export default function PurchaseOrdersPage() {
           <TabsTrigger value="list">Órdenes</TabsTrigger>
           <TabsTrigger value="new">Nueva Orden</TabsTrigger>
           <TabsTrigger value="payables">Cuentas por Pagar</TabsTrigger>
+          <TabsTrigger value="payments">Histórico de Pagos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="list" className="space-y-4">
@@ -97,6 +120,10 @@ export default function PurchaseOrdersPage() {
 
         <TabsContent value="payables" className="space-y-4">
           <AccountsPayableTab />
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-4">
+          <PaymentsHistoryTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ComboBox } from "@/components/ui/combobox"
 import { apiPost } from "@/lib/db/localApi"
@@ -38,6 +39,7 @@ export default function NewProductPage() {
     categoryId: "",
     barcode: "",
     unitOfMeasure: "Pieza",
+    hasIva16: true,
     isActive: true,
   })
   const [supplierForm, setSupplierForm] = useState({ supplierId: "", price: "", preferred: true })
@@ -113,6 +115,7 @@ export default function NewProductPage() {
         type: formData.type,
         categoryId: formData.categoryId,
         barcode: formData.barcode.trim() || undefined,
+        hasIva16: formData.hasIva16,
         active: formData.isActive,
       }
 
@@ -383,63 +386,87 @@ export default function NewProductPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.currentStock || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  currentStock: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    currentStock: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.minStock || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  minStock: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    minStock: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.maxStock || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  maxStock: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    maxStock: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.reorderPoint || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  reorderPoint: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    reorderPoint: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                         </TableRow>
@@ -459,7 +486,7 @@ export default function NewProductPage() {
                 <CardDescription>Configuración de disponibilidad</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label htmlFor="isActive">Producto Activo</Label>
                   <Select
                     value={formData.isActive ? "active" : "inactive"}
@@ -473,6 +500,15 @@ export default function NewProductPage() {
                       <SelectItem value="inactive">Inactivo</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="flex items-center space-x-2 pt-2">
+                  <Checkbox
+                    id="hasIva16"
+                    checked={formData.hasIva16}
+                    onCheckedChange={(checked) => setFormData({ ...formData, hasIva16: checked === true })}
+                  />
+                  <Label htmlFor="hasIva16" className="cursor-pointer">IVA 16%</Label>
                 </div>
               </CardContent>
             </Card>
