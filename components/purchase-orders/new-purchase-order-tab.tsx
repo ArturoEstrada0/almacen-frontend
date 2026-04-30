@@ -121,17 +121,13 @@ export function NewPurchaseOrderTab({
     [warehouses, warehouseId],
   )
 
-  const productOptions = useMemo(() => {
+  const baseProductOptions = useMemo(() => {
     const selectedWarehouseType = normalizeType((selectedWarehouse as any)?.type)
 
-    // If a supplier is selected, only show products associated with that supplier
     let baseProducts: any[]
     if (supplierId && supplierProducts.length > 0) {
-      baseProducts = supplierProducts
-        .map((sp: any) => sp.product)
-        .filter(Boolean)
+      baseProducts = supplierProducts.map((sp: any) => sp.product).filter(Boolean)
     } else if (supplierId && supplierProducts.length === 0) {
-      // Supplier selected but no associated products yet
       baseProducts = []
     } else {
       baseProducts = products
@@ -151,6 +147,13 @@ export function NewPurchaseOrderTab({
         subtitle: product.sku,
       }))
   }, [products, supplierProducts, supplierId, selectedWarehouse])
+
+  const getProductOptionsForRow = (currentIndex: number) => {
+    const selectedInOtherRows = new Set(
+      items.filter((_, i) => i !== currentIndex && items[i].productId).map((it) => it.productId),
+    )
+    return baseProductOptions.filter((opt) => !selectedInOtherRows.has(opt.value))
+  }
 
   useEffect(() => {
     if (mode !== "edit" || !initialOrder) {
@@ -259,13 +262,6 @@ export function NewPurchaseOrderTab({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">{mode === "edit" ? `Editar Orden ${initialOrder?.orderNumber || ""}` : "Nueva Orden de Compra"}</h2>
-        <p className="text-sm text-muted-foreground">
-          {mode === "edit" ? "Modifica productos y cantidades de la orden" : "Crea una nueva orden de compra a proveedor"}
-        </p>
-      </div>
-
       <Card ref={infoCardRef}>
         <CardHeader>
           <CardTitle>Información General</CardTitle>
@@ -408,7 +404,7 @@ export function NewPurchaseOrderTab({
                       <TableRow key={index}>
                         <TableCell>
                           <ComboBox
-                            options={productOptions}
+                            options={getProductOptionsForRow(index)}
                             value={item.productId}
                             onChange={(value) => updateItem(index, "productId", value)}
                             placeholder="Selecciona un producto"

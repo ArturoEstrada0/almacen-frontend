@@ -10,7 +10,6 @@ import { NewPurchaseOrderTab } from "@/components/purchase-orders/new-purchase-o
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
 import { PaymentsHistoryTab } from "@/components/purchase-orders/payments-history-tab"
 import { ProtectedCreate } from "@/components/auth/protected-action"
-import type { PurchaseOrder } from "@/lib/types"
 
 export default function PurchaseOrdersPage() {
   const searchParams = useSearchParams()
@@ -24,7 +23,6 @@ export default function PurchaseOrdersPage() {
     setActiveTab(t)
   }, [searchParams])
 
-  // Keep URL in sync with active tab so reload preserves current tab
   useEffect(() => {
     try {
       const params = new URLSearchParams(searchParams?.toString() || "")
@@ -32,13 +30,11 @@ export default function PurchaseOrdersPage() {
       else params.delete("tab")
       const qs = params.toString()
       const url = qs ? `${pathname}?${qs}` : pathname
-      // replace to avoid adding history entries on each tab change
       router.replace(url)
     } catch (e) {
       // ignore
     }
   }, [activeTab, router, pathname, searchParams])
-  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null)
 
   return (
     <div className="space-y-6">
@@ -90,30 +86,16 @@ export default function PurchaseOrdersPage() {
 
         <TabsContent value="list" className="space-y-4">
           <PurchaseOrdersListTab
-            onCreateNew={() => {
-              setEditingOrder(null)
-              setActiveTab("new")
-            }}
-            onEditOrder={(order) => {
-              setEditingOrder(order)
-              setActiveTab("new")
-            }}
+            onCreateNew={() => setActiveTab("new")}
           />
         </TabsContent>
 
         <TabsContent value="new" className="space-y-4">
           <ProtectedCreate module="purchaseOrders">
             <NewPurchaseOrderTab
-              mode={editingOrder ? "edit" : "create"}
-              initialOrder={editingOrder}
-              onCancelEdit={() => {
-                setEditingOrder(null)
-                setActiveTab("list")
-              }}
-              onSuccess={() => {
-                setEditingOrder(null)
-                setActiveTab("list")
-              }}
+              mode="create"
+              onSuccess={() => setActiveTab("list")}
+              onCancelEdit={() => setActiveTab("list")}
             />
           </ProtectedCreate>
         </TabsContent>

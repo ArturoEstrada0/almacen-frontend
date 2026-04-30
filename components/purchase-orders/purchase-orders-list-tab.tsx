@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
@@ -25,10 +26,10 @@ import type { PurchaseOrder } from "@/lib/types"
 
 interface PurchaseOrdersListTabProps {
   onCreateNew: () => void
-  onEditOrder: (order: PurchaseOrder) => void
 }
 
-export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrdersListTabProps) {
+export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProps) {
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>("all")
@@ -301,7 +302,7 @@ export function PurchaseOrdersListTab({ onCreateNew, onEditOrder }: PurchaseOrde
                               </ProtectedUpdate>
                             )}
                             <ProtectedUpdate module="purchaseOrders">
-                              <Button variant="outline" size="icon" onClick={() => onEditOrder(rowOrder)} disabled={!editable} aria-label="Editar orden">
+                              <Button variant="outline" size="icon" onClick={() => router.push(`/purchase-orders/${rowOrder.id}/edit`)} disabled={!editable} aria-label="Editar orden">
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             </ProtectedUpdate>

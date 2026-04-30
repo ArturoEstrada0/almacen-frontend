@@ -358,22 +358,30 @@ export default function EditProductPage({ params }: Params) {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/products">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Editar Producto</h1>
-          <p className="text-muted-foreground">Editar producto existente</p>
+    <div className="h-full overflow-y-auto -m-6">
+      <div className="sticky top-0 z-10 bg-background px-6 py-4 border-b">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/products">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Editar Producto</h1>
+              <p className="text-muted-foreground">Editar producto existente</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" className="bg-transparent" asChild>
+              <Link href="/products">Cancelar</Link>
+            </Button>
+            <Button type="submit" form="edit-product-form"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+      <form id="edit-product-form" onSubmit={handleSubmit} className="p-6 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Información General</CardTitle>
@@ -472,14 +480,39 @@ export default function EditProductPage({ params }: Params) {
                   <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="unitOfMeasure">Unidad de Medida *</Label>
-                  <Input
-                    id="unitOfMeasure"
-                    placeholder="Pieza, Kg, Litro, etc."
-                    value={formData.unitOfMeasure}
-                    onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value })}
-                  />
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="unitOfMeasure">Unidad de Medida *</Label>
+                    <Input
+                      id="unitOfMeasure"
+                      placeholder="Pieza, Kg, Litro, etc."
+                      value={formData.unitOfMeasure}
+                      onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="isActive">Estado del Producto</Label>
+                    <Select
+                      value={formData.isActive ? "active" : "inactive"}
+                      onValueChange={(value) => setFormData({ ...formData, isActive: value === "active" })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Seleccionar estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Activo</SelectItem>
+                        <SelectItem value="inactive">Inactivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-7">
+                    <Checkbox
+                      id="hasIva16"
+                      checked={formData.hasIva16}
+                      onCheckedChange={(checked) => setFormData({ ...formData, hasIva16: checked === true })}
+                    />
+                    <Label htmlFor="hasIva16" className="cursor-pointer">IVA 16%</Label>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -489,60 +522,87 @@ export default function EditProductPage({ params }: Params) {
                 <CardTitle>Proveedores</CardTitle>
                 <CardDescription>Proveedores asociados a este producto (opcional)</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="max-h-[300px] overflow-y-auto space-y-3 pr-1">
-                  {/* Existing suppliers */}
-                  {productSuppliers.map((ps: any) => {
-                    const supplierName = ps.supplier?.name || allSuppliers.find((s: any) => s.id === ps.supplierId)?.name || ps.supplierId
-                    return (
-                      <div key={ps.id} className="flex items-center gap-3 rounded-md border p-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm">{supplierName}</p>
-                          {ps.preferred && <p className="text-xs text-muted-foreground">Preferido</p>}
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Left: add new suppliers */}
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Agregar proveedores</p>
+                    <div className="max-h-[300px] overflow-y-auto space-y-3 pr-1">
+                      {pendingSuppliers.map((ps, index) => {
+                        const registeredIds = new Set(productSuppliers.map((r: any) => r.supplierId))
+                        const selectedInOtherPending = new Set(
+                          pendingSuppliers.filter((_, i) => i !== index && pendingSuppliers[i].supplierId).map((p) => p.supplierId),
+                        )
+                        const availableSuppliers = allSuppliers.filter(
+                          (s: any) => !registeredIds.has(s.id) && !selectedInOtherPending.has(s.id),
+                        )
+                        return (
+                        <div key={index} className="flex items-center gap-3 rounded-md border border-dashed p-3">
+                          <div className="flex-1">
+                            <Label className="mb-1 block">Proveedor</Label>
+                            <ComboBox
+                              options={availableSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
+                              value={ps.supplierId}
+                              onChange={(v) => updatePendingSupplier(index, "supplierId", v)}
+                              placeholder="Seleccionar proveedor..."
+                              searchPlaceholder="Buscar proveedor..."
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 mt-5 text-destructive hover:text-destructive"
+                            onClick={() => removePendingSupplier(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="shrink-0 text-destructive hover:text-destructive"
-                          onClick={() => setSupplierToDelete({ id: ps.id, name: supplierName })}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-
-                  {/* Pending new suppliers */}
-                  {pendingSuppliers.map((ps, index) => (
-                    <div key={index} className="flex items-center gap-3 rounded-md border border-dashed p-3">
-                      <div className="flex-1">
-                        <Label className="mb-1 block">Proveedor</Label>
-                        <ComboBox
-                          options={allSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
-                          value={ps.supplierId}
-                          onChange={(v) => updatePendingSupplier(index, "supplierId", v)}
-                          placeholder="Seleccionar proveedor..."
-                          searchPlaceholder="Buscar proveedor..."
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 mt-5 text-destructive hover:text-destructive"
-                        onClick={() => removePendingSupplier(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      )
+                      })}
+                      {pendingSuppliers.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">Sin proveedores pendientes</p>
+                      )}
                     </div>
-                  ))}
-                </div>
+                    <Button type="button" variant="outline" size="sm" onClick={addPendingSupplier} className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar proveedor
+                    </Button>
+                  </div>
 
-                <Button type="button" variant="outline" size="sm" onClick={addPendingSupplier} className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Agregar proveedor
-                </Button>
+                  {/* Right: existing registered suppliers */}
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Proveedores registrados {productSuppliers.length > 0 && `(${productSuppliers.length})`}
+                    </p>
+                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1">
+                      {productSuppliers.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">Sin proveedores asociados</p>
+                      ) : (
+                        productSuppliers.map((ps: any) => {
+                          const supplierName = ps.supplier?.name || allSuppliers.find((s: any) => s.id === ps.supplierId)?.name || ps.supplierId
+                          return (
+                            <div key={ps.id} className="flex items-center gap-3 rounded-md border p-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{supplierName}</p>
+                                {ps.preferred && <p className="text-xs text-muted-foreground">Preferido</p>}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 text-destructive hover:text-destructive"
+                                onClick={() => setSupplierToDelete({ id: ps.id, name: supplierName })}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -646,48 +706,6 @@ export default function EditProductPage({ params }: Params) {
                 </div>
               </CardContent>
             </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Estado</CardTitle>
-                <CardDescription>Configuración de disponibilidad</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Label htmlFor="isActive">Producto Activo</Label>
-                  <Select
-                    value={formData.isActive ? "active" : "inactive"}
-                    onValueChange={(value) => setFormData({ ...formData, isActive: value === "active" })}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Seleccionar estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Activo</SelectItem>
-                      <SelectItem value="inactive">Inactivo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center space-x-2 pt-2">
-                  <Checkbox
-                    id="hasIva16"
-                    checked={formData.hasIva16}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hasIva16: checked === true })}
-                  />
-                  <Label htmlFor="hasIva16" className="cursor-pointer">IVA 16%</Label>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex flex-col gap-2">
-              <Button type="submit" className="w-full"><Save className="mr-2 h-4 w-4" />Guardar Cambios</Button>
-              <Button type="button" variant="outline" className="w-full bg-transparent" asChild><Link href="/products">Cancelar</Link></Button>
-            </div>
-          </div>
-        </div>
       </form>
 
       <AlertDialog open={!!supplierToDelete} onOpenChange={(open) => { if (!open) setSupplierToDelete(null) }}>
