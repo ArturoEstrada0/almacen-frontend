@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ComboBox } from "@/components/ui/combobox"
 import { apiPost } from "@/lib/db/localApi"
@@ -38,6 +39,7 @@ export default function NewProductPage() {
     categoryId: "",
     barcode: "",
     unitOfMeasure: "Pieza",
+    hasIva16: true,
     isActive: true,
   })
   const [supplierForm, setSupplierForm] = useState({ supplierId: "", price: "", preferred: true })
@@ -113,6 +115,7 @@ export default function NewProductPage() {
         type: formData.type,
         categoryId: formData.categoryId,
         barcode: formData.barcode.trim() || undefined,
+        hasIva16: formData.hasIva16,
         active: formData.isActive,
       }
 
@@ -163,22 +166,33 @@ export default function NewProductPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/products">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Nuevo Producto</h1>
-          <p className="text-muted-foreground">Agregar un nuevo producto al catálogo</p>
+    <div className="h-full overflow-y-auto -m-6">
+      <div className="sticky top-0 z-10 bg-background px-6 py-4 border-b">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/products">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Nuevo Producto</h1>
+              <p className="text-muted-foreground">Agregar un nuevo producto al catálogo</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" className="bg-transparent" asChild>
+              <Link href="/products">Cancelar</Link>
+            </Button>
+            <Button type="submit" form="new-product-form" disabled={loading}>
+              <Save className="mr-2 h-4 w-4" />
+              Guardar Producto
+            </Button>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+      <form id="new-product-form" onSubmit={handleSubmit} className="p-6 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Información General</CardTitle>
@@ -284,19 +298,44 @@ export default function NewProductPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="unitOfMeasure">Unidad de Medida *</Label>
-                  <Input
-                    id="unitOfMeasure"
-                    placeholder="Pieza, Kg, Litro, etc."
-                    value={formData.unitOfMeasure}
-                    onChange={(e) => {
-                      setFormData({ ...formData, unitOfMeasure: e.target.value })
-                      clearFieldError("unitOfMeasure")
-                    }}
-                    className={fieldErrors.unitOfMeasure ? "border-red-500 focus-visible:ring-red-500" : ""}
-                  />
-                  {fieldErrors.unitOfMeasure ? <p className="text-sm text-red-600">{fieldErrors.unitOfMeasure}</p> : null}
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="unitOfMeasure">Unidad de Medida *</Label>
+                    <Input
+                      id="unitOfMeasure"
+                      placeholder="Pieza, Kg, Litro, etc."
+                      value={formData.unitOfMeasure}
+                      onChange={(e) => {
+                        setFormData({ ...formData, unitOfMeasure: e.target.value })
+                        clearFieldError("unitOfMeasure")
+                      }}
+                      className={fieldErrors.unitOfMeasure ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    />
+                    {fieldErrors.unitOfMeasure ? <p className="text-sm text-red-600">{fieldErrors.unitOfMeasure}</p> : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="isActive">Estado del Producto</Label>
+                    <Select
+                      value={formData.isActive ? "active" : "inactive"}
+                      onValueChange={(value) => setFormData({ ...formData, isActive: value === "active" })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Seleccionar estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Activo</SelectItem>
+                        <SelectItem value="inactive">Inactivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-7">
+                    <Checkbox
+                      id="hasIva16"
+                      checked={formData.hasIva16}
+                      onCheckedChange={(checked) => setFormData({ ...formData, hasIva16: checked === true })}
+                    />
+                    <Label htmlFor="hasIva16" className="cursor-pointer">IVA 16%</Label>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -383,63 +422,87 @@ export default function NewProductPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.currentStock || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  currentStock: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    currentStock: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.minStock || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  minStock: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    minStock: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.maxStock || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  maxStock: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    maxStock: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                           <TableCell>
-                            <Input 
+                            <Input
                               type="number"
-                              step="0.01"
-                              className="w-24" 
+                              step="1"
+                              min="0"
+                              inputMode="numeric"
+                              className="w-24"
+                              placeholder="0"
                               value={warehouseInventory[warehouse.id]?.reorderPoint || ""}
-                              onChange={(e) => setWarehouseInventory(prev => ({
-                                ...prev,
-                                [warehouse.id]: {
-                                  ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
-                                  reorderPoint: e.target.value
-                                }
-                              }))}
+                              onChange={(e) => {
+                                const sanitized = e.target.value.replace(/[^0-9]/g, "")
+                                setWarehouseInventory(prev => ({
+                                  ...prev,
+                                  [warehouse.id]: {
+                                    ...(prev[warehouse.id] || { minStock: "", maxStock: "", reorderPoint: "", currentStock: "" }),
+                                    reorderPoint: sanitized
+                                  }
+                                }))
+                              }}
                             />
                           </TableCell>
                         </TableRow>
@@ -450,44 +513,6 @@ export default function NewProductPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Estado</CardTitle>
-                <CardDescription>Configuración de disponibilidad</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Label htmlFor="isActive">Producto Activo</Label>
-                  <Select
-                    value={formData.isActive ? "active" : "inactive"}
-                    onValueChange={(value) => setFormData({ ...formData, isActive: value === "active" })}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Seleccionar estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Activo</SelectItem>
-                      <SelectItem value="inactive">Inactivo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex flex-col gap-2">
-              <Button type="submit" className="w-full" disabled={loading}>
-                <Save className="mr-2 h-4 w-4" />
-                Guardar Producto
-              </Button>
-              <Button type="button" variant="outline" className="w-full bg-transparent" asChild>
-                <Link href="/products">Cancelar</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
       </form>
     </div>
   )

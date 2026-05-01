@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useSuppliers } from "@/lib/hooks/use-suppliers"
+import { ComboBox } from "@/components/ui/combobox"
+import { useSuppliers, useSupplierProducts } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { cancelPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
@@ -86,8 +87,15 @@ export function NewPurchaseOrderTab({
     return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
   }
 
+  const calculateItemTax = (item: PurchaseOrderItem) => {
+    const product = products.find((p) => p.id === item.productId)
+    const appliesIva = product ? product.hasIva16 !== false : true
+    if (!appliesIva) return 0
+    return item.quantity * item.unitPrice * 0.16
+  }
+
   const calculateTax = () => {
-    return calculateSubtotal() * 0.16
+    return items.reduce((sum, item) => sum + calculateItemTax(item), 0)
   }
 
   const calculateTotal = () => {
@@ -99,6 +107,53 @@ export function NewPurchaseOrderTab({
   const { suppliers } = useSuppliers()
   const { products } = useProducts()
   const { warehouses } = useWarehouses()
+  const { supplierProducts } = useSupplierProducts(supplierId || null)
+
+  const normalizeType = (value: string | null | undefined) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+
+  const selectedWarehouse = useMemo(
+    () => warehouses.find((warehouse: any) => String(warehouse.id) === String(warehouseId)),
+    [warehouses, warehouseId],
+  )
+
+  const baseProductOptions = useMemo(() => {
+    const selectedWarehouseType = normalizeType((selectedWarehouse as any)?.type)
+
+    let baseProducts: any[]
+    if (supplierId && supplierProducts.length > 0) {
+      baseProducts = supplierProducts.map((sp: any) => sp.product).filter(Boolean)
+    } else if (supplierId && supplierProducts.length === 0) {
+      baseProducts = []
+    } else {
+      baseProducts = products
+    }
+
+    return baseProducts
+      .filter((product: any) => product?.isActive !== false)
+      .filter((product: any) => {
+        if (!selectedWarehouseType) return true
+        const productType = normalizeType(product?.type)
+        if (!productType) return true
+        return productType === selectedWarehouseType
+      })
+      .map((product: any) => ({
+        value: product.id,
+        label: `${product.name} (${product.sku})`,
+        subtitle: product.sku,
+      }))
+  }, [products, supplierProducts, supplierId, selectedWarehouse])
+
+  const getProductOptionsForRow = (currentIndex: number) => {
+    const selectedInOtherRows = new Set(
+      items.filter((_, i) => i !== currentIndex && items[i].productId).map((it) => it.productId),
+    )
+    return baseProductOptions.filter((opt) => !selectedInOtherRows.has(opt.value))
+  }
 
   useEffect(() => {
     if (mode !== "edit" || !initialOrder) {
@@ -194,8 +249,10 @@ export function NewPurchaseOrderTab({
 
   const supplier = suppliers.find((s) => s.id === supplierId)
   
-  // Actualizar creditDays cuando se selecciona un proveedor
   const handleSupplierChange = (value: string) => {
+    if (value !== supplierId) {
+      setItems([])
+    }
     setSupplierId(value)
     const selectedSupplier = suppliers.find((s) => s.id === value)
     if (selectedSupplier) {
@@ -205,13 +262,6 @@ export function NewPurchaseOrderTab({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">{mode === "edit" ? `Editar Orden ${initialOrder?.orderNumber || ""}` : "Nueva Orden de Compra"}</h2>
-        <p className="text-sm text-muted-foreground">
-          {mode === "edit" ? "Modifica productos y cantidades de la orden" : "Crea una nueva orden de compra a proveedor"}
-        </p>
-      </div>
-
       <Card ref={infoCardRef}>
         <CardHeader>
           <CardTitle>Información General</CardTitle>
@@ -227,18 +277,14 @@ export function NewPurchaseOrderTab({
                   <p className="text-xs text-muted-foreground">Para cambiar proveedor, cancela esta orden y crea una nueva</p>
                 </div>
               ) : (
-                <Select value={supplierId} onValueChange={handleSupplierChange}>
-                  <SelectTrigger className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}>
-                    <SelectValue placeholder="Selecciona un proveedor" />
-                  </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                </Select>
+                <ComboBox
+                  options={suppliers.map((s) => ({ value: s.id, label: s.name, subtitle: s.rfc }))}
+                  value={supplierId}
+                  onChange={handleSupplierChange}
+                  placeholder="Selecciona un proveedor"
+                  searchPlaceholder="Buscar proveedor..."
+                  className={submitted && !supplierId ? 'border-red-500 ring-1 ring-red-500' : ''}
+                />
               )}
               {submitted && !supplierId
                 ? <p className="text-xs text-red-500">Selecciona un proveedor para continuar</p>
@@ -248,18 +294,14 @@ export function NewPurchaseOrderTab({
 
             <div className="space-y-2">
               <Label>Almacén de Destino *</Label>
-              <Select value={warehouseId} onValueChange={setWarehouseId}>
-                <SelectTrigger className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}>
-                  <SelectValue placeholder="Selecciona un almacén" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ComboBox
+                options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                value={warehouseId}
+                onChange={setWarehouseId}
+                placeholder="Selecciona un almacén"
+                searchPlaceholder="Buscar almacén..."
+                className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}
+              />
               {submitted && !warehouseId && (
                 <p className="text-xs text-red-500">Selecciona un almacén de destino</p>
               )}
@@ -267,10 +309,9 @@ export function NewPurchaseOrderTab({
 
             <div className="space-y-2">
               <Label>Fecha de Entrega Esperada *</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={expectedDeliveryDate}
-                onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                onChange={(v) => setExpectedDeliveryDate(v)}
                 className={submitted && !expectedDeliveryDate ? 'border-red-500 ring-1 ring-red-500' : ''}
               />
               {submitted && !expectedDeliveryDate && (
@@ -311,13 +352,13 @@ export function NewPurchaseOrderTab({
               <CardDescription>Agrega los productos a la orden de compra</CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline">
+              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline" disabled={!supplierId}>
                 Importar XML
               </Button>
-              <Button onClick={addItem} size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Agregar Producto
-            </Button>
+              <Button onClick={addItem} size="sm" disabled={!supplierId}>
+                <Plus className="mr-2 h-4 w-4" />
+                Agregar Producto
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -329,79 +370,86 @@ export function NewPurchaseOrderTab({
           )}
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <p className="text-sm text-muted-foreground">No hay productos agregados</p>
-              <Button onClick={addItem} variant="outline" className="mt-4 bg-transparent">
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Primer Producto
-              </Button>
+              {!supplierId ? (
+                <p className="text-sm text-muted-foreground">Selecciona un proveedor para agregar productos</p>
+              ) : supplierProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Este proveedor no tiene productos asociados</p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">No hay productos agregados</p>
+                  <Button onClick={addItem} variant="outline" className="mt-4 bg-transparent">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Agregar Primer Producto
+                  </Button>
+                </>
+              )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Cantidad</TableHead>
-                  <TableHead>Precio Unitario</TableHead>
-                  <TableHead>Subtotal</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <div className="max-h-[460px] overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead>Precio Unitario</TableHead>
+                    <TableHead>IVA</TableHead>
+                    <TableHead>Subtotal</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {items.map((item, index) => {
-                  const product = products.find((p) => p.id === item.productId)
-                  return (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <Select value={item.productId} onValueChange={(value) => updateItem(index, "productId", value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un producto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products
-                              .filter((p) => p.type === "insumo")
-                              .map((product) => (
-                                <SelectItem key={product.id} value={product.id}>
-                                  {product.name} ({product.sku})
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        {product && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Stock actual: {product.minStock} • Precio sugerido: {formatCurrency(product.costPrice)}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, "quantity", Number.parseInt(e.target.value) || 0)}
-                          className="w-24"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={item.unitPrice}
-                          onChange={(e) => updateItem(index, "unitPrice", Number.parseFloat(e.target.value) || 0)}
-                          className="w-32"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+                    const product = products.find((p) => p.id === item.productId)
+                    return (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <ComboBox
+                            options={getProductOptionsForRow(index)}
+                            value={item.productId}
+                            onChange={(value) => updateItem(index, "productId", value)}
+                            placeholder="Selecciona un producto"
+                            searchPlaceholder="Buscar producto..."
+                            className="w-full"
+                          />
+                          {product && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Stock actual: {product.minStock} • Precio sugerido: {formatCurrency(product.costPrice)}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, "quantity", Number.parseInt(e.target.value) || 0)}
+                            className="w-24"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={item.unitPrice}
+                            onChange={(e) => updateItem(index, "unitPrice", Number.parseFloat(e.target.value) || 0)}
+                            className="w-32"
+                            placeholder="0.00"
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{formatCurrency(calculateItemTax(item))}</TableCell>
+                        <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
 
           {items.length > 0 && (

@@ -177,6 +177,7 @@ export default function ProductsPage() {
                 <TableHead>SKU</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Categoría</TableHead>
                 <TableHead>Precio Costo</TableHead>
                 <TableHead>Precio Venta</TableHead>
                 <TableHead>Estado</TableHead>
@@ -186,7 +187,7 @@ export default function ProductsPage() {
             <TableBody>
               {pagedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
                     No se encontraron productos
                   </TableCell>
                 </TableRow>
@@ -219,7 +220,12 @@ export default function ProductsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="capitalize">
-                        {product.type}
+                        {product.type || "Sin tipo"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {product.category?.name || "Sin categoría"}
                       </Badge>
                     </TableCell>
                     <TableCell>{formatCurrency(Number((product as any).costPrice || 0))}</TableCell>

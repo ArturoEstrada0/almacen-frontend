@@ -42,3 +42,16 @@ export async function updateSupplier(id: string, data: Partial<Supplier>) {
 export async function deleteSupplier(id: string) {
   return ApiClient.delete(API_ENDPOINTS.suppliers.delete(id))
 }
+
+export function useSupplierProducts(supplierId: string | null | undefined) {
+  const { data, error, isLoading } = useSWR<any[]>(
+    supplierId ? `supplier-products-${supplierId}` : null,
+    () => ApiClient.get<any[]>(API_ENDPOINTS.suppliers.products(supplierId!)),
+  )
+
+  return {
+    supplierProducts: data || [],
+    isLoading,
+    isError: error,
+  }
+}

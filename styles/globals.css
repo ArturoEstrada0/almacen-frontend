@@ -123,3 +123,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide scrollbar for ComboBox portal while keeping scroll functionality */
+div[style*="scrollbar-width"]::-webkit-scrollbar {
+  display: none;
+}
