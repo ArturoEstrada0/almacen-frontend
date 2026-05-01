@@ -52,6 +52,24 @@ export function useUser(id: string | null) {
   }
 }
 
+export function useCurrentUser() {
+  const { data, error, isLoading } = useSWR<User>(
+    API_ENDPOINTS.users.current(),
+    fetcher<User>,
+    {
+      onError: (error) => {
+        console.error('Error loading current user:', error)
+      }
+    }
+  )
+
+  return {
+    currentUser: data,
+    isLoading,
+    isError: error,
+  }
+}
+
 export async function createUser(data: {
   email: string
   password: string

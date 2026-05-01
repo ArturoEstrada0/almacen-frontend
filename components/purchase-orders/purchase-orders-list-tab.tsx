@@ -11,8 +11,10 @@ import { usePurchaseOrder, usePurchaseOrders, receivePurchaseOrder } from "@/lib
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useProducts } from "@/lib/hooks/use-products"
+import { useMovements } from "@/lib/hooks/use-inventory"
 import { formatCurrency } from "@/lib/utils/format"
-import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X } from "lucide-react"
+import { useCurrentUser } from "@/lib/hooks/use-users"
+import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -38,16 +40,19 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({})
+  const [isReceivingLoading, setIsReceivingLoading] = useState(false)
 
   const [detailsOrderId, setDetailsOrderId] = useState<string | null>(null)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
 
   const { purchaseOrders, isLoading, mutate } = usePurchaseOrders()
   const { purchaseOrder: detailsOrder, isLoading: detailsLoading } = usePurchaseOrder(detailsOrderId || "")
+  const { movements } = useMovements()
 
   const { suppliers } = useSuppliers()
   const { warehouses } = useWarehouses()
   const { products } = useProducts()
+  const { currentUser } = useCurrentUser()
 
   const formatDateSafely = (value?: string | Date | null) => {
     if (!value) return "-"
@@ -134,14 +139,17 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
   const handleCompleteReception = async () => {
     if (!selectedOrder) return
+    setIsReceivingLoading(true)
     try {
       const order = purchaseOrders.find((o) => o.id === selectedOrder)
       if (!order) return
 
+      const userName = currentUser?.fullName || currentUser?.email || "sistema"
+
       for (const item of order.items) {
         const qty = receiveQuantities[item.id] ?? Math.max(0, item.quantity - item.receivedQuantity)
         if (qty > 0) {
-          await receivePurchaseOrder(order.id, item.id, qty)
+          await receivePurchaseOrder(order.id, item.id, qty, userName)
         }
       }
 
@@ -154,11 +162,27 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       setReceiveQuantities({})
     } catch (e: any) {
       toast.error(e?.message || "Error al registrar la recepción")
+    } finally {
+      setIsReceivingLoading(false)
     }
   }
 
   const order = selectedOrder ? purchaseOrders.find((o) => o.id === selectedOrder) : null
+  const poReference = detailsOrder ? `PO-${(detailsOrder as any)?.code}` : ""
+  const relatedMovements = movements?.filter((m: any) => m.referenceType === "PO" && m.referenceId === detailsOrderId) || []
   const detailsTraceability = ((detailsOrder as any)?.traceability || []) as any[]
+
+  // Group movements by creation date to show "batches" of reception
+  const groupedMovements = relatedMovements.reduce((groups: any[], movement: any) => {
+    const dateKey = new Date(movement.createdAt).toLocaleDateString()
+    const group = groups.find((g) => g.date === dateKey)
+    if (group) {
+      group.movements.push(movement)
+    } else {
+      groups.push({ date: dateKey, movements: [movement] })
+    }
+    return groups
+  }, [])
 
   return (
     <>
@@ -396,12 +420,21 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setReceiveDialogOpen(false)}>
+                <Button variant="outline" onClick={() => setReceiveDialogOpen(false)} disabled={isReceivingLoading}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCompleteReception}>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Completar Recepción
+                <Button onClick={handleCompleteReception} disabled={isReceivingLoading}>
+                  {isReceivingLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Completar Recepción
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -484,15 +517,53 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground">Historial</Label>
+                <Label className="text-xs text-muted-foreground">Historial de Movimientos</Label>
                 {detailsLoading ? (
                   <p className="text-sm text-muted-foreground mt-2">Cargando historial...</p>
-                ) : detailsTraceability.length === 0 ? (
-                  <p className="text-sm text-muted-foreground mt-2">No hay historial registrado.</p>
+                ) : relatedMovements.length === 0 && detailsTraceability.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-2">No hay historial de movimientos registrado.</p>
                 ) : (
-                  <div className="mt-2 space-y-2 rounded-md border p-3">
+                  <div className="mt-2 space-y-4 rounded-md border p-3">
+                    {groupedMovements.map((group: any, groupIdx: number) => (
+                      <div key={`group-${groupIdx}`}>
+                        {groupIdx > 0 && <div className="my-3 border-t" />}
+                        <div className="text-xs font-semibold text-muted-foreground mb-2">Recepción del {group.date}</div>
+                        <div className="space-y-2">
+                          {group.movements.map((movement: any) => {
+                            const item = movement.items?.[0]
+                            const product = products.find((p) => p.id === item?.productId)
+                            const unitPrice = item?.cost || product?.price
+                            const total = unitPrice ? Number(unitPrice) * Number(item?.quantity) : 0
+                            return (
+                              <div key={movement.id} className="bg-gray-50 dark:bg-slate-900 p-2 rounded">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">
+                                      ✓ {product?.name} ({item?.quantity} un)
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(movement.createdAt).toLocaleTimeString()} • {movement.userName || "sistema"}
+                                    </p>
+                                  </div>
+                                  <div className="text-right text-sm ml-4">
+                                    <p className="font-medium">{formatCurrency(total)}</p>
+                                    {unitPrice && <p className="text-xs text-muted-foreground">@{formatCurrency(unitPrice)}</p>}
+                                  </div>
+                                </div>
+                                {movement.notes && (
+                                  <div className="mt-1 text-xs text-muted-foreground border-t pt-1">
+                                    <span className="font-semibold">Nota:</span> {movement.notes}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
                     {detailsTraceability.map((event: any) => (
-                      <div key={event.id} className="border-b pb-2 last:border-b-0 last:pb-0">
+                      <div key={event.id} className="bg-gray-50 dark:bg-slate-900 p-2 rounded">
                         <p className="text-sm font-medium capitalize">{event.action}</p>
                         <p className="text-xs text-muted-foreground">
                           {new Date(event.createdAt).toLocaleString()} • {event.userName || event.userId || "sistema"}

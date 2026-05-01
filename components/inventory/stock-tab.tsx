@@ -10,7 +10,7 @@ import { useInventoryByWarehouse, useMovements, updateInventoryStock } from "@/l
 import { useMemo } from "react"
 import { useProducts, updateProduct } from "@/lib/hooks/use-products"
 import { formatNumber } from "@/lib/utils/format"
-import { Search, AlertTriangle, Download, Upload, ArrowLeftRight, Loader2 } from "lucide-react"
+import { Search, AlertTriangle, Download, Upload, ArrowLeftRight, Loader2, Edit } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
@@ -57,6 +57,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
   const [editMax, setEditMax] = useState<string>("")
   const [editReorder, setEditReorder] = useState<string>("")
   const [editCostPrice, setEditCostPrice] = useState<string>("")
+  const [isEditSaving, setIsEditSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
@@ -413,6 +414,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
                 <TableHead>Stock Min/Max</TableHead>
                 <TableHead>Punto Reorden</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead className="text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -451,7 +453,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
                     <TableCell>
                       <Badge variant="secondary">{formatNumber(product?.reorderPoint || stock.reorderPoint || 0)}</Badge>
                     </TableCell>
-                    <TableCell className="flex items-center gap-2">
+                    <TableCell>
                       <div>
                         {status === "low" && (
                           <Badge variant="destructive" className="gap-1">
@@ -462,9 +464,11 @@ export function StockTab({ warehouseId }: StockTabProps) {
                         {status === "normal" && <Badge variant="default">Normal</Badge>}
                         {status === "high" && <Badge variant="secondary">Alto</Badge>}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="icon"
+                        variant="ghost"
                         onClick={() => {
                           setEditingStock(stock)
                           const product = products.find((p) => p.id === stock.productId)
@@ -478,8 +482,9 @@ export function StockTab({ warehouseId }: StockTabProps) {
                           setEditReorder(String(product?.reorderPoint || stock.reorderPoint || 0))
                           setEditDialogOpen(true)
                         }}
+                        className="h-8 w-8"
                       >
-                        Editar
+                        <Edit className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -578,7 +583,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isEditSaving}>Cancelar</Button>
             <Button
               onClick={async () => {
                 if (!editingStock) return
@@ -591,6 +596,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
                   return
                 }
 
+                setIsEditSaving(true)
                 try {
                   // Actualizar el inventario
                   await updateInventoryStock({
@@ -617,10 +623,19 @@ export function StockTab({ warehouseId }: StockTabProps) {
                 } catch (err) {
                   console.error("Error updating inventory settings", err)
                   alert("Error actualizando inventario")
+                  setIsEditSaving(false)
                 }
               }}
+              disabled={isEditSaving}
             >
-              Guardar
+              {isEditSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Guardar"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

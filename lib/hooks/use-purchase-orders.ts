@@ -63,8 +63,8 @@ export async function createPurchaseOrder(data: any) {
   return ApiClient.post<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.create(), data)
 }
 
-export async function receivePurchaseOrder(orderId: string, itemId: string, quantity: number) {
-  return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.receive(orderId, itemId), { quantity })
+export async function receivePurchaseOrder(orderId: string, itemId: string, quantity: number, userName?: string) {
+  return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.receive(orderId, itemId), { quantity, userName })
 }
 
 export async function cancelPurchaseOrder(id: string) {

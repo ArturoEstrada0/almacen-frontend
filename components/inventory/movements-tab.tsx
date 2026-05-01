@@ -54,8 +54,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
     const mv: any = movement
     const matchesSearch =
       (mv.items?.[0]?.product?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (movement.warehouse?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (mv.items?.[0]?.lotNumber || "").toLowerCase().includes(searchTerm.toLowerCase())
+      (movement.warehouse?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     const matchesType = typeFilter === "all" || movement.type === typeFilter
     const matchesWarehouse = !warehouseId || movement.warehouseId === warehouseId
     return matchesSearch && matchesType && matchesWarehouse
@@ -293,7 +292,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por producto, almacén o lote..."
+                  placeholder="Buscar por producto o almacén..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9"
@@ -320,9 +319,9 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Producto</TableHead>
+                    <TableHead className="text-right">Precio Unitario</TableHead>
                     <TableHead>Almacén</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
-                    <TableHead>Lote</TableHead>
                     <TableHead>Usuario</TableHead>
                     <TableHead className="text-right">Costo Total</TableHead>
                   </TableRow>
@@ -345,18 +344,32 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                           </span>
                         </Badge>
                       </TableCell>
-                      <TableCell>{(movement as any).items?.[0]?.product?.name}</TableCell>
+                      <TableCell className="font-medium">{(movement as any).items?.[0]?.product?.name}</TableCell>
+                      <TableCell className="text-right">
+                        {(() => {
+                          const item = (movement as any).items?.[0]
+                          const unitPrice = item?.cost || item?.product?.price
+                          return unitPrice ? formatCurrency(unitPrice) : "-"
+                        })()}
+                      </TableCell>
                       <TableCell>{movement.warehouse?.name}</TableCell>
                       <TableCell className="text-right font-medium">
                         {movement.type === "salida" ? "-" : "+"}
                         {(movement as any).items?.[0]?.quantity}
                       </TableCell>
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground">{movement.lotNumber || "-"}</span>
+                      <TableCell className="text-sm">
+                        <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">
+                          {movement.userName || "-"}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{movement.userName || "-"}</TableCell>
                       <TableCell className="text-right">
-                        {(movement as any).total ? formatCurrency((movement as any).total) : "-"}
+                        {(() => {
+                          const item = (movement as any).items?.[0]
+                          const unitPrice = item?.cost || item?.product?.price
+                          const quantity = Number(item?.quantity) || 0
+                          const total = unitPrice ? unitPrice * quantity : 0
+                          return total > 0 ? formatCurrency(total) : "-"
+                        })()}
                       </TableCell>
                     </motion.tr>
                   ))}

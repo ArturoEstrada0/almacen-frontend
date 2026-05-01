@@ -160,6 +160,7 @@ export const API_ENDPOINTS = {
   users: {
     list: () => `${API_BASE_URL}/api/users`,
     get: (id: string) => `${API_BASE_URL}/api/users/${id}`,
+    current: () => `${API_BASE_URL}/api/users/current/me`,
     create: () => `${API_BASE_URL}/api/users`,
     update: (id: string) => `${API_BASE_URL}/api/users/${id}`,
     delete: (id: string) => `${API_BASE_URL}/api/users/${id}`,
