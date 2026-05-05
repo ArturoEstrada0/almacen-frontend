@@ -7,11 +7,11 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 // products and suppliers come from API hooks
-import { useSuppliers } from "@/lib/hooks/use-suppliers"
+import { useSuppliersWithFilters } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { createQuotation, useQuotations } from "@/lib/hooks/use-quotations"
 import { toast } from "@/lib/utils/toast"
-import { Plus, Trash2, Send, Building2, Package, Eye, RefreshCw, FileText, Clock, CheckCircle, Mail } from "lucide-react"
+import { Plus, Trash2, Send, Building2, Package, Eye, RefreshCw, FileText, Clock, CheckCircle, Mail, X } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -25,7 +25,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -69,6 +80,7 @@ export function QuotationsTab() {
     return date.toISOString().split('T')[0]
   })
   const [selectedQuotation, setSelectedQuotation] = useState<any>(null)
+  const [confirming, setConfirming] = useState<{ type: 'approve' | 'deny' | null; quotation: any | null }>({ type: null, quotation: null })
   
   // Hook para obtener cotizaciones existentes
   const { quotations, isLoading: quotationsLoading, mutate: refreshQuotations } = useQuotations()
@@ -92,8 +104,11 @@ export function QuotationsTab() {
     setQuotationItems(quotationItems.filter((item) => item.id !== id))
   }
 
-  const { suppliers: apiSuppliers } = useSuppliers()
   const { products } = useProducts()
+  const selectedProductIds = Array.from(new Set(quotationItems.map((item) => item.productId)))
+  const { suppliers: apiSuppliers } = useSuppliersWithFilters(
+    quotationItems.length > 0 ? { productIds: selectedProductIds } : undefined,
+  )
 
   // Map backend supplier shape to the UI-friendly shape used in the mock data
   const mappedSuppliers = (apiSuppliers || []).map((s: any) => ({
@@ -106,6 +121,7 @@ export function QuotationsTab() {
     phone: s.phone || "",
     email: s.email || "",
     isActive: s.active ?? true,
+    productSuppliers: s.productSuppliers || [],
   }))
 
   const availableSuppliers = mappedSuppliers.filter((supplier) => supplier.isActive)
@@ -123,6 +139,17 @@ export function QuotationsTab() {
     }
     if (quotationItems.length === 0) {
       toast.error("Agrega al menos un producto a la solicitud")
+      return
+    }
+
+    // Verificar si algunos proveedores seleccionados no tienen email configurado
+    const suppliersMissingEmail = (selectedSuppliers || [])
+      .map((id) => (apiSuppliers || []).find((s: any) => s.id === id))
+      .filter((s: any) => !s || !s.email)
+
+    if (suppliersMissingEmail.length > 0) {
+      const names = suppliersMissingEmail.map((s: any) => s?.name || s?.businessName || 'Proveedor').join(', ')
+      toast.error(`Los siguientes proveedores no tienen email configurado: ${names}`)
       return
     }
 
@@ -150,6 +177,54 @@ export function QuotationsTab() {
       toast.dismiss()
       console.error(err)
       toast.error(err?.message || "Error creando cotización")
+    }
+  }
+
+  const handleApprove = async (quotation: any) => {
+    const supplierId = quotation.winningSupplierId
+    if (!supplierId) {
+      toast.error("Selecciona primero el proveedor ganador desde la comparación")
+      return
+    }
+
+    try {
+      toast.loading("Aprobando cotización...")
+      const res = await fetch(`/api/quotations/${quotation.id}/winner/${supplierId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      })
+      const data = await res.json()
+      toast.dismiss()
+      if (!res.ok) {
+        throw new Error(data?.message || 'Error aprobando cotización')
+      }
+      toast.success("Cotización aprobada")
+      refreshQuotations()
+    } catch (err: any) {
+      toast.dismiss()
+      console.error(err)
+      toast.error(err?.message || "Error al aprobar cotización")
+    }
+  }
+
+  const handleDeny = async (quotation: any) => {
+    try {
+      toast.loading("Cancelando cotización...")
+      const res = await fetch(`/api/quotations/${quotation.id}/cancel`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      })
+      const data = await res.json()
+      toast.dismiss()
+      if (!res.ok) {
+        throw new Error(data?.message || 'Error cancelando cotización')
+      }
+      toast.success("Cotización cancelada")
+      refreshQuotations()
+    } catch (err: any) {
+      toast.dismiss()
+      console.error(err)
+      toast.error(err?.message || "Error al cancelar cotización")
     }
   }
 
@@ -239,6 +314,31 @@ export function QuotationsTab() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
+                          {/* Quick actions: Approve / Deny */}
+                          {quotation.status !== 'cerrada' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                if (quotation.winningSupplierId) {
+                                  setConfirming({ type: 'approve', quotation })
+                                } else {
+                                  // No winning supplier selected yet — guide user to view details
+                                  setSelectedQuotation(quotation)
+                                  toast.info('Selecciona al proveedor ganador en Ver antes de aprobar')
+                                }
+                              }}
+                              className="mr-2"
+                              aria-label="Aprobar"
+                            >
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                            </Button>
+                          )}
+                          {quotation.status !== 'cancelada' && (
+                            <Button variant="ghost" size="icon" onClick={() => setConfirming({ type: 'deny', quotation })} className="mr-2" aria-label="Denegar">
+                              <X className="h-4 w-4 text-red-600" />
+                            </Button>
+                          )}
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button 
@@ -336,7 +436,7 @@ export function QuotationsTab() {
                                               ) : null}
                                               <TableCell>
                                                 <div className="flex items-center gap-2">
-                                                  <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                                  <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                                                   <span className="font-medium text-sm">{resp.supplier?.name}</span>
                                                 </div>
                                               </TableCell>
@@ -510,45 +610,64 @@ export function QuotationsTab() {
       {quotationItems.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Proveedores Disponibles</CardTitle>
+            <CardTitle>Proveedores Disponibles ({availableSuppliers.length})</CardTitle>
             <CardDescription>
-              Selecciona los proveedores a los que deseas enviar la solicitud de cotización
+              Solo se muestran los proveedores que tienen al menos uno de los productos seleccionados
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              {availableSuppliers.map((supplier) => (
-                <Card
-                  key={supplier.id}
-                  className={`cursor-pointer transition-all ${
-                    selectedSuppliers.includes(supplier.id) ? "border-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => toggleSupplier(supplier.id)}
-                >
-                  <CardContent className="flex items-start gap-4 p-4">
-                    <Checkbox checked={selectedSuppliers.includes(supplier.id)} />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Building2 className="h-4 w-4" />
+            {availableSuppliers.length === 0 ? (
+              <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No hay proveedores asociados a los productos seleccionados.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {availableSuppliers.map((supplier) => (
+                  <Card
+                    key={supplier.id}
+                    className={`cursor-pointer transition-all ${
+                      selectedSuppliers.includes(supplier.id) ? "border-primary bg-primary/5" : ""
+                    }`}
+                    onClick={() => toggleSupplier(supplier.id)}
+                  >
+                    <CardContent className="flex items-start gap-4 p-4">
+                      <Checkbox checked={selectedSuppliers.includes(supplier.id)} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Building2 className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{supplier.businessName}</p>
+                            <p className="text-xs text-muted-foreground">{supplier.code}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{supplier.businessName}</p>
-                          <p className="text-xs text-muted-foreground">{supplier.code}</p>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <p>{supplier.email}</p>
+                          <p>{supplier.phone}</p>
+                          <Badge variant="outline" className="mt-2">
+                            {supplier.businessType}
+                          </Badge>
                         </div>
+
+                        {supplier.productSuppliers?.length > 0 && (
+                          <div className="mt-3">
+                            <p className="mb-2 text-xs font-medium text-muted-foreground">Productos asociados</p>
+                            <div className="flex flex-wrap gap-2">
+                              {supplier.productSuppliers.map((ps: any) => (
+                                <Badge key={ps.id || ps.productId} variant="secondary" className="text-[10px]">
+                                  {ps.product?.name || ps.product?.sku || "Producto"}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>{supplier.email}</p>
-                        <p>{supplier.phone}</p>
-                        <Badge variant="outline" className="mt-2">
-                          {supplier.businessType}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
 
             {selectedSuppliers.length > 0 && (
               <Dialog>
@@ -583,13 +702,7 @@ export function QuotationsTab() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="validUntil">Válido Hasta</Label>
-                      <Input
-                        id="validUntil"
-                        type="date"
-                        value={validUntil}
-                        onChange={(e) => setValidUntil(e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
-                      />
+                      <DatePicker value={validUntil} onChange={(v) => setValidUntil(v)} />
                       <p className="text-xs text-muted-foreground">
                         Fecha límite para que los proveedores respondan
                       </p>
@@ -619,6 +732,36 @@ export function QuotationsTab() {
         </Card>
       )}
       </TabsContent>
+      <AlertDialog open={!!confirming.type} onOpenChange={() => setConfirming({ type: null, quotation: null })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirming.type === 'approve' ? 'Aprobar cotización' : 'Cancelar cotización'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming.type === 'approve'
+                ? '¿Confirmas aprobar esta cotización? Esta acción marcará la cotización como cerrada.'
+                : '¿Confirmas cancelar esta cotización? Esta acción la marcará como cancelada.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!confirming.quotation) return
+                if (confirming.type === 'approve') {
+                  handleApprove(confirming.quotation)
+                } else if (confirming.type === 'deny') {
+                  handleDeny(confirming.quotation)
+                }
+                setConfirming({ type: null, quotation: null })
+              }}
+            >
+              {confirming.type === 'approve' ? 'Aprobar' : 'Denegar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Tabs>
   )
 }

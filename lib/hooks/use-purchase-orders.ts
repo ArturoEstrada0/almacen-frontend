@@ -90,6 +90,16 @@ export async function registerPayment(orderId: string, data: {
   return ApiClient.postFormData<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.registerPayment(orderId), body)
 }
 
+export async function registerInvoice(orderId: string, data: {
+  invoiceDate: string
+  invoiceNumber?: string
+}) {
+  return ApiClient.patch<PurchaseOrder>(
+    API_ENDPOINTS.purchaseOrders.registerInvoice(orderId),
+    data,
+  )
+}
+
 export async function registerShipmentPayablePayment(entryId: string, data: {
   amount: number
   paymentMethod?: string

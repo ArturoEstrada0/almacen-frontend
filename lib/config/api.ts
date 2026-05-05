@@ -50,8 +50,23 @@ export const API_ENDPOINTS = {
 
   // Suppliers
   suppliers: {
-    list: (supplierType?: string) =>
-      `${API_BASE_URL}/api/suppliers${supplierType ? `?supplierType=${encodeURIComponent(supplierType)}` : ""}`,
+    list: (
+      params?: string | { supplierType?: string; productIds?: string[] },
+    ) => {
+      const searchParams = new URLSearchParams()
+
+      if (typeof params === "string") {
+        if (params) searchParams.set("supplierType", params)
+      } else if (params) {
+        if (params.supplierType) searchParams.set("supplierType", params.supplierType)
+        if (params.productIds && params.productIds.length > 0) {
+          searchParams.set("productIds", params.productIds.join(","))
+        }
+      }
+
+      const query = searchParams.toString()
+      return `${API_BASE_URL}/api/suppliers${query ? `?${query}` : ""}`
+    },
     get: (id: string) => `${API_BASE_URL}/api/suppliers/${id}`,
     create: () => `${API_BASE_URL}/api/suppliers`,
     update: (id: string) => `${API_BASE_URL}/api/suppliers/${id}`,
@@ -88,6 +103,7 @@ export const API_ENDPOINTS = {
     receive: (id: string, itemId: string) => `${API_BASE_URL}/api/purchase-orders/${id}/receive/${itemId}`,
     cancel: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/cancel`,
     registerPayment: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/payment`,
+    registerInvoice: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/invoice`,
     pending: () => `${API_BASE_URL}/api/purchase-orders/pending`,
     payments: () => `${API_BASE_URL}/api/purchase-orders/payments`,
   },

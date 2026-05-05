@@ -31,6 +31,7 @@ import {
   Loader2, 
   Mail, 
   CheckCircle2, 
+  Check,
   XCircle, 
   Clock, 
   Package, 
@@ -52,6 +53,7 @@ interface Quotation {
   validUntil: string
   notes?: string
   winningSupplierId?: string
+  purchaseOrderId?: string | null
   items: {
     id: string
     productId: string
@@ -191,6 +193,30 @@ export default function QuotationDetailPage() {
     }
   }
 
+  const handleApprove = async () => {
+    if (!quotation?.winningSupplierId) {
+      toast.error("Primero selecciona un proveedor ganador en la comparación")
+      return
+    }
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
+      const response = await fetch(`${apiUrl}/quotations/${quotationId}/winner/${quotation.winningSupplierId}`, {
+        method: "PATCH",
+      })
+
+      if (response.ok) {
+        toast.success("Cotización aprobada")
+        fetchQuotation()
+      } else {
+        const error = await response.json()
+        toast.error(error.message || "Error al aprobar la cotización")
+      }
+    } catch (error) {
+      toast.error("Error al aprobar la cotización")
+    }
+  }
+
   const handleCancel = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
@@ -225,6 +251,8 @@ export default function QuotationDetailPage() {
   const isExpired = new Date(quotation.validUntil) < new Date()
   const canSendEmails = !["cancelada", "cerrada"].includes(quotation.status)
   const hasResponses = quotation.supplierTokens?.some((t) => t.used)
+  const linkedPurchaseOrderUrl = quotation.purchaseOrderId ? `/purchase-orders/${quotation.purchaseOrderId}/edit` : null
+  const canApprove = !["cancelada", "cerrada"].includes(quotation.status) && Boolean(quotation.winningSupplierId)
 
   return (
     <div className="space-y-6">
@@ -252,6 +280,44 @@ export default function QuotationDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {canApprove && (
+            <Button onClick={handleApprove} variant="outline" className="text-green-700 border-green-200 hover:bg-green-50">
+              <Check className="mr-2 h-4 w-4" />
+              Aprobar
+            </Button>
+          )}
+          {canSendEmails && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Denegar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Denegar cotización?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción cancelará la cotización y los proveedores ya no podrán responder.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>No, mantener</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleCancel}>
+                    Sí, denegar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          {linkedPurchaseOrderUrl && (
+            <Link href={linkedPurchaseOrderUrl}>
+              <Button variant="outline">
+                <Package className="mr-2 h-4 w-4" />
+                Ver Orden de Compra
+              </Button>
+            </Link>
+          )}
           {hasResponses && (
             <Link href={`/quotations/${quotationId}/comparison`}>
               <Button variant="outline">
@@ -270,28 +336,6 @@ export default function QuotationDetailPage() {
                 )}
                 Enviar a Todos
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancelar
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>¿Cancelar cotización?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Esta acción no se puede deshacer. Los proveedores ya no podrán responder.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>No, mantener</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleCancel}>
-                      Sí, cancelar
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </>
           )}
         </div>

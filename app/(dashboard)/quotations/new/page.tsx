@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { mutate as globalMutate } from "swr"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +36,9 @@ interface Product {
     abbreviation: string
     name: string
   }
+  productSuppliers?: {
+    supplierId: string
+  }[]
 }
 
 interface Supplier {
@@ -141,6 +145,13 @@ export default function NewQuotationPage() {
     )
   }
 
+  const supplierFilteredProducts =
+    selectedSuppliers.length > 0
+      ? products.filter((product) =>
+          product.productSuppliers?.some((relation) => selectedSuppliers.includes(relation.supplierId)),
+        )
+      : products
+
   const handleSubmit = async () => {
     // Validaciones
     if (items.length === 0) {
@@ -183,6 +194,7 @@ export default function NewQuotationPage() {
       if (response.ok) {
         const quotation = await response.json()
         toast.success("Cotización creada exitosamente")
+        await globalMutate("quotations")
         router.push(`/quotations/${quotation.id}`)
       } else {
         const error = await response.json()
@@ -196,7 +208,7 @@ export default function NewQuotationPage() {
     }
   }
 
-  const filteredProducts = products.filter(
+  const filteredProducts = supplierFilteredProducts.filter(
     (product) =>
       product.name.toLowerCase().includes(productSearchValue.toLowerCase()) ||
       product.code.toLowerCase().includes(productSearchValue.toLowerCase())
@@ -320,7 +332,11 @@ export default function NewQuotationPage() {
                         onValueChange={setProductSearchValue}
                       />
                       <CommandList>
-                        <CommandEmpty>No se encontraron productos.</CommandEmpty>
+                        <CommandEmpty>
+                          {selectedSuppliers.length > 0
+                            ? "No hay productos asociados a los proveedores seleccionados"
+                            : "No se encontraron productos."}
+                        </CommandEmpty>
                         <CommandGroup>
                           {filteredProducts.slice(0, 10).map((product) => (
                             <CommandItem

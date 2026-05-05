@@ -42,6 +42,8 @@ type PayableRow = {
   amountPaid: number
   paymentStatus: "pendiente" | "parcial" | "pagado" | "vencido"
   documents?: Array<{ label: string; url: string }>
+  invoiceDate?: string | Date | null
+  invoiceNumber?: string | null
 }
 
 type AccountsPayableTabProps = {
@@ -80,6 +82,8 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
         total: Number(order.total || 0),
         amountPaid: Number((order as any).amountPaid || 0),
         paymentStatus: (order.paymentStatus as any) || "pendiente",
+        invoiceDate: order.invoiceDate || null,
+        invoiceNumber: order.invoiceNumber || null,
       }
     })
 
@@ -271,6 +275,7 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                     <TableHead>Proveedor / Transportista</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Fecha Vencimiento</TableHead>
+                    <TableHead>Fecha Factura</TableHead>
                     <TableHead>Días Crédito</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Estado</TableHead>
@@ -284,8 +289,9 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                       ? Math.ceil((new Date(row.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
                       : null
 
+                    const isPoWithoutInvoice = row.source === "purchase-order" && !row.invoiceDate
                     return (
-                      <TableRow key={`${row.source}-${row.id}`}>
+                      <TableRow key={`${row.source}-${row.id}`} className={isPoWithoutInvoice ? "bg-amber-50 dark:bg-amber-950/20" : ""}>
                         <TableCell className="font-mono font-medium">{row.orderNumber}</TableCell>
                         <TableCell>
                           <div>
@@ -309,6 +315,24 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                                 <p className="text-xs text-red-500">Vencido hace {Math.abs(daysUntilDue)} días</p>
                               )}
                             </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {row.source === "purchase-order" ? (
+                            <>
+                              {row.invoiceDate ? (
+                                <div className="text-sm">
+                                  <p className="font-medium">{new Date(row.invoiceDate).toLocaleDateString()}</p>
+                                  {row.invoiceNumber && <p className="text-xs text-muted-foreground">{row.invoiceNumber}</p>}
+                                </div>
+                              ) : (
+                                <span className="text-xs bg-amber-100 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 px-2 py-1 rounded">
+                                  Sin factura
+                                </span>
+                              )}
+                            </>
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
                           )}

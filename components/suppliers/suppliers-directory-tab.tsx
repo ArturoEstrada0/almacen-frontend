@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
-import { Search, Building2, Edit, Trash2, Mail, Phone, Send, Eye } from "lucide-react"
+import { Search, Building2, Edit, Trash2, Mail, Phone, Send, Eye, ChevronLeft, ChevronRight } from "lucide-react"
 import { updateSupplier, deleteSupplier } from "@/lib/hooks/use-suppliers"
 import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { useToast } from "@/hooks/use-toast"
@@ -34,6 +34,8 @@ export function SuppliersDirectoryTab() {
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null)
   const [emailSubject, setEmailSubject] = useState("")
   const [emailBody, setEmailBody] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const { suppliers: apiSuppliers, isLoading, isError, mutate } = useSuppliers(
     selectedSupplierType === "all" ? undefined : selectedSupplierType,
@@ -71,6 +73,18 @@ export function SuppliersDirectoryTab() {
       getSupplierTypeLabel(supplier.supplierType).toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredSuppliers.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedSuppliers = filteredSuppliers.slice(startIndex, startIndex + itemsPerPage)
+
+  // Reset to page 1 when filters change
+  const handleFilterChange = (searchValue: string, supplierTypeValue: string) => {
+    setSearchTerm(searchValue)
+    setSelectedSupplierType(supplierTypeValue)
+    setCurrentPage(1)
+  }
 
   const handleSendEmail = (supplierId: string) => {
     setSelectedSupplier(supplierId)
@@ -139,12 +153,12 @@ export function SuppliersDirectoryTab() {
               <Input
                 placeholder="Buscar por nombre, código, RFC o tipo..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleFilterChange(e.target.value, selectedSupplierType)}
                 className="pl-9"
               />
             </div>
             <div>
-              <Select value={selectedSupplierType} onValueChange={setSelectedSupplierType}>
+              <Select value={selectedSupplierType} onValueChange={(value) => handleFilterChange(searchTerm, value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Filtrar por tipo" />
                 </SelectTrigger>
@@ -297,7 +311,7 @@ export function SuppliersDirectoryTab() {
           <CardHeader>
           <CardTitle>Directorio de Proveedores</CardTitle>
           <CardDescription>
-            {isLoading ? "Cargando proveedores..." : `${filteredSuppliers.length} proveedor${filteredSuppliers.length !== 1 ? "es" : ""} encontrado${filteredSuppliers.length !== 1 ? "s" : ""}`}
+            {isLoading ? "Cargando proveedores..." : `${filteredSuppliers.length} proveedor${filteredSuppliers.length !== 1 ? "es" : ""} encontrado${filteredSuppliers.length !== 1 ? "s" : ""} • Página ${currentPage} de ${totalPages || 1}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -305,144 +319,179 @@ export function SuppliersDirectoryTab() {
             <div className="flex items-center justify-center py-16">
               <Spinner2 />
             </div>
+          ) : filteredSuppliers.length === 0 ? (
+            <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No se encontraron proveedores con los filtros seleccionados.
+            </div>
           ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Razón Social</TableHead>
-                <TableHead>RFC</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Giro</TableHead>
-                <TableHead>Contacto</TableHead>
-                <TableHead>Crédito</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isError ? (
+          <>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-sm text-destructive">Error al cargar proveedores</TableCell>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Razón Social</TableHead>
+                  <TableHead>RFC</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Giro</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead>Crédito</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ) : (
-                filteredSuppliers.map((supplier) => (
-                <TableRow key={supplier.id}>
-                  <TableCell className="font-mono text-sm">{supplier.code}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Building2 className="h-5 w-5" />
+              </TableHeader>
+              <TableBody>
+                {isError ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-sm text-destructive">Error al cargar proveedores</TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedSuppliers.map((supplier) => (
+                  <TableRow key={supplier.id}>
+                    <TableCell className="font-mono text-sm">{supplier.code}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <Building2 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{supplier.businessName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {supplier.city}, {supplier.state}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium">{supplier.businessName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {supplier.city}, {supplier.state}
-                        </p>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">{supplier.rfc}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{getSupplierTypeLabel(supplier.supplierType)}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{supplier.businessType}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {supplier.contactName && <p className="text-sm font-medium">{supplier.contactName}</p>}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          {supplier.phone}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Mail className="h-3 w-3" />
+                          {supplier.email}
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{supplier.rfc}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{getSupplierTypeLabel(supplier.supplierType)}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{supplier.businessType}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {supplier.contactName && <p className="text-sm font-medium">{supplier.contactName}</p>}
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Phone className="h-3 w-3" />
-                        {supplier.phone}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Mail className="h-3 w-3" />
-                        {supplier.email}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{supplier.creditDays} días</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={supplier.isActive ? "default" : "secondary"}>
-                      {supplier.isActive ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Dialog>
-                        {/*<DialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleSendEmail(supplier.id)}
-                            title="Enviar correo"
-                          >
-                            <Send className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>*/}
-                        
-                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>Enviar Correo a {supplier.businessName}</DialogTitle>
-                            <DialogDescription>Para: {supplier.email}</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="subject">Asunto</Label>
-                              <Input
-                                id="subject"
-                                value={emailSubject}
-                                onChange={(e) => setEmailSubject(e.target.value)}
-                                placeholder="Asunto del correo"
-                              />
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{supplier.creditDays} días</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={supplier.isActive ? "default" : "secondary"}>
+                        {supplier.isActive ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Dialog>
+                          {/*<DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleSendEmail(supplier.id)}
+                              title="Enviar correo"
+                            >
+                              <Send className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>*/}
+                          
+                          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Enviar Correo a {supplier.businessName}</DialogTitle>
+                              <DialogDescription>Para: {supplier.email}</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="subject">Asunto</Label>
+                                <Input
+                                  id="subject"
+                                  value={emailSubject}
+                                  onChange={(e) => setEmailSubject(e.target.value)}
+                                  placeholder="Asunto del correo"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="body">Mensaje</Label>
+                                <Textarea
+                                  id="body"
+                                  value={emailBody}
+                                  onChange={(e) => setEmailBody(e.target.value)}
+                                  placeholder="Escribe tu mensaje aquí..."
+                                  rows={10}
+                                />
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button variant="outline">Cancelar</Button>
+                                <Button>
+                                  <Send className="mr-2 h-4 w-4" />
+                                  Enviar Correo
+                                </Button>
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="body">Mensaje</Label>
-                              <Textarea
-                                id="body"
-                                value={emailBody}
-                                onChange={(e) => setEmailBody(e.target.value)}
-                                placeholder="Escribe tu mensaje aquí..."
-                                rows={10}
-                              />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline">Cancelar</Button>
-                              <Button>
-                                <Send className="mr-2 h-4 w-4" />
-                                Enviar Correo
-                              </Button>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                          </DialogContent>
+                        </Dialog>
 
-                      {/* View details button */}
-                      <Button variant="ghost" size="icon" onClick={() => { setDetailsSupplier(supplier); setDetailsDialogOpen(true) }} title="Ver detalles">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <ProtectedUpdate module="suppliers">
-                        <Button asChild variant="ghost" size="icon">
-                          <Link href={`/suppliers/${supplier.id}/edit`} title="Editar proveedor">
-                            <Edit className="h-4 w-4" />
-                          </Link>
+                        {/* View details button */}
+                        <Button variant="ghost" size="icon" onClick={() => { setDetailsSupplier(supplier); setDetailsDialogOpen(true) }} title="Ver detalles">
+                          <Eye className="h-4 w-4" />
                         </Button>
-                      </ProtectedUpdate>
-                      <ProtectedDelete module="suppliers">
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(supplier.id)} title="Eliminar proveedor">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </ProtectedDelete>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                        <ProtectedUpdate module="suppliers">
+                          <Button asChild variant="ghost" size="icon">
+                            <Link href={`/suppliers/${supplier.id}/edit`} title="Editar proveedor">
+                              <Edit className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </ProtectedUpdate>
+                        <ProtectedDelete module="suppliers">
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(supplier.id)} title="Eliminar proveedor">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </ProtectedDelete>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-between border-t pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, filteredSuppliers.length)} de {filteredSuppliers.length}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
           )}
         </CardContent>
       </Card>
