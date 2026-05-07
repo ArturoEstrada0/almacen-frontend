@@ -14,7 +14,7 @@ import {
 } from "@/lib/hooks/use-purchase-orders"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { formatCurrency } from "@/lib/utils/format"
-import { Search, DollarSign, AlertCircle, Calendar } from "lucide-react"
+import { Search, DollarSign, AlertCircle, Calendar, FileText } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -55,7 +55,9 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
   const [selectedPayableId, setSelectedPayableId] = useState<string | null>(null)
+  const [selectedInvoicePayableId, setSelectedInvoicePayableId] = useState<string | null>(null)
   const [paymentAmount, setPaymentAmount] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("")
   const [paymentReference, setPaymentReference] = useState("")
@@ -138,7 +140,13 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
     setPaymentNotes("")
   }
 
+  const handleViewInvoice = (payableId: string) => {
+    setSelectedInvoicePayableId(payableId)
+    setInvoiceDialogOpen(true)
+  }
+
   const selectedPayable = selectedPayableId ? filteredOrders.find((row) => row.id === selectedPayableId) || payableRows.find((row) => row.id === selectedPayableId) : null
+  const selectedInvoicePayable = selectedInvoicePayableId ? filteredOrders.find((row) => row.id === selectedInvoicePayableId) || payableRows.find((row) => row.id === selectedInvoicePayableId) : null
 
   const handleCompletePayment = async () => {
     if (!selectedPayable || !paymentAmount || Number(paymentAmount) <= 0) {
@@ -345,12 +353,20 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <ProtectedUpdate module="purchaseOrders">
-                            <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(row.id, row.supplierId)}>
-                              <DollarSign className="mr-2 h-4 w-4" />
-                              Registrar Pago
-                            </Button>
-                          </ProtectedUpdate>
+                          <div className="flex justify-end gap-2">
+                            {(row.documents?.length || row.invoiceDate) && (
+                              <Button variant="outline" size="sm" onClick={() => handleViewInvoice(row.id)}>
+                                <FileText className="mr-2 h-4 w-4" />
+                                Ver Factura
+                              </Button>
+                            )}
+                            <ProtectedUpdate module="purchaseOrders">
+                              <Button variant="outline" size="sm" onClick={() => handleRegisterPayment(row.id, row.supplierId)}>
+                                <DollarSign className="mr-2 h-4 w-4" />
+                                Registrar Pago
+                              </Button>
+                            </ProtectedUpdate>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
@@ -362,6 +378,59 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Factura</DialogTitle>
+            <DialogDescription>
+              Documentos de {selectedInvoicePayable?.source === "shipment" ? "embarque" : "factura"} para {selectedInvoicePayable?.orderNumber}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedInvoicePayable && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Proveedor / Transportista</Label>
+                  <p className="font-medium">{selectedInvoicePayable.supplierName}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Referencia</Label>
+                  <p className="font-medium">{selectedInvoicePayable.orderNumber}</p>
+                </div>
+                {selectedInvoicePayable.source === "purchase-order" && selectedInvoicePayable.invoiceDate && (
+                  <>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Fecha de Factura</Label>
+                      <p className="font-medium">{new Date(selectedInvoicePayable.invoiceDate).toLocaleDateString()}</p>
+                    </div>
+                    {selectedInvoicePayable.invoiceNumber && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Número de Factura</Label>
+                        <p className="font-medium">{selectedInvoicePayable.invoiceNumber}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {selectedInvoicePayable.documents && selectedInvoicePayable.documents.length > 0 ? (
+                <PayableDocumentsList documents={selectedInvoicePayable.documents} />
+              ) : (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20 p-4">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">No hay documentos disponibles para esta factura</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setInvoiceDialogOpen(false)}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
         <DialogContent>

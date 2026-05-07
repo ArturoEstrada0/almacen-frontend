@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge"
 import { useSuppliersWithFilters } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { createQuotation, useQuotations } from "@/lib/hooks/use-quotations"
+import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { toast } from "@/lib/utils/toast"
-import { Plus, Trash2, Send, Building2, Package, Eye, RefreshCw, FileText, Clock, CheckCircle, Mail, X } from "lucide-react"
+import { Plus, Trash2, Send, Building2, Package, Eye, RefreshCw, FileText, Clock, Mail, CheckCircle } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -25,16 +26,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -50,6 +41,7 @@ interface QuotationItem {
 const statusLabels: Record<string, string> = {
   borrador: "Borrador",
   pendiente: "Pendiente",
+  pendiente_ganador: "Pendiente de ganador",
   enviada: "Enviada",
   parcial: "Parcial",
   completada: "Completada",
@@ -60,6 +52,7 @@ const statusLabels: Record<string, string> = {
 const statusColors: Record<string, string> = {
   borrador: "bg-gray-100 text-gray-800",
   pendiente: "bg-yellow-100 text-yellow-800",
+  pendiente_ganador: "bg-amber-100 text-amber-800",
   enviada: "bg-blue-100 text-blue-800",
   parcial: "bg-orange-100 text-orange-800",
   completada: "bg-green-100 text-green-800",
@@ -73,17 +66,63 @@ export function QuotationsTab() {
   const [quantity, setQuantity] = useState("")
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([])
   const [emailMessage, setEmailMessage] = useState("")
+  const toDateOnlyString = (value: Date) => {
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, "0")
+    const day = String(value.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
   const [validUntil, setValidUntil] = useState(() => {
-    // Por defecto, 7 días a partir de hoy
+    // Por defecto, 7 días a partir de hoy (fecha local, sin UTC)
     const date = new Date()
     date.setDate(date.getDate() + 7)
-    return date.toISOString().split('T')[0]
+    return toDateOnlyString(date)
   })
   const [selectedQuotation, setSelectedQuotation] = useState<any>(null)
-  const [confirming, setConfirming] = useState<{ type: 'approve' | 'deny' | null; quotation: any | null }>({ type: null, quotation: null })
+  const [selectingWinnerFor, setSelectingWinnerFor] = useState<string | null>(null)
+  
+  // Estados para búsqueda, filtro y paginación
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   
   // Hook para obtener cotizaciones existentes
   const { quotations, isLoading: quotationsLoading, mutate: refreshQuotations } = useQuotations()
+
+  // Funciones helper - definidas antes de usarlas
+  const formatDate = (dateStr: any) => {
+    if (!dateStr) return "-"
+    try {
+      // Para columnas DATE (YYYY-MM-DD), construir fecha local para evitar desfase UTC
+      const match = String(dateStr).match(/^\d{4}-\d{2}-\d{2}$/)
+      if (match) {
+        const parts = dateStr.split("-")
+        const parsed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+        return format(parsed, "dd MMM yyyy", { locale: es })
+      }
+      // Para timestamps, mostrar en UTC para mantener referencia del servidor
+      const parsed = new Date(dateStr)
+      return format(parsed, "dd MMM yyyy", { locale: es })
+    } catch {
+      return dateStr
+    }
+  }
+
+  const getQuotationDisplayStatus = (quotation: any) => {
+    if (!quotation) return "borrador"
+    if (quotation.status === "completada" && !quotation.winningSupplierId) {
+      return "pendiente_ganador"
+    }
+    return quotation.status
+  }
+
+  const canSelectWinner = (quotation: any) => {
+    if (!quotation) return false
+    if (["cerrada", "cancelada"].includes(String(quotation.status || "").toLowerCase())) return false
+    return !quotation.winningSupplierId
+  }
 
   const addQuotationItem = () => {
     if (selectedProduct && quantity) {
@@ -103,6 +142,65 @@ export function QuotationsTab() {
   const removeQuotationItem = (id: string) => {
     setQuotationItems(quotationItems.filter((item) => item.id !== id))
   }
+
+  // Función para buscar en cotizaciones
+  const filterAndSearchQuotations = () => {
+    let filtered = quotations
+
+    // Filtro por estado
+    if (selectedStatuses.length > 0) {
+      filtered = filtered.filter((q: any) => {
+        const displayStatus = getQuotationDisplayStatus(q)
+        return selectedStatuses.includes(displayStatus)
+      })
+    }
+
+    // Búsqueda por texto
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter((quotation: any) => {
+        // Buscar en código de cotización
+        if (quotation.code?.toLowerCase().includes(query)) return true
+
+        // Buscar en productos
+        if (
+          quotation.items?.some((item: any) =>
+            item.product?.name?.toLowerCase().includes(query) ||
+            item.product?.sku?.toLowerCase().includes(query)
+          )
+        )
+          return true
+
+        // Buscar en proveedores (nombre, código, RFC, email)
+        if (
+          quotation.supplierTokens?.some((token: any) => {
+            const supplier = token.supplier
+            return (
+              supplier?.name?.toLowerCase().includes(query) ||
+              supplier?.code?.toLowerCase().includes(query) ||
+              supplier?.rfc?.toLowerCase().includes(query) ||
+              supplier?.email?.toLowerCase().includes(query)
+            )
+          })
+        )
+          return true
+
+        return false
+      })
+    }
+
+    return filtered
+  }
+
+  const filteredQuotations = filterAndSearchQuotations()
+  const totalPages = Math.ceil(filteredQuotations.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedQuotations = filteredQuotations.slice(startIndex, startIndex + itemsPerPage)
+
+  // Resetear a página 1 cuando cambia búsqueda o filtros
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedStatuses])
 
   const { products } = useProducts()
   const selectedProductIds = Array.from(new Set(quotationItems.map((item) => item.productId)))
@@ -180,59 +278,20 @@ export function QuotationsTab() {
     }
   }
 
-  const handleApprove = async (quotation: any) => {
-    const supplierId = quotation.winningSupplierId
-    if (!supplierId) {
-      toast.error("Selecciona primero el proveedor ganador desde la comparación")
-      return
-    }
-
+  const handleSelectWinner = async (quotation: any, supplierId: string, supplierName: string) => {
+    setSelectingWinnerFor(`${quotation.id}:${supplierId}`)
     try {
-      toast.loading("Aprobando cotización...")
-      const res = await fetch(`/api/quotations/${quotation.id}/winner/${supplierId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-      })
-      const data = await res.json()
-      toast.dismiss()
-      if (!res.ok) {
-        throw new Error(data?.message || 'Error aprobando cotización')
-      }
-      toast.success("Cotización aprobada")
-      refreshQuotations()
-    } catch (err: any) {
-      toast.dismiss()
-      console.error(err)
-      toast.error(err?.message || "Error al aprobar cotización")
-    }
-  }
+      await ApiClient.patch(
+        API_ENDPOINTS.quotations.markWinner(quotation.id, supplierId),
+        {},
+      )
 
-  const handleDeny = async (quotation: any) => {
-    try {
-      toast.loading("Cancelando cotización...")
-      const res = await fetch(`/api/quotations/${quotation.id}/cancel`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-      })
-      const data = await res.json()
-      toast.dismiss()
-      if (!res.ok) {
-        throw new Error(data?.message || 'Error cancelando cotización')
-      }
-      toast.success("Cotización cancelada")
-      refreshQuotations()
-    } catch (err: any) {
-      toast.dismiss()
-      console.error(err)
-      toast.error(err?.message || "Error al cancelar cotización")
-    }
-  }
-
-  const formatDate = (dateStr: string) => {
-    try {
-      return format(new Date(dateStr), "dd MMM yyyy", { locale: es })
-    } catch {
-      return dateStr
+      toast.success(`${supplierName} seleccionado como proveedor ganador`)
+      await refreshQuotations()
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo seleccionar proveedor ganador")
+    } finally {
+      setSelectingWinnerFor(null)
     }
   }
 
@@ -272,6 +331,66 @@ export function QuotationsTab() {
                 No hay cotizaciones. Crea una nueva en la pestaña "Nueva Cotización".
               </div>
             ) : (
+              <div className="space-y-4">
+                {/* Barra de búsqueda y filtros */}
+                <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {/* Buscador */}
+                    <div className="md:col-span-2">
+                      <Label htmlFor="search" className="mb-2 block">Buscar</Label>
+                      <Input
+                        id="search"
+                        placeholder="Buscar por código, productos, proveedor, RFC, email..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                    {/* Filtro de estados */}
+                    <div>
+                      <Label htmlFor="status-filter" className="mb-2 block">Estado</Label>
+                      <Select
+                        value={selectedStatuses.length === 0 ? "all" : selectedStatuses[0]}
+                        onValueChange={(value) => {
+                          if (value === "all") {
+                            setSelectedStatuses([])
+                          } else {
+                            setSelectedStatuses([value])
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="status-filter">
+                          <SelectValue placeholder="Todos los estados" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los estados</SelectItem>
+                          {Object.keys(statusLabels).map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {statusLabels[status]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {/* Información de resultados */}
+                  <div className="text-sm text-muted-foreground">
+                    Mostrando {paginatedQuotations.length === 0 && filteredQuotations.length === 0 ? 0 : startIndex + 1} -{" "}
+                    {Math.min(startIndex + itemsPerPage, filteredQuotations.length)} de {filteredQuotations.length} cotizaciones
+                    {filteredQuotations.length < quotations.length && (
+                      <span> (filtradas de {quotations.length})</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tabla de cotizaciones */}
+                {paginatedQuotations.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground rounded-md border p-4">
+                    {filteredQuotations.length === 0 && quotations.length > 0
+                      ? "No hay cotizaciones que coincidan con tu búsqueda o filtros."
+                      : "No hay cotizaciones disponibles."}
+                  </div>
+                ) : (
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
@@ -286,7 +405,10 @@ export function QuotationsTab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {quotations.map((quotation: any) => (
+                    {paginatedQuotations.map((quotation: any) => {
+                      const displayStatus = getQuotationDisplayStatus(quotation)
+
+                      return (
                       <TableRow key={quotation.id}>
                         <TableCell className="font-mono font-medium">{quotation.code}</TableCell>
                         <TableCell>{formatDate(quotation.date)}</TableCell>
@@ -309,36 +431,11 @@ export function QuotationsTab() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={statusColors[quotation.status] || "bg-gray-100"}>
-                            {statusLabels[quotation.status] || quotation.status}
+                          <Badge className={statusColors[displayStatus] || "bg-gray-100"}>
+                            {statusLabels[displayStatus] || displayStatus}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {/* Quick actions: Approve / Deny */}
-                          {quotation.status !== 'cerrada' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                if (quotation.winningSupplierId) {
-                                  setConfirming({ type: 'approve', quotation })
-                                } else {
-                                  // No winning supplier selected yet — guide user to view details
-                                  setSelectedQuotation(quotation)
-                                  toast.info('Selecciona al proveedor ganador en Ver antes de aprobar')
-                                }
-                              }}
-                              className="mr-2"
-                              aria-label="Aprobar"
-                            >
-                              <CheckCircle className="h-4 w-4 text-green-600" />
-                            </Button>
-                          )}
-                          {quotation.status !== 'cancelada' && (
-                            <Button variant="ghost" size="icon" onClick={() => setConfirming({ type: 'deny', quotation })} className="mr-2" aria-label="Denegar">
-                              <X className="h-4 w-4 text-red-600" />
-                            </Button>
-                          )}
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button 
@@ -356,14 +453,14 @@ export function QuotationsTab() {
                                   <div>
                                     <DialogTitle className="text-xl">Cotización {quotation.code}</DialogTitle>
                                     <DialogDescription className="mt-1">
-                                      Creada el {formatDate(quotation.createdAt || quotation.date)}
+                                      Creada el {formatDate(quotation.date || quotation.createdAt)}
                                       {quotation.validUntil && (
                                         <span className="ml-2">• Válida hasta {formatDate(quotation.validUntil)}</span>
                                       )}
                                     </DialogDescription>
                                   </div>
-                                  <Badge className={`${statusColors[quotation.status] || "bg-gray-100"} ml-4`}>
-                                    {statusLabels[quotation.status] || quotation.status}
+                                  <Badge className={`${statusColors[displayStatus] || "bg-gray-100"} ml-4`}>
+                                    {statusLabels[displayStatus] || displayStatus}
                                   </Badge>
                                 </div>
                               </DialogHeader>
@@ -491,6 +588,11 @@ export function QuotationsTab() {
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                          {quotation.winningSupplierId === token.supplierId && (
+                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                              Ganador
+                                            </Badge>
+                                          )}
                                           {token.emailSent ? (
                                             <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                               <Mail className="mr-1 h-3 w-3" />
@@ -508,6 +610,15 @@ export function QuotationsTab() {
                                               Respondió
                                             </Badge>
                                           )}
+                                          {canSelectWinner(quotation) && token.used && (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => handleSelectWinner(quotation, token.supplierId, token.supplier?.name || "Proveedor")}
+                                              disabled={selectingWinnerFor === `${quotation.id}:${token.supplierId}`}
+                                            >
+                                              {selectingWinnerFor === `${quotation.id}:${token.supplierId}` ? "Seleccionando..." : "Elegir ganador"}
+                                            </Button>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
@@ -518,9 +629,70 @@ export function QuotationsTab() {
                           </Dialog>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )})}
                   </TableBody>
                 </Table>
+              </div>
+                )}
+
+                {/* Controles de paginación */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 mt-4 p-4 border rounded-lg bg-muted/30">
+                    <div className="text-sm text-muted-foreground">
+                      Página {currentPage} de {totalPages}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Anterior
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {/* Números de página */}
+                        {Array.from({ length: totalPages }).map((_, idx) => {
+                          const page = idx + 1
+                          const isNearCurrent =
+                            page === currentPage || Math.abs(page - currentPage) <= 1
+                          const isEndPage = page === 1 || page === totalPages
+
+                          if (!isNearCurrent && !isEndPage) {
+                            if (page === 2 || page === totalPages - 1) {
+                              return (
+                                <span key={page} className="text-muted-foreground">
+                                  ...
+                                </span>
+                              )
+                            }
+                            return null
+                          }
+
+                          return (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setCurrentPage(page)}
+                              className="h-8 w-8 p-0"
+                            >
+                              {page}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -732,36 +904,6 @@ export function QuotationsTab() {
         </Card>
       )}
       </TabsContent>
-      <AlertDialog open={!!confirming.type} onOpenChange={() => setConfirming({ type: null, quotation: null })}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirming.type === 'approve' ? 'Aprobar cotización' : 'Cancelar cotización'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirming.type === 'approve'
-                ? '¿Confirmas aprobar esta cotización? Esta acción marcará la cotización como cerrada.'
-                : '¿Confirmas cancelar esta cotización? Esta acción la marcará como cancelada.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (!confirming.quotation) return
-                if (confirming.type === 'approve') {
-                  handleApprove(confirming.quotation)
-                } else if (confirming.type === 'deny') {
-                  handleDeny(confirming.quotation)
-                }
-                setConfirming({ type: null, quotation: null })
-              }}
-            >
-              {confirming.type === 'approve' ? 'Aprobar' : 'Denegar'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Tabs>
   )
 }

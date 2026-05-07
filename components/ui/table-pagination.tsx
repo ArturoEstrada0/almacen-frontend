@@ -12,6 +12,7 @@ export interface TablePaginationProps {
   onPageChange: (page: number) => void
   onPageSizeChange: (size: number) => void
   pageSizeOptions?: number[]
+  showTopRightControls?: boolean
 }
 
 export function TablePagination({
@@ -21,13 +22,59 @@ export function TablePagination({
   onPageChange,
   onPageSizeChange,
   pageSizeOptions = [20, 50, 100],
+  showTopRightControls = false,
 }: TablePaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const endItem = Math.min(currentPage * pageSize, totalItems)
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-2">
+    <div className="space-y-3 py-4 px-2">
+      {showTopRightControls && (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onPageChange(1)}
+            disabled={currentPage <= 1}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm mx-2 min-w-20 text-center">
+            {currentPage} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage >= totalPages}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span>Mostrando</span>
         <span className="font-medium text-foreground">{startItem}</span>
@@ -98,6 +145,7 @@ export function TablePagination({
             <ChevronsRight className="h-4 w-4" />
           </Button>
         </div>
+      </div>
       </div>
     </div>
   )

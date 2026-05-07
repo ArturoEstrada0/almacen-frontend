@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,7 +15,7 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { useMovements } from "@/lib/hooks/use-inventory"
 import { formatCurrency } from "@/lib/utils/format"
 import { useCurrentUser } from "@/lib/hooks/use-users"
-import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2 } from "lucide-react"
+import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -40,6 +41,14 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({})
+  const [receiveInvoiceDate, setReceiveInvoiceDate] = useState<string>(() => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, "0")
+    const day = String(today.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  })
+  const [receiveInvoiceNumber, setReceiveInvoiceNumber] = useState<string>("")
   const [isReceivingLoading, setIsReceivingLoading] = useState(false)
 
   const [detailsOrderId, setDetailsOrderId] = useState<string | null>(null)
@@ -71,6 +80,49 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString()
   }
 
+  const parseDateOnly = (value?: string | Date | null): Date | null => {
+    if (!value) return null
+
+    if (typeof value === "string") {
+      const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (m) {
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      }
+    }
+
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return null
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  }
+
+  const toIsoDateOnly = (value?: string | Date | null): string => {
+    const parsed = parseDateOnly(value)
+    if (!parsed) return new Date().toISOString().split("T")[0]
+
+    const year = parsed.getFullYear()
+    const month = String(parsed.getMonth() + 1).padStart(2, "0")
+    const day = String(parsed.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  const getDaysUntilDueText = (dueDateValue?: string | Date | null) => {
+    const dueDate = parseDateOnly(dueDateValue)
+    if (!dueDate) return "Vence: -"
+
+    const today = new Date()
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const diffMs = dueDate.getTime() - todayDate.getTime()
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 0) {
+      return `Venció hace ${Math.abs(diffDays)} día${Math.abs(diffDays) === 1 ? "" : "s"}`
+    }
+    if (diffDays === 0) {
+      return "Vence hoy"
+    }
+    return `Faltan ${diffDays} día${diffDays === 1 ? "" : "s"}`
+  }
+
   const filteredOrders = (purchaseOrders || []).filter((order) => {
     const term = searchTerm.toLowerCase().trim()
     const supplierObj = suppliers.find((s) => s.id === order.supplierId)
@@ -100,7 +152,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     return matchesSearch && matchesStatus && matchesPayment && matchesDateRange
   })
 
-  const { pagedItems: pagedOrders, paginationProps } = usePagination(filteredOrders, 20)
+  const { pagedItems: pagedOrders, paginationProps, totalPages } = usePagination(filteredOrders, 20)
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -133,7 +185,14 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   }
 
   const handleReceiveOrder = (orderId: string) => {
+    const today = new Date()
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+    const currentOrder = purchaseOrders.find((o) => o.id === orderId)
+    const existingInvoiceDate = currentOrder?.invoiceDate ? toIsoDateOnly(currentOrder.invoiceDate) : todayIso
+
     setSelectedOrder(orderId)
+    setReceiveInvoiceDate(existingInvoiceDate)
+    setReceiveInvoiceNumber(currentOrder?.invoiceNumber || "")
     setReceiveDialogOpen(true)
   }
 
@@ -149,7 +208,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       for (const item of order.items) {
         const qty = receiveQuantities[item.id] ?? Math.max(0, item.quantity - item.receivedQuantity)
         if (qty > 0) {
-          await receivePurchaseOrder(order.id, item.id, qty, userName)
+          await receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber)
         }
       }
 
@@ -160,6 +219,9 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       setReceiveDialogOpen(false)
       setSelectedOrder(null)
       setReceiveQuantities({})
+      const today = new Date()
+      setReceiveInvoiceDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`)
+      setReceiveInvoiceNumber("")
     } catch (e: any) {
       toast.error(e?.message || "Error al registrar la recepción")
     } finally {
@@ -248,12 +310,55 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Órdenes de Compra</CardTitle>
-          <CardDescription>
-            {filteredOrders.length} orden{filteredOrders.length !== 1 ? "es" : ""} encontrada
-            {filteredOrders.length !== 1 ? "s" : ""}
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Órdenes de Compra</CardTitle>
+            <CardDescription>
+              {filteredOrders.length} orden{filteredOrders.length !== 1 ? "es" : ""} encontrada
+              {filteredOrders.length !== 1 ? "s" : ""}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(1)}
+              disabled={paginationProps.currentPage <= 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(paginationProps.currentPage - 1)}
+              disabled={paginationProps.currentPage <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm mx-2 min-w-20 text-center">
+              {paginationProps.currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(paginationProps.currentPage + 1)}
+              disabled={paginationProps.currentPage >= totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(totalPages)}
+              disabled={paginationProps.currentPage >= totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -281,8 +386,10 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                     const editable = (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
                     const supplier = suppliers.find((s) => s.id === rowOrder.supplierId)
                     const warehouse = warehouses.find((w) => w.id === rowOrder.warehouseId)
-                    const dueDate = rowOrder.dueDate ? new Date(rowOrder.dueDate) : null
-                    const isOverdue = rowOrder.paymentStatus === "pendiente" && dueDate && new Date() > dueDate
+                    const dueDate = parseDateOnly(rowOrder.dueDate as any)
+                    const today = new Date()
+                    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                    const isOverdue = rowOrder.paymentStatus === "pendiente" && dueDate && todayDate > dueDate
 
                     return (
                       <TableRow key={rowOrder.id}>
@@ -311,7 +418,10 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                               {isOverdue ? "vencido" : rowOrder.paymentStatus}
                             </Badge>
                             {rowOrder.paymentStatus !== "pagado" && (
-                              <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
+                              <>
+                                <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
+                                <p className="text-xs text-muted-foreground">{getDaysUntilDueText(rowOrder.dueDate as any)}</p>
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -415,6 +525,22 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div>
+                <Label htmlFor="receive-invoice-date">Fecha de Facturación *</Label>
+                <DatePicker value={receiveInvoiceDate} onChange={setReceiveInvoiceDate} disabled={isReceivingLoading} />
+              </div>
+
+              <div>
+                <Label htmlFor="receive-invoice-number">Número de Factura</Label>
+                <Input
+                  id="receive-invoice-number"
+                  value={receiveInvoiceNumber}
+                  onChange={(e) => setReceiveInvoiceNumber(e.target.value)}
+                  placeholder="Opcional"
+                  disabled={isReceivingLoading}
+                />
+              </div>
+
+              <div>
                 <Label>Notas de Recepción</Label>
                 <Textarea placeholder="Observaciones sobre la recepción..." />
               </div>
@@ -423,7 +549,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                 <Button variant="outline" onClick={() => setReceiveDialogOpen(false)} disabled={isReceivingLoading}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCompleteReception} disabled={isReceivingLoading}>
+                <Button onClick={handleCompleteReception} disabled={isReceivingLoading || !receiveInvoiceDate}>
                   {isReceivingLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

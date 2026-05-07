@@ -43,5 +43,5 @@ export async function createQuotation(data: CreateQuotationData) {
 }
 
 export async function markQuotationWinner(id: string, supplierId: string) {
-  return ApiClient.post<Quotation>(API_ENDPOINTS.quotations.markWinner(id, supplierId), {})
+  return ApiClient.patch<Quotation>(API_ENDPOINTS.quotations.markWinner(id, supplierId), {})
 }

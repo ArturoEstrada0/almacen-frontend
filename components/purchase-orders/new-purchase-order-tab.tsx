@@ -43,7 +43,15 @@ interface QuotationOption {
   code: string
   status: string
   winningSupplierId?: string | null
+  validUntil?: string | null
   notes?: string | null
+  supplierTokens?: Array<{
+    supplierId: string
+    supplier?: {
+      id: string
+      name: string
+    }
+  }>
   items?: Array<{
     id: string
     productId: string
@@ -78,6 +86,7 @@ export function NewPurchaseOrderTab({
   const [items, setItems] = useState<PurchaseOrderItem[]>([])
   const [notes, setNotes] = useState("")
   const [selectedQuotationId, setSelectedQuotationId] = useState("")
+  const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<QuotationOption | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const infoCardRef = useRef<HTMLDivElement>(null)
 
@@ -149,15 +158,22 @@ export function NewPurchaseOrderTab({
   )
 
   const selectedQuotation = useMemo(
-    () => quotations.find((quotation) => quotation.id === selectedQuotationId),
-    [quotations, selectedQuotationId],
+    () => selectedQuotationDetail || quotations.find((quotation) => quotation.id === selectedQuotationId),
+    [quotations, selectedQuotationDetail, selectedQuotationId],
   )
 
   const eligibleQuotations = useMemo(
-    () => quotations.filter((quotation) => {
-      const isApproved = ["cerrada", "aprobada", "aceptada", "completada"].includes(String(quotation.status || "").toLowerCase())
-      return isApproved && (!supplierId || String(quotation.winningSupplierId || "") === String(supplierId))
-    }),
+    () => {
+      if (!supplierId) return []
+
+      return quotations.filter((quotation) => {
+        const isApproved = ["cerrada", "aprobada", "aceptada", "completada"].includes(String(quotation.status || "").toLowerCase())
+        const hasWinner = !!quotation.winningSupplierId
+        const matchesWinner = String(quotation.winningSupplierId || "") === String(supplierId)
+
+        return isApproved && hasWinner && matchesWinner
+      })
+    },
     [quotations, supplierId],
   )
 
@@ -223,15 +239,50 @@ export function NewPurchaseOrderTab({
   }, [mode, initialOrder])
 
   useEffect(() => {
+    if (mode !== "create" || !selectedQuotationId || !supplierId) {
+      setSelectedQuotationDetail(null)
+      return
+    }
+
+    let cancelled = false
+
+    const fetchQuotationDetail = async () => {
+      try {
+        const quotationDetail = await ApiClient.get<QuotationOption>(API_ENDPOINTS.quotations.get(selectedQuotationId))
+        if (!cancelled) {
+          setSelectedQuotationDetail(quotationDetail)
+        }
+      } catch (error) {
+        console.error("Error loading quotation detail:", error)
+        if (!cancelled) {
+          setSelectedQuotationDetail(null)
+        }
+      }
+    }
+
+    fetchQuotationDetail()
+
+    return () => {
+      cancelled = true
+    }
+  }, [mode, selectedQuotationId])
+
+  useEffect(() => {
     if (mode !== "create" || !selectedQuotation) return
 
     if (selectedQuotation.winningSupplierId && selectedQuotation.winningSupplierId !== supplierId) {
       setSupplierId(selectedQuotation.winningSupplierId)
     }
 
+    const quotationSupplierId =
+      selectedQuotation.winningSupplierId ||
+      supplierId ||
+      selectedQuotation.supplierTokens?.[0]?.supplierId ||
+      ""
+
     const quotationItems = (selectedQuotation.items || []).map((item) => {
       const response = (item.supplierResponses || []).find(
-        (r) => String(r.supplierId) === String(selectedQuotation.winningSupplierId) && r.available !== false,
+        (r) => String(r.supplierId) === String(quotationSupplierId) && r.available !== false,
       )
 
       return {
@@ -319,6 +370,7 @@ export function NewPurchaseOrderTab({
     if (value !== supplierId) {
       setItems([])
       setSelectedQuotationId("")
+      setSelectedQuotationDetail(null)
     }
     setSupplierId(value)
     const selectedSupplier = suppliers.find((s) => s.id === value)
@@ -328,6 +380,11 @@ export function NewPurchaseOrderTab({
   }
 
   const handleQuotationChange = (value: string) => {
+    if (!supplierId) {
+      toast.error("Primero selecciona un proveedor")
+      return
+    }
+
     setSelectedQuotationId(value)
     const quotation = quotations.find((item) => item.id === value)
     if (!quotation) return
@@ -408,14 +465,6 @@ export function NewPurchaseOrderTab({
                 value={creditDays}
                 onChange={(e) => setCreditDays(Number(e.target.value))}
               />
-              {expectedDeliveryDate && (
-                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs font-medium text-blue-900 dark:text-blue-100">Fecha de Vencimiento</p>
-                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mt-1">
-                    {new Date(new Date(expectedDeliveryDate).getTime() + creditDays * 24 * 60 * 60 * 1000).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
 
@@ -430,29 +479,32 @@ export function NewPurchaseOrderTab({
         </CardContent>
       </Card>
 
-      {mode === "create" ? (
+      {mode === "create" && (eligibleQuotations.length > 0 || selectedQuotationId) ? (
         <Card>
           <CardHeader>
             <CardTitle>Cotización vinculada</CardTitle>
-            <CardDescription>Selecciona una cotización aprobada del mismo proveedor para copiar sus condiciones</CardDescription>
+            <CardDescription>Selecciona una cotización con proveedor ganador para copiar sus condiciones</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Cotización aprobada</Label>
+              <Label>Cotización aceptada</Label>
               <ComboBox
                 options={eligibleQuotations.map((quotation) => ({
                   value: quotation.id,
                   label: quotation.code,
-                  subtitle: quotation.winningSupplierId ? `Proveedor vinculado: ${quotation.winningSupplierId}` : quotation.status,
+                  subtitle: quotation.supplierTokens?.find((token) => token.supplierId === quotation.winningSupplierId)?.supplier?.name
+                    ? `Ganador: ${quotation.supplierTokens?.find((token) => token.supplierId === quotation.winningSupplierId)?.supplier?.name}`
+                    : quotation.status,
                 }))}
                 value={selectedQuotationId}
                 onChange={handleQuotationChange}
-                placeholder={supplierId ? "Selecciona una cotización aprobada" : "Primero selecciona un proveedor"}
+                placeholder={supplierId ? "Selecciona una cotización aceptada" : "Primero selecciona un proveedor"}
                 searchPlaceholder="Buscar cotización..."
+                disabled={!supplierId}
                 className={!supplierId ? "opacity-70" : ""}
               />
               <p className="text-xs text-muted-foreground">
-                Solo se muestran cotizaciones cerradas, aprobadas o aceptadas del proveedor seleccionado.
+                Solo se muestran cotizaciones que ya tienen proveedor ganador.
               </p>
             </div>
 
