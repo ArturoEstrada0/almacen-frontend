@@ -13,17 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
@@ -31,7 +20,6 @@ import {
   Loader2, 
   Mail, 
   CheckCircle2, 
-  XCircle, 
   Clock, 
   Package, 
   Building2,
@@ -52,6 +40,7 @@ interface Quotation {
   validUntil: string
   notes?: string
   winningSupplierId?: string
+  purchaseOrderId?: string | null
   items: {
     id: string
     productId: string
@@ -191,24 +180,6 @@ export default function QuotationDetailPage() {
     }
   }
 
-  const handleCancel = async () => {
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
-      const response = await fetch(`${apiUrl}/quotations/${quotationId}/cancel`, {
-        method: "PATCH",
-      })
-      
-      if (response.ok) {
-        toast.success("Cotización cancelada")
-        fetchQuotation()
-      } else {
-        toast.error("Error al cancelar")
-      }
-    } catch (error) {
-      toast.error("Error al cancelar")
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -225,6 +196,7 @@ export default function QuotationDetailPage() {
   const isExpired = new Date(quotation.validUntil) < new Date()
   const canSendEmails = !["cancelada", "cerrada"].includes(quotation.status)
   const hasResponses = quotation.supplierTokens?.some((t) => t.used)
+  const linkedPurchaseOrderUrl = quotation.purchaseOrderId ? `/purchase-orders/${quotation.purchaseOrderId}/edit` : null
 
   return (
     <div className="space-y-6">
@@ -252,6 +224,14 @@ export default function QuotationDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {linkedPurchaseOrderUrl && (
+            <Link href={linkedPurchaseOrderUrl}>
+              <Button variant="outline">
+                <Package className="mr-2 h-4 w-4" />
+                Ver Orden de Compra
+              </Button>
+            </Link>
+          )}
           {hasResponses && (
             <Link href={`/quotations/${quotationId}/comparison`}>
               <Button variant="outline">
@@ -270,28 +250,6 @@ export default function QuotationDetailPage() {
                 )}
                 Enviar a Todos
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancelar
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>¿Cancelar cotización?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Esta acción no se puede deshacer. Los proveedores ya no podrán responder.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>No, mantener</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleCancel}>
-                      Sí, cancelar
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </>
           )}
         </div>

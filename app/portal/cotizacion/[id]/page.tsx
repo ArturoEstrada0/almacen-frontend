@@ -71,6 +71,31 @@ export default function SupplierQuotationPortal() {
   const [alreadyResponded, setAlreadyResponded] = useState(false)
   const [responses, setResponses] = useState<Map<string, ItemResponse>>(new Map())
 
+  const parseDateOnly = (value?: string | null) => {
+    if (!value) return null
+    const raw = String(value)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [year, month, day] = raw.split("-").map(Number)
+      return new Date(year, month - 1, day)
+    }
+    const parsed = new Date(raw)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const formatDateLocal = (value?: string | null) => {
+    const parsed = parseDateOnly(value)
+    if (!parsed) return "-"
+    return format(parsed, "dd MMM yyyy", { locale: es })
+  }
+
+  const isQuotationExpired = (validUntil?: string | null) => {
+    const parsed = parseDateOnly(validUntil)
+    if (!parsed) return false
+    const endOfDay = new Date(parsed)
+    endOfDay.setHours(23, 59, 59, 999)
+    return new Date() > endOfDay
+  }
+
   useEffect(() => {
     fetchQuotation()
   }, [quotationId, token])
@@ -188,7 +213,7 @@ export default function SupplierQuotationPortal() {
     }
   }
 
-  const isExpired = quotation && new Date(quotation.validUntil) < new Date()
+  const isExpired = isQuotationExpired(quotation?.validUntil)
 
   if (loading) {
     return (
@@ -289,11 +314,11 @@ export default function SupplierQuotationPortal() {
             <div className="flex flex-col text-sm text-gray-500">
               <span className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
-                Fecha: {quotation && format(new Date(quotation.date), "dd MMM yyyy", { locale: es })}
+                Fecha: {formatDateLocal(quotation?.date)}
               </span>
               <span className="flex items-center gap-1 text-orange-600">
                 <Clock className="h-4 w-4" />
-                Válida hasta: {quotation && format(new Date(quotation.validUntil), "dd MMM yyyy", { locale: es })}
+                Válida hasta: {formatDateLocal(quotation?.validUntil)}
               </span>
             </div>
           </div>

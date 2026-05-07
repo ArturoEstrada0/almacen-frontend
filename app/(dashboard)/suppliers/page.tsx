@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Plus, Building2, FileText, DollarSign } from "lucide-react"
@@ -8,12 +8,36 @@ import Link from "next/link"
 import { QuotationsTab } from "@/components/suppliers/quotations-tab"
 import { SuppliersDirectoryTab } from "@/components/suppliers/suppliers-directory-tab"
 import { AccountsPayableTab } from "@/components/purchase-orders/accounts-payable-tab"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ProtectedCreate } from "@/components/auth/protected-action"
 
 export default function SuppliersPage() {
-  const [activeTab, setActiveTab] = useState("directory")
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get("tab")
+  const [activeTab, setActiveTab] = useState(initialTab === "quotations" || initialTab === "payables" ? initialTab : "directory")
+
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    if (tab === "directory" || tab === "quotations" || tab === "payables") {
+      setActiveTab(tab)
+    } else {
+      setActiveTab("directory")
+    }
+  }, [searchParams])
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    const params = new URLSearchParams(searchParams.toString())
+    if (value === "directory") {
+      params.delete("tab")
+    } else {
+      params.set("tab", value)
+    }
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname)
+  }
 
   return (
     <div className="space-y-6">
@@ -32,7 +56,7 @@ export default function SuppliersPage() {
         </ProtectedCreate>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-3">
           <TabsTrigger value="directory" className="gap-2">
             <Building2 className="h-4 w-4" />

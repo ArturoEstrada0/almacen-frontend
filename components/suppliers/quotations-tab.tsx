@@ -1,17 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 // products and suppliers come from API hooks
-import { useSuppliers } from "@/lib/hooks/use-suppliers"
+import { useSuppliersWithFilters } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { createQuotation, useQuotations } from "@/lib/hooks/use-quotations"
+import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { toast } from "@/lib/utils/toast"
-import { Plus, Trash2, Send, Building2, Package, Eye, RefreshCw, FileText, Clock, CheckCircle, Mail } from "lucide-react"
+import { Plus, Trash2, Send, Building2, Package, Eye, RefreshCw, FileText, Clock, Mail, CheckCircle } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -26,6 +27,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -39,6 +41,7 @@ interface QuotationItem {
 const statusLabels: Record<string, string> = {
   borrador: "Borrador",
   pendiente: "Pendiente",
+  pendiente_ganador: "Pendiente de ganador",
   enviada: "Enviada",
   parcial: "Parcial",
   completada: "Completada",
@@ -49,6 +52,7 @@ const statusLabels: Record<string, string> = {
 const statusColors: Record<string, string> = {
   borrador: "bg-gray-100 text-gray-800",
   pendiente: "bg-yellow-100 text-yellow-800",
+  pendiente_ganador: "bg-amber-100 text-amber-800",
   enviada: "bg-blue-100 text-blue-800",
   parcial: "bg-orange-100 text-orange-800",
   completada: "bg-green-100 text-green-800",
@@ -62,16 +66,63 @@ export function QuotationsTab() {
   const [quantity, setQuantity] = useState("")
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([])
   const [emailMessage, setEmailMessage] = useState("")
+  const toDateOnlyString = (value: Date) => {
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, "0")
+    const day = String(value.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
   const [validUntil, setValidUntil] = useState(() => {
-    // Por defecto, 7 días a partir de hoy
+    // Por defecto, 7 días a partir de hoy (fecha local, sin UTC)
     const date = new Date()
     date.setDate(date.getDate() + 7)
-    return date.toISOString().split('T')[0]
+    return toDateOnlyString(date)
   })
   const [selectedQuotation, setSelectedQuotation] = useState<any>(null)
+  const [selectingWinnerFor, setSelectingWinnerFor] = useState<string | null>(null)
+  
+  // Estados para búsqueda, filtro y paginación
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   
   // Hook para obtener cotizaciones existentes
   const { quotations, isLoading: quotationsLoading, mutate: refreshQuotations } = useQuotations()
+
+  // Funciones helper - definidas antes de usarlas
+  const formatDate = (dateStr: any) => {
+    if (!dateStr) return "-"
+    try {
+      // Para columnas DATE (YYYY-MM-DD), construir fecha local para evitar desfase UTC
+      const match = String(dateStr).match(/^\d{4}-\d{2}-\d{2}$/)
+      if (match) {
+        const parts = dateStr.split("-")
+        const parsed = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+        return format(parsed, "dd MMM yyyy", { locale: es })
+      }
+      // Para timestamps, mostrar en UTC para mantener referencia del servidor
+      const parsed = new Date(dateStr)
+      return format(parsed, "dd MMM yyyy", { locale: es })
+    } catch {
+      return dateStr
+    }
+  }
+
+  const getQuotationDisplayStatus = (quotation: any) => {
+    if (!quotation) return "borrador"
+    if (quotation.status === "completada" && !quotation.winningSupplierId) {
+      return "pendiente_ganador"
+    }
+    return quotation.status
+  }
+
+  const canSelectWinner = (quotation: any) => {
+    if (!quotation) return false
+    if (["cerrada", "cancelada"].includes(String(quotation.status || "").toLowerCase())) return false
+    return !quotation.winningSupplierId
+  }
 
   const addQuotationItem = () => {
     if (selectedProduct && quantity) {
@@ -92,8 +143,70 @@ export function QuotationsTab() {
     setQuotationItems(quotationItems.filter((item) => item.id !== id))
   }
 
-  const { suppliers: apiSuppliers } = useSuppliers()
+  // Función para buscar en cotizaciones
+  const filterAndSearchQuotations = () => {
+    let filtered = quotations
+
+    // Filtro por estado
+    if (selectedStatuses.length > 0) {
+      filtered = filtered.filter((q: any) => {
+        const displayStatus = getQuotationDisplayStatus(q)
+        return selectedStatuses.includes(displayStatus)
+      })
+    }
+
+    // Búsqueda por texto
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter((quotation: any) => {
+        // Buscar en código de cotización
+        if (quotation.code?.toLowerCase().includes(query)) return true
+
+        // Buscar en productos
+        if (
+          quotation.items?.some((item: any) =>
+            item.product?.name?.toLowerCase().includes(query) ||
+            item.product?.sku?.toLowerCase().includes(query)
+          )
+        )
+          return true
+
+        // Buscar en proveedores (nombre, código, RFC, email)
+        if (
+          quotation.supplierTokens?.some((token: any) => {
+            const supplier = token.supplier
+            return (
+              supplier?.name?.toLowerCase().includes(query) ||
+              supplier?.code?.toLowerCase().includes(query) ||
+              supplier?.rfc?.toLowerCase().includes(query) ||
+              supplier?.email?.toLowerCase().includes(query)
+            )
+          })
+        )
+          return true
+
+        return false
+      })
+    }
+
+    return filtered
+  }
+
+  const filteredQuotations = filterAndSearchQuotations()
+  const totalPages = Math.ceil(filteredQuotations.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedQuotations = filteredQuotations.slice(startIndex, startIndex + itemsPerPage)
+
+  // Resetear a página 1 cuando cambia búsqueda o filtros
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedStatuses])
+
   const { products } = useProducts()
+  const selectedProductIds = Array.from(new Set(quotationItems.map((item) => item.productId)))
+  const { suppliers: apiSuppliers } = useSuppliersWithFilters(
+    quotationItems.length > 0 ? { productIds: selectedProductIds } : undefined,
+  )
 
   // Map backend supplier shape to the UI-friendly shape used in the mock data
   const mappedSuppliers = (apiSuppliers || []).map((s: any) => ({
@@ -106,6 +219,7 @@ export function QuotationsTab() {
     phone: s.phone || "",
     email: s.email || "",
     isActive: s.active ?? true,
+    productSuppliers: s.productSuppliers || [],
   }))
 
   const availableSuppliers = mappedSuppliers.filter((supplier) => supplier.isActive)
@@ -123,6 +237,17 @@ export function QuotationsTab() {
     }
     if (quotationItems.length === 0) {
       toast.error("Agrega al menos un producto a la solicitud")
+      return
+    }
+
+    // Verificar si algunos proveedores seleccionados no tienen email configurado
+    const suppliersMissingEmail = (selectedSuppliers || [])
+      .map((id) => (apiSuppliers || []).find((s: any) => s.id === id))
+      .filter((s: any) => !s || !s.email)
+
+    if (suppliersMissingEmail.length > 0) {
+      const names = suppliersMissingEmail.map((s: any) => s?.name || s?.businessName || 'Proveedor').join(', ')
+      toast.error(`Los siguientes proveedores no tienen email configurado: ${names}`)
       return
     }
 
@@ -153,11 +278,20 @@ export function QuotationsTab() {
     }
   }
 
-  const formatDate = (dateStr: string) => {
+  const handleSelectWinner = async (quotation: any, supplierId: string, supplierName: string) => {
+    setSelectingWinnerFor(`${quotation.id}:${supplierId}`)
     try {
-      return format(new Date(dateStr), "dd MMM yyyy", { locale: es })
-    } catch {
-      return dateStr
+      await ApiClient.patch(
+        API_ENDPOINTS.quotations.markWinner(quotation.id, supplierId),
+        {},
+      )
+
+      toast.success(`${supplierName} seleccionado como proveedor ganador`)
+      await refreshQuotations()
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo seleccionar proveedor ganador")
+    } finally {
+      setSelectingWinnerFor(null)
     }
   }
 
@@ -197,6 +331,66 @@ export function QuotationsTab() {
                 No hay cotizaciones. Crea una nueva en la pestaña "Nueva Cotización".
               </div>
             ) : (
+              <div className="space-y-4">
+                {/* Barra de búsqueda y filtros */}
+                <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {/* Buscador */}
+                    <div className="md:col-span-2">
+                      <Label htmlFor="search" className="mb-2 block">Buscar</Label>
+                      <Input
+                        id="search"
+                        placeholder="Buscar por código, productos, proveedor, RFC, email..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                    {/* Filtro de estados */}
+                    <div>
+                      <Label htmlFor="status-filter" className="mb-2 block">Estado</Label>
+                      <Select
+                        value={selectedStatuses.length === 0 ? "all" : selectedStatuses[0]}
+                        onValueChange={(value) => {
+                          if (value === "all") {
+                            setSelectedStatuses([])
+                          } else {
+                            setSelectedStatuses([value])
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="status-filter">
+                          <SelectValue placeholder="Todos los estados" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los estados</SelectItem>
+                          {Object.keys(statusLabels).map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {statusLabels[status]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {/* Información de resultados */}
+                  <div className="text-sm text-muted-foreground">
+                    Mostrando {paginatedQuotations.length === 0 && filteredQuotations.length === 0 ? 0 : startIndex + 1} -{" "}
+                    {Math.min(startIndex + itemsPerPage, filteredQuotations.length)} de {filteredQuotations.length} cotizaciones
+                    {filteredQuotations.length < quotations.length && (
+                      <span> (filtradas de {quotations.length})</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tabla de cotizaciones */}
+                {paginatedQuotations.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground rounded-md border p-4">
+                    {filteredQuotations.length === 0 && quotations.length > 0
+                      ? "No hay cotizaciones que coincidan con tu búsqueda o filtros."
+                      : "No hay cotizaciones disponibles."}
+                  </div>
+                ) : (
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
@@ -211,7 +405,10 @@ export function QuotationsTab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {quotations.map((quotation: any) => (
+                    {paginatedQuotations.map((quotation: any) => {
+                      const displayStatus = getQuotationDisplayStatus(quotation)
+
+                      return (
                       <TableRow key={quotation.id}>
                         <TableCell className="font-mono font-medium">{quotation.code}</TableCell>
                         <TableCell>{formatDate(quotation.date)}</TableCell>
@@ -234,8 +431,8 @@ export function QuotationsTab() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={statusColors[quotation.status] || "bg-gray-100"}>
-                            {statusLabels[quotation.status] || quotation.status}
+                          <Badge className={statusColors[displayStatus] || "bg-gray-100"}>
+                            {statusLabels[displayStatus] || displayStatus}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
@@ -256,14 +453,14 @@ export function QuotationsTab() {
                                   <div>
                                     <DialogTitle className="text-xl">Cotización {quotation.code}</DialogTitle>
                                     <DialogDescription className="mt-1">
-                                      Creada el {formatDate(quotation.createdAt || quotation.date)}
+                                      Creada el {formatDate(quotation.date || quotation.createdAt)}
                                       {quotation.validUntil && (
                                         <span className="ml-2">• Válida hasta {formatDate(quotation.validUntil)}</span>
                                       )}
                                     </DialogDescription>
                                   </div>
-                                  <Badge className={`${statusColors[quotation.status] || "bg-gray-100"} ml-4`}>
-                                    {statusLabels[quotation.status] || quotation.status}
+                                  <Badge className={`${statusColors[displayStatus] || "bg-gray-100"} ml-4`}>
+                                    {statusLabels[displayStatus] || displayStatus}
                                   </Badge>
                                 </div>
                               </DialogHeader>
@@ -336,7 +533,7 @@ export function QuotationsTab() {
                                               ) : null}
                                               <TableCell>
                                                 <div className="flex items-center gap-2">
-                                                  <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                                  <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                                                   <span className="font-medium text-sm">{resp.supplier?.name}</span>
                                                 </div>
                                               </TableCell>
@@ -391,6 +588,11 @@ export function QuotationsTab() {
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                          {quotation.winningSupplierId === token.supplierId && (
+                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                              Ganador
+                                            </Badge>
+                                          )}
                                           {token.emailSent ? (
                                             <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                               <Mail className="mr-1 h-3 w-3" />
@@ -408,6 +610,15 @@ export function QuotationsTab() {
                                               Respondió
                                             </Badge>
                                           )}
+                                          {canSelectWinner(quotation) && token.used && (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => handleSelectWinner(quotation, token.supplierId, token.supplier?.name || "Proveedor")}
+                                              disabled={selectingWinnerFor === `${quotation.id}:${token.supplierId}`}
+                                            >
+                                              {selectingWinnerFor === `${quotation.id}:${token.supplierId}` ? "Seleccionando..." : "Elegir ganador"}
+                                            </Button>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
@@ -418,9 +629,70 @@ export function QuotationsTab() {
                           </Dialog>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )})}
                   </TableBody>
                 </Table>
+              </div>
+                )}
+
+                {/* Controles de paginación */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-4 mt-4 p-4 border rounded-lg bg-muted/30">
+                    <div className="text-sm text-muted-foreground">
+                      Página {currentPage} de {totalPages}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Anterior
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {/* Números de página */}
+                        {Array.from({ length: totalPages }).map((_, idx) => {
+                          const page = idx + 1
+                          const isNearCurrent =
+                            page === currentPage || Math.abs(page - currentPage) <= 1
+                          const isEndPage = page === 1 || page === totalPages
+
+                          if (!isNearCurrent && !isEndPage) {
+                            if (page === 2 || page === totalPages - 1) {
+                              return (
+                                <span key={page} className="text-muted-foreground">
+                                  ...
+                                </span>
+                              )
+                            }
+                            return null
+                          }
+
+                          return (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setCurrentPage(page)}
+                              className="h-8 w-8 p-0"
+                            >
+                              {page}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -510,45 +782,64 @@ export function QuotationsTab() {
       {quotationItems.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Proveedores Disponibles</CardTitle>
+            <CardTitle>Proveedores Disponibles ({availableSuppliers.length})</CardTitle>
             <CardDescription>
-              Selecciona los proveedores a los que deseas enviar la solicitud de cotización
+              Solo se muestran los proveedores que tienen al menos uno de los productos seleccionados
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              {availableSuppliers.map((supplier) => (
-                <Card
-                  key={supplier.id}
-                  className={`cursor-pointer transition-all ${
-                    selectedSuppliers.includes(supplier.id) ? "border-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => toggleSupplier(supplier.id)}
-                >
-                  <CardContent className="flex items-start gap-4 p-4">
-                    <Checkbox checked={selectedSuppliers.includes(supplier.id)} />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Building2 className="h-4 w-4" />
+            {availableSuppliers.length === 0 ? (
+              <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No hay proveedores asociados a los productos seleccionados.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {availableSuppliers.map((supplier) => (
+                  <Card
+                    key={supplier.id}
+                    className={`cursor-pointer transition-all ${
+                      selectedSuppliers.includes(supplier.id) ? "border-primary bg-primary/5" : ""
+                    }`}
+                    onClick={() => toggleSupplier(supplier.id)}
+                  >
+                    <CardContent className="flex items-start gap-4 p-4">
+                      <Checkbox checked={selectedSuppliers.includes(supplier.id)} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Building2 className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{supplier.businessName}</p>
+                            <p className="text-xs text-muted-foreground">{supplier.code}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{supplier.businessName}</p>
-                          <p className="text-xs text-muted-foreground">{supplier.code}</p>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <p>{supplier.email}</p>
+                          <p>{supplier.phone}</p>
+                          <Badge variant="outline" className="mt-2">
+                            {supplier.businessType}
+                          </Badge>
                         </div>
+
+                        {supplier.productSuppliers?.length > 0 && (
+                          <div className="mt-3">
+                            <p className="mb-2 text-xs font-medium text-muted-foreground">Productos asociados</p>
+                            <div className="flex flex-wrap gap-2">
+                              {supplier.productSuppliers.map((ps: any) => (
+                                <Badge key={ps.id || ps.productId} variant="secondary" className="text-[10px]">
+                                  {ps.product?.name || ps.product?.sku || "Producto"}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>{supplier.email}</p>
-                        <p>{supplier.phone}</p>
-                        <Badge variant="outline" className="mt-2">
-                          {supplier.businessType}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
 
             {selectedSuppliers.length > 0 && (
               <Dialog>
@@ -583,13 +874,7 @@ export function QuotationsTab() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="validUntil">Válido Hasta</Label>
-                      <Input
-                        id="validUntil"
-                        type="date"
-                        value={validUntil}
-                        onChange={(e) => setValidUntil(e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
-                      />
+                      <DatePicker value={validUntil} onChange={(v) => setValidUntil(v)} />
                       <p className="text-xs text-muted-foreground">
                         Fecha límite para que los proveedores respondan
                       </p>

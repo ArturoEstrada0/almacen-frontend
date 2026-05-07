@@ -18,6 +18,22 @@ export function useSuppliers(supplierType?: string) {
   }
 }
 
+export function useSuppliersWithFilters(filters?: { supplierType?: string; productIds?: string[] }) {
+  const keyParts = [filters?.supplierType || "all", ...(filters?.productIds || [])]
+  const cacheKey = `suppliers-${keyParts.join("-")}`
+
+  const { data, error, isLoading, mutate } = useSWR<Supplier[]>(cacheKey, () =>
+    ApiClient.get<Supplier[]>(API_ENDPOINTS.suppliers.list(filters)),
+  )
+
+  return {
+    suppliers: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+  }
+}
+
 export function useSupplier(id: string) {
   const { data, error, isLoading, mutate } = useSWR<Supplier>(id ? `supplier-${id}` : null, () =>
     ApiClient.get<Supplier>(API_ENDPOINTS.suppliers.get(id)),

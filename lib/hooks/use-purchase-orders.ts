@@ -63,8 +63,20 @@ export async function createPurchaseOrder(data: any) {
   return ApiClient.post<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.create(), data)
 }
 
-export async function receivePurchaseOrder(orderId: string, itemId: string, quantity: number) {
-  return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.receive(orderId, itemId), { quantity })
+export async function receivePurchaseOrder(
+  orderId: string,
+  itemId: string,
+  quantity: number,
+  userName?: string,
+  invoiceDate?: string,
+  invoiceNumber?: string,
+) {
+  return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.receive(orderId, itemId), {
+    quantity,
+    userName,
+    invoiceDate,
+    invoiceNumber,
+  })
 }
 
 export async function cancelPurchaseOrder(id: string) {
@@ -88,6 +100,16 @@ export async function registerPayment(orderId: string, data: {
   if (data.invoiceFile) body.append("invoiceFile", data.invoiceFile)
 
   return ApiClient.postFormData<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.registerPayment(orderId), body)
+}
+
+export async function registerInvoice(orderId: string, data: {
+  invoiceDate: string
+  invoiceNumber?: string
+}) {
+  return ApiClient.patch<PurchaseOrder>(
+    API_ENDPOINTS.purchaseOrders.registerInvoice(orderId),
+    data,
+  )
 }
 
 export async function registerShipmentPayablePayment(entryId: string, data: {

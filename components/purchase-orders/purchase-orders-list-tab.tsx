@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,8 +12,10 @@ import { usePurchaseOrder, usePurchaseOrders, receivePurchaseOrder } from "@/lib
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useProducts } from "@/lib/hooks/use-products"
+import { useMovements } from "@/lib/hooks/use-inventory"
 import { formatCurrency } from "@/lib/utils/format"
-import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X } from "lucide-react"
+import { useCurrentUser } from "@/lib/hooks/use-users"
+import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -38,16 +41,27 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({})
+  const [receiveInvoiceDate, setReceiveInvoiceDate] = useState<string>(() => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, "0")
+    const day = String(today.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  })
+  const [receiveInvoiceNumber, setReceiveInvoiceNumber] = useState<string>("")
+  const [isReceivingLoading, setIsReceivingLoading] = useState(false)
 
   const [detailsOrderId, setDetailsOrderId] = useState<string | null>(null)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
 
   const { purchaseOrders, isLoading, mutate } = usePurchaseOrders()
   const { purchaseOrder: detailsOrder, isLoading: detailsLoading } = usePurchaseOrder(detailsOrderId || "")
+  const { movements } = useMovements()
 
   const { suppliers } = useSuppliers()
   const { warehouses } = useWarehouses()
   const { products } = useProducts()
+  const { currentUser } = useCurrentUser()
 
   const formatDateSafely = (value?: string | Date | null) => {
     if (!value) return "-"
@@ -64,6 +78,49 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
     const date = new Date(value)
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString()
+  }
+
+  const parseDateOnly = (value?: string | Date | null): Date | null => {
+    if (!value) return null
+
+    if (typeof value === "string") {
+      const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (m) {
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      }
+    }
+
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return null
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  }
+
+  const toIsoDateOnly = (value?: string | Date | null): string => {
+    const parsed = parseDateOnly(value)
+    if (!parsed) return new Date().toISOString().split("T")[0]
+
+    const year = parsed.getFullYear()
+    const month = String(parsed.getMonth() + 1).padStart(2, "0")
+    const day = String(parsed.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  const getDaysUntilDueText = (dueDateValue?: string | Date | null) => {
+    const dueDate = parseDateOnly(dueDateValue)
+    if (!dueDate) return "Vence: -"
+
+    const today = new Date()
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const diffMs = dueDate.getTime() - todayDate.getTime()
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 0) {
+      return `Venció hace ${Math.abs(diffDays)} día${Math.abs(diffDays) === 1 ? "" : "s"}`
+    }
+    if (diffDays === 0) {
+      return "Vence hoy"
+    }
+    return `Faltan ${diffDays} día${diffDays === 1 ? "" : "s"}`
   }
 
   const filteredOrders = (purchaseOrders || []).filter((order) => {
@@ -95,7 +152,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     return matchesSearch && matchesStatus && matchesPayment && matchesDateRange
   })
 
-  const { pagedItems: pagedOrders, paginationProps } = usePagination(filteredOrders, 20)
+  const { pagedItems: pagedOrders, paginationProps, totalPages } = usePagination(filteredOrders, 20)
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -128,20 +185,30 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   }
 
   const handleReceiveOrder = (orderId: string) => {
+    const today = new Date()
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+    const currentOrder = purchaseOrders.find((o) => o.id === orderId)
+    const existingInvoiceDate = currentOrder?.invoiceDate ? toIsoDateOnly(currentOrder.invoiceDate) : todayIso
+
     setSelectedOrder(orderId)
+    setReceiveInvoiceDate(existingInvoiceDate)
+    setReceiveInvoiceNumber(currentOrder?.invoiceNumber || "")
     setReceiveDialogOpen(true)
   }
 
   const handleCompleteReception = async () => {
     if (!selectedOrder) return
+    setIsReceivingLoading(true)
     try {
       const order = purchaseOrders.find((o) => o.id === selectedOrder)
       if (!order) return
 
+      const userName = currentUser?.fullName || currentUser?.email || "sistema"
+
       for (const item of order.items) {
         const qty = receiveQuantities[item.id] ?? Math.max(0, item.quantity - item.receivedQuantity)
         if (qty > 0) {
-          await receivePurchaseOrder(order.id, item.id, qty)
+          await receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber)
         }
       }
 
@@ -152,13 +219,32 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       setReceiveDialogOpen(false)
       setSelectedOrder(null)
       setReceiveQuantities({})
+      const today = new Date()
+      setReceiveInvoiceDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`)
+      setReceiveInvoiceNumber("")
     } catch (e: any) {
       toast.error(e?.message || "Error al registrar la recepción")
+    } finally {
+      setIsReceivingLoading(false)
     }
   }
 
   const order = selectedOrder ? purchaseOrders.find((o) => o.id === selectedOrder) : null
+  const poReference = detailsOrder ? `PO-${(detailsOrder as any)?.code}` : ""
+  const relatedMovements = movements?.filter((m: any) => m.referenceType === "PO" && m.referenceId === detailsOrderId) || []
   const detailsTraceability = ((detailsOrder as any)?.traceability || []) as any[]
+
+  // Group movements by creation date to show "batches" of reception
+  const groupedMovements = relatedMovements.reduce((groups: any[], movement: any) => {
+    const dateKey = new Date(movement.createdAt).toLocaleDateString()
+    const group = groups.find((g) => g.date === dateKey)
+    if (group) {
+      group.movements.push(movement)
+    } else {
+      groups.push({ date: dateKey, movements: [movement] })
+    }
+    return groups
+  }, [])
 
   return (
     <>
@@ -224,12 +310,55 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Órdenes de Compra</CardTitle>
-          <CardDescription>
-            {filteredOrders.length} orden{filteredOrders.length !== 1 ? "es" : ""} encontrada
-            {filteredOrders.length !== 1 ? "s" : ""}
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Órdenes de Compra</CardTitle>
+            <CardDescription>
+              {filteredOrders.length} orden{filteredOrders.length !== 1 ? "es" : ""} encontrada
+              {filteredOrders.length !== 1 ? "s" : ""}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(1)}
+              disabled={paginationProps.currentPage <= 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(paginationProps.currentPage - 1)}
+              disabled={paginationProps.currentPage <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm mx-2 min-w-20 text-center">
+              {paginationProps.currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(paginationProps.currentPage + 1)}
+              disabled={paginationProps.currentPage >= totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => paginationProps.onPageChange(totalPages)}
+              disabled={paginationProps.currentPage >= totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -257,8 +386,10 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                     const editable = (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
                     const supplier = suppliers.find((s) => s.id === rowOrder.supplierId)
                     const warehouse = warehouses.find((w) => w.id === rowOrder.warehouseId)
-                    const dueDate = rowOrder.dueDate ? new Date(rowOrder.dueDate) : null
-                    const isOverdue = rowOrder.paymentStatus === "pendiente" && dueDate && new Date() > dueDate
+                    const dueDate = parseDateOnly(rowOrder.dueDate as any)
+                    const today = new Date()
+                    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                    const isOverdue = rowOrder.paymentStatus === "pendiente" && dueDate && todayDate > dueDate
 
                     return (
                       <TableRow key={rowOrder.id}>
@@ -287,7 +418,10 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                               {isOverdue ? "vencido" : rowOrder.paymentStatus}
                             </Badge>
                             {rowOrder.paymentStatus !== "pagado" && (
-                              <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
+                              <>
+                                <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
+                                <p className="text-xs text-muted-foreground">{getDaysUntilDueText(rowOrder.dueDate as any)}</p>
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -391,17 +525,42 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div>
+                <Label htmlFor="receive-invoice-date">Fecha de Facturación *</Label>
+                <DatePicker value={receiveInvoiceDate} onChange={setReceiveInvoiceDate} disabled={isReceivingLoading} />
+              </div>
+
+              <div>
+                <Label htmlFor="receive-invoice-number">Número de Factura</Label>
+                <Input
+                  id="receive-invoice-number"
+                  value={receiveInvoiceNumber}
+                  onChange={(e) => setReceiveInvoiceNumber(e.target.value)}
+                  placeholder="Opcional"
+                  disabled={isReceivingLoading}
+                />
+              </div>
+
+              <div>
                 <Label>Notas de Recepción</Label>
                 <Textarea placeholder="Observaciones sobre la recepción..." />
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setReceiveDialogOpen(false)}>
+                <Button variant="outline" onClick={() => setReceiveDialogOpen(false)} disabled={isReceivingLoading}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCompleteReception}>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Completar Recepción
+                <Button onClick={handleCompleteReception} disabled={isReceivingLoading || !receiveInvoiceDate}>
+                  {isReceivingLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Completar Recepción
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -484,15 +643,53 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground">Historial</Label>
+                <Label className="text-xs text-muted-foreground">Historial de Movimientos</Label>
                 {detailsLoading ? (
                   <p className="text-sm text-muted-foreground mt-2">Cargando historial...</p>
-                ) : detailsTraceability.length === 0 ? (
-                  <p className="text-sm text-muted-foreground mt-2">No hay historial registrado.</p>
+                ) : relatedMovements.length === 0 && detailsTraceability.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-2">No hay historial de movimientos registrado.</p>
                 ) : (
-                  <div className="mt-2 space-y-2 rounded-md border p-3">
+                  <div className="mt-2 space-y-4 rounded-md border p-3">
+                    {groupedMovements.map((group: any, groupIdx: number) => (
+                      <div key={`group-${groupIdx}`}>
+                        {groupIdx > 0 && <div className="my-3 border-t" />}
+                        <div className="text-xs font-semibold text-muted-foreground mb-2">Recepción del {group.date}</div>
+                        <div className="space-y-2">
+                          {group.movements.map((movement: any) => {
+                            const item = movement.items?.[0]
+                            const product = products.find((p) => p.id === item?.productId)
+                            const unitPrice = item?.cost || product?.price
+                            const total = unitPrice ? Number(unitPrice) * Number(item?.quantity) : 0
+                            return (
+                              <div key={movement.id} className="bg-gray-50 dark:bg-slate-900 p-2 rounded">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">
+                                      ✓ {product?.name} ({item?.quantity} un)
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(movement.createdAt).toLocaleTimeString()} • {movement.userName || "sistema"}
+                                    </p>
+                                  </div>
+                                  <div className="text-right text-sm ml-4">
+                                    <p className="font-medium">{formatCurrency(total)}</p>
+                                    {unitPrice && <p className="text-xs text-muted-foreground">@{formatCurrency(unitPrice)}</p>}
+                                  </div>
+                                </div>
+                                {movement.notes && (
+                                  <div className="mt-1 text-xs text-muted-foreground border-t pt-1">
+                                    <span className="font-semibold">Nota:</span> {movement.notes}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
                     {detailsTraceability.map((event: any) => (
-                      <div key={event.id} className="border-b pb-2 last:border-b-0 last:pb-0">
+                      <div key={event.id} className="bg-gray-50 dark:bg-slate-900 p-2 rounded">
                         <p className="text-sm font-medium capitalize">{event.action}</p>
                         <p className="text-xs text-muted-foreground">
                           {new Date(event.createdAt).toLocaleString()} • {event.userName || event.userId || "sistema"}

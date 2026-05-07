@@ -1,5 +1,5 @@
 export const SUPPLIER_TYPE_OPTIONS = [
-  { value: "insumos", label: "Insumos" },
+  { value: "insumo", label: "Insumo" },
   { value: "fruta", label: "Fruta" },
   { value: "servicios", label: "Servicios" },
   { value: "transporte", label: "Transporte" },

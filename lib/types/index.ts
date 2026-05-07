@@ -153,6 +153,14 @@ export interface PurchaseOrder {
   supplier?: Supplier
   warehouseId: string
   warehouse?: Warehouse
+  quotationId?: string | null
+  quotation?: {
+    id: string
+    code: string
+    status: string
+    winningSupplierId?: string | null
+    purchaseOrderId?: string | null
+  } | null
   orderDate: Date
   expectedDeliveryDate: Date
   deliveryDate?: Date
@@ -465,6 +473,7 @@ export interface Quotation {
   status: QuotationStatus
   items: QuotationItem[]
   responses: QuotationResponse[]
+  purchaseOrderId?: string | null
   notes?: string
   userId: string
   userName: string

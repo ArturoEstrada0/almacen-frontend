@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef, useMemo } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -11,6 +12,7 @@ import { useSuppliers, useSupplierProducts } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { cancelPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
+import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { formatCurrency } from "@/lib/utils/format"
 import type { PurchaseOrder } from "@/lib/types"
 import { Plus, Trash2, Save } from "lucide-react"
@@ -36,6 +38,34 @@ interface PurchaseOrderItem {
   unitPrice: number
 }
 
+interface QuotationOption {
+  id: string
+  code: string
+  status: string
+  winningSupplierId?: string | null
+  validUntil?: string | null
+  notes?: string | null
+  supplierTokens?: Array<{
+    supplierId: string
+    supplier?: {
+      id: string
+      name: string
+    }
+  }>
+  items?: Array<{
+    id: string
+    productId: string
+    quantity: number
+    notes?: string | null
+    supplierResponses?: Array<{
+      supplierId: string
+      price: number
+      available?: boolean
+      notes?: string | null
+    }>
+  }>
+}
+
 interface NewPurchaseOrderTabProps {
   onSuccess: () => void
   mode?: "create" | "edit"
@@ -55,6 +85,8 @@ export function NewPurchaseOrderTab({
   const [creditDays, setCreditDays] = useState(0)
   const [items, setItems] = useState<PurchaseOrderItem[]>([])
   const [notes, setNotes] = useState("")
+  const [selectedQuotationId, setSelectedQuotationId] = useState("")
+  const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<QuotationOption | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const infoCardRef = useRef<HTMLDivElement>(null)
 
@@ -108,6 +140,10 @@ export function NewPurchaseOrderTab({
   const { products } = useProducts()
   const { warehouses } = useWarehouses()
   const { supplierProducts } = useSupplierProducts(supplierId || null)
+  const { data: quotations = [] } = useSWR<QuotationOption[]>(
+    mode === "create" ? "purchase-order-quotations" : null,
+    () => ApiClient.get<QuotationOption[]>(API_ENDPOINTS.quotations.list()),
+  )
 
   const normalizeType = (value: string | null | undefined) =>
     String(value || "")
@@ -119,6 +155,26 @@ export function NewPurchaseOrderTab({
   const selectedWarehouse = useMemo(
     () => warehouses.find((warehouse: any) => String(warehouse.id) === String(warehouseId)),
     [warehouses, warehouseId],
+  )
+
+  const selectedQuotation = useMemo(
+    () => selectedQuotationDetail || quotations.find((quotation) => quotation.id === selectedQuotationId),
+    [quotations, selectedQuotationDetail, selectedQuotationId],
+  )
+
+  const eligibleQuotations = useMemo(
+    () => {
+      if (!supplierId) return []
+
+      return quotations.filter((quotation) => {
+        const isApproved = ["cerrada", "aprobada", "aceptada", "completada"].includes(String(quotation.status || "").toLowerCase())
+        const hasWinner = !!quotation.winningSupplierId
+        const matchesWinner = String(quotation.winningSupplierId || "") === String(supplierId)
+
+        return isApproved && hasWinner && matchesWinner
+      })
+    },
+    [quotations, supplierId],
   )
 
   const baseProductOptions = useMemo(() => {
@@ -163,6 +219,7 @@ export function NewPurchaseOrderTab({
       setCreditDays(0)
       setItems([])
       setNotes("")
+      setSelectedQuotationId("")
       return
     }
 
@@ -171,6 +228,7 @@ export function NewPurchaseOrderTab({
     setExpectedDeliveryDate(initialOrder.expectedDeliveryDate ? String(initialOrder.expectedDeliveryDate).split("T")[0] : "")
     setCreditDays(initialOrder.creditDays || 0)
     setNotes(initialOrder.notes || "")
+    setSelectedQuotationId(initialOrder.quotationId || "")
     setItems(
       (initialOrder.items || []).map((it) => ({
         productId: it.productId,
@@ -179,6 +237,64 @@ export function NewPurchaseOrderTab({
       })),
     )
   }, [mode, initialOrder])
+
+  useEffect(() => {
+    if (mode !== "create" || !selectedQuotationId || !supplierId) {
+      setSelectedQuotationDetail(null)
+      return
+    }
+
+    let cancelled = false
+
+    const fetchQuotationDetail = async () => {
+      try {
+        const quotationDetail = await ApiClient.get<QuotationOption>(API_ENDPOINTS.quotations.get(selectedQuotationId))
+        if (!cancelled) {
+          setSelectedQuotationDetail(quotationDetail)
+        }
+      } catch (error) {
+        console.error("Error loading quotation detail:", error)
+        if (!cancelled) {
+          setSelectedQuotationDetail(null)
+        }
+      }
+    }
+
+    fetchQuotationDetail()
+
+    return () => {
+      cancelled = true
+    }
+  }, [mode, selectedQuotationId])
+
+  useEffect(() => {
+    if (mode !== "create" || !selectedQuotation) return
+
+    if (selectedQuotation.winningSupplierId && selectedQuotation.winningSupplierId !== supplierId) {
+      setSupplierId(selectedQuotation.winningSupplierId)
+    }
+
+    const quotationSupplierId =
+      selectedQuotation.winningSupplierId ||
+      supplierId ||
+      selectedQuotation.supplierTokens?.[0]?.supplierId ||
+      ""
+
+    const quotationItems = (selectedQuotation.items || []).map((item) => {
+      const response = (item.supplierResponses || []).find(
+        (r) => String(r.supplierId) === String(quotationSupplierId) && r.available !== false,
+      )
+
+      return {
+        productId: item.productId,
+        quantity: Number(item.quantity) || 1,
+        unitPrice: Number(response?.price ?? 0),
+      }
+    })
+
+    setItems(quotationItems)
+    setNotes((current) => current || selectedQuotation.notes || "")
+  }, [mode, selectedQuotation, supplierId, suppliers])
 
   const handleSubmit = async () => {
     setSubmitted(true)
@@ -196,6 +312,7 @@ export function NewPurchaseOrderTab({
         expectedDate: expectedDeliveryDate,
         creditDays,
         notes,
+        quotationId: selectedQuotationId || undefined,
         items: items.map((it) => ({
           productId: it.productId,
           quantity: Number(it.quantity),
@@ -252,11 +369,32 @@ export function NewPurchaseOrderTab({
   const handleSupplierChange = (value: string) => {
     if (value !== supplierId) {
       setItems([])
+      setSelectedQuotationId("")
+      setSelectedQuotationDetail(null)
     }
     setSupplierId(value)
     const selectedSupplier = suppliers.find((s) => s.id === value)
     if (selectedSupplier) {
       setCreditDays(selectedSupplier.paymentTerms || 0)
+    }
+  }
+
+  const handleQuotationChange = (value: string) => {
+    if (!supplierId) {
+      toast.error("Primero selecciona un proveedor")
+      return
+    }
+
+    setSelectedQuotationId(value)
+    const quotation = quotations.find((item) => item.id === value)
+    if (!quotation) return
+
+    if (quotation.winningSupplierId) {
+      setSupplierId(quotation.winningSupplierId)
+      const selectedSupplier = suppliers.find((s) => s.id === quotation.winningSupplierId)
+      if (selectedSupplier) {
+        setCreditDays(selectedSupplier.paymentTerms || 0)
+      }
     }
   }
 
@@ -327,9 +465,6 @@ export function NewPurchaseOrderTab({
                 value={creditDays}
                 onChange={(e) => setCreditDays(Number(e.target.value))}
               />
-              <p className="text-xs text-muted-foreground">
-                La fecha de vencimiento se calculará automáticamente
-              </p>
             </div>
           </div>
 
@@ -343,6 +478,61 @@ export function NewPurchaseOrderTab({
           </div>
         </CardContent>
       </Card>
+
+      {mode === "create" && (eligibleQuotations.length > 0 || selectedQuotationId) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Cotización vinculada</CardTitle>
+            <CardDescription>Selecciona una cotización con proveedor ganador para copiar sus condiciones</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Cotización aceptada</Label>
+              <ComboBox
+                options={eligibleQuotations.map((quotation) => ({
+                  value: quotation.id,
+                  label: quotation.code,
+                  subtitle: quotation.supplierTokens?.find((token) => token.supplierId === quotation.winningSupplierId)?.supplier?.name
+                    ? `Ganador: ${quotation.supplierTokens?.find((token) => token.supplierId === quotation.winningSupplierId)?.supplier?.name}`
+                    : quotation.status,
+                }))}
+                value={selectedQuotationId}
+                onChange={handleQuotationChange}
+                placeholder={supplierId ? "Selecciona una cotización aceptada" : "Primero selecciona un proveedor"}
+                searchPlaceholder="Buscar cotización..."
+                disabled={!supplierId}
+                className={!supplierId ? "opacity-70" : ""}
+              />
+              <p className="text-xs text-muted-foreground">
+                Solo se muestran cotizaciones que ya tienen proveedor ganador.
+              </p>
+            </div>
+
+            {selectedQuotation && (
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                <p className="text-sm font-medium">{selectedQuotation.code}</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedQuotation.items?.length || 0} productos • {selectedQuotation.status}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Al seleccionar esta cotización, las cantidades y precios se copiarán automáticamente a la orden.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : initialOrder?.quotation ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Cotización vinculada</CardTitle>
+            <CardDescription>Referencia original utilizada para generar esta orden</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="font-medium">{initialOrder.quotation.code}</p>
+            <p className="text-xs text-muted-foreground">Estado: {initialOrder.quotation.status}</p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
