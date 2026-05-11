@@ -434,10 +434,8 @@ export default function EditSupplierPage() {
                       <TableHead>Producto</TableHead>
                       <TableHead>Categoría</TableHead>
                       <TableHead>Precio prov.</TableHead>
-                      <TableHead>SKU prov.</TableHead>
-                      <TableHead>Entrega</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Acciones</TableHead>
+                      {/* <TableHead>Acciones</TableHead> */}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -452,12 +450,10 @@ export default function EditSupplierPage() {
                         </TableCell>
                         <TableCell>{ps.product?.category?.name || "—"}</TableCell>
                         <TableCell>${Number(ps.price).toFixed(2)}</TableCell>
-                        <TableCell className="text-muted-foreground">{ps.supplierSku || "—"}</TableCell>
-                        <TableCell>{ps.leadTimeDays ?? 0} días</TableCell>
                         <TableCell>
-                          {ps.preferred
-                            ? <Badge className="text-xs">Preferido</Badge>
-                            : <Badge variant="secondary" className="text-xs">Alternativo</Badge>}
+                          {ps.product?.active ?? ps.product?.isActive ?? true
+                            ? <Badge className="text-xs">Activo</Badge>
+                            : <Badge variant="secondary" className="text-xs">Inactivo</Badge>}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
