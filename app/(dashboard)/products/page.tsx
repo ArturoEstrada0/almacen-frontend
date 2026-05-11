@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { useProducts } from "@/lib/hooks/use-products"
 import { formatCurrency } from "@/lib/utils/format"
-import { Plus, Search, Edit, Trash2, ImageIcon, ListTree } from "lucide-react"
+import { Plus, Search, Edit, Trash2, ImageIcon, ListTree, Link2 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -241,6 +241,11 @@ export default function ProductsPage() {
                           <Button variant="ghost" size="icon" asChild>
                             <Link href={`/products/${product.id}`}>
                               <Edit className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="icon" asChild title="Asociar proveedores">
+                            <Link href={`/products/${product.id}/suppliers`}>
+                              <Link2 className="h-4 w-4" />
                             </Link>
                           </Button>
                         </ProtectedUpdate>
