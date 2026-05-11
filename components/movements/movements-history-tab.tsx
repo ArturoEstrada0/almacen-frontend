@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { mockMovements, mockProducts, mockWarehouses } from "@/lib/mock-data"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrencyWithDenomination, formatNumber } from "@/lib/utils/format"
 import { Search, TrendingUp, TrendingDown, Activity, Download, Filter } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -175,9 +175,9 @@ export function MovementsHistoryTab() {
                         {formatNumber(Math.abs(movement.quantity))}
                       </span>
                     </TableCell>
-                    <TableCell>{movement.unitCost ? formatCurrency(movement.unitCost) : "-"}</TableCell>
+                    <TableCell>{movement.unitCost ? formatCurrencyWithDenomination(movement.unitCost, (movement.currency || "MXN") as "MXN" | "USD") : "-"}</TableCell>
                     <TableCell className="font-medium">
-                      {movement.totalCost ? formatCurrency(movement.totalCost) : "-"}
+                      {movement.totalCost ? formatCurrencyWithDenomination(movement.totalCost, (movement.currency || "MXN") as "MXN" | "USD") : "-"}
                     </TableCell>
                     <TableCell className="font-mono text-xs">{movement.lotNumber || "-"}</TableCell>
                     <TableCell className="text-sm">{movement.userName}</TableCell>
