@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/lib/context/auth-context"
+import { useNavigation } from "@/lib/context/navigation-context"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import Spinner2 from "@/components/ui/spinner2"
@@ -15,8 +16,7 @@ export default function DashboardLayout({
   const { user, loading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
-
-  
+  const { isNavigating } = useNavigation()
 
   useEffect(() => {
     if (!loading && !user) {
@@ -47,7 +47,14 @@ export default function DashboardLayout({
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto bg-background p-6">{children}</main>
+        <main className="relative flex-1 overflow-y-auto bg-background p-6">
+          {isNavigating && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-50">
+              <Spinner2 />
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   )

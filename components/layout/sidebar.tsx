@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
@@ -20,6 +19,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/lib/context/auth-context"
 import { PermissionModule } from "@/lib/types/permissions"
+import { NavLink } from "@/components/ui/nav-link"
 
 interface NavigationItem {
   name: string
@@ -71,11 +71,11 @@ export function Sidebar() {
         {visibleNavigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
           return (
-            <Link
+            <NavLink
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -83,7 +83,7 @@ export function Sidebar() {
             >
               <item.icon className="h-5 w-5" />
               {item.name}
-            </Link>
+            </NavLink>
           )
         })}
       </nav>
