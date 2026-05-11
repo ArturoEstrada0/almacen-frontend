@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
@@ -17,11 +18,17 @@ import { ProtectedCreate } from "@/components/auth/protected-action"
 import Spinner2 from "@/components/ui/spinner2"
 
 export default function InventoryPage() {
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const selectedWarehouse = searchParams.get("warehouse")
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState<string>("all")
   const { warehouses, isLoading: warehousesLoading } = useWarehouses()
   const [activeTab, setActiveTab] = useState("stock")
+
+  const openWarehouse = (warehouseId: string) => {
+    router.push(`/inventory?warehouse=${warehouseId}`)
+  }
 
   const filteredWarehouses = (warehouses || []).filter((warehouse: any) => {
     const q = searchTerm.trim().toLowerCase()
@@ -91,7 +98,7 @@ export default function InventoryPage() {
             >
               <Card
                 className="cursor-pointer transition-all hover:shadow-lg hover:border-primary"
-                onClick={() => setSelectedWarehouse(warehouse.id)}
+                onClick={() => openWarehouse(warehouse.id)}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -126,7 +133,7 @@ export default function InventoryPage() {
                       </span>
                     </div>
                   )}
-                  <Button className="w-full bg-transparent" variant="outline">
+                  <Button className="w-full bg-transparent" variant="outline" onClick={() => openWarehouse(warehouse.id)}>
                     Ver Inventario
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
@@ -151,7 +158,7 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => setSelectedWarehouse(null)}>
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
               <ArrowRight className="h-4 w-4 rotate-180" />
             </Button>
             <div>
