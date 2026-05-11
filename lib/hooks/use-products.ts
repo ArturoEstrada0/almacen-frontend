@@ -50,9 +50,14 @@ export function useProducts() {
 }
 
 export function useProductsByType(type: string) {
-  const { data, error, isLoading, mutate } = useSWR<any[]>(`products-${type}`, async () => {
+  const key = type ? `products-${type}` : `products-all`
+  const { data, error, isLoading, mutate } = useSWR<any[]>(key, async () => {
     const products = await ApiClient.get<any[]>(API_ENDPOINTS.products.list())
-    return products.filter((p) => p.type === type).map(mapBackendProduct)
+    if (!type) return products.map(mapBackendProduct)
+    const wanted = String(type).toLowerCase().trim()
+    return products
+      .filter((p) => (p.type || "").toString().toLowerCase().trim() === wanted)
+      .map(mapBackendProduct)
   })
 
   return {

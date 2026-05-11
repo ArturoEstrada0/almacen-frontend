@@ -190,25 +190,29 @@ export default function ProductSuppliersPage({ params }: Params) {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <ComboBox
-                    value={row.supplierId}
-                    onChange={(v) => updatePendingSupplier(index, v)}
-                    options={availableSuppliers(index).map((supplier: any) => ({
-                      value: String(supplier.id),
-                      label: supplier.name,
-                    }))}
-                    placeholder="Seleccionar proveedor..."
-                    searchPlaceholder="Buscar proveedor..."
-                    emptyMessage="No hay proveedores disponibles"
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      onClick={() => associateSupplier(index)}
-                      disabled={!row.supplierId}
-                    >
-                      Asociar proveedor
-                    </Button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <ComboBox
+                        value={row.supplierId}
+                        onChange={(v) => updatePendingSupplier(index, v)}
+                        options={availableSuppliers(index).map((supplier: any) => ({
+                          value: String(supplier.id),
+                          label: supplier.name,
+                        }))}
+                        placeholder="Seleccionar proveedor..."
+                        searchPlaceholder="Buscar proveedor..."
+                        emptyMessage="No hay proveedores disponibles"
+                      />
+                    </div>
+                    <div className="shrink-0">
+                      <Button
+                        type="button"
+                        onClick={() => associateSupplier(index)}
+                        disabled={!row.supplierId}
+                      >
+                        Asociar proveedor
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
