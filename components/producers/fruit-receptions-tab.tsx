@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
+import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Printer, Edit, Trash2, Upload, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
@@ -483,11 +484,11 @@ export function FruitReceptionsTab() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Productor *</Label>
-                    <ComboBox
+                    <ProductorComboBox
                       value={selectedProducer}
                       onChange={setSelectedProducer}
                       options={producers.map((producer) => ({
-                        value: producer.id,
+                        value: String(producer.id),
                         label: `${producer.code} - ${producer.name}`,
                         subtitle: producer.code
                       }))}
@@ -498,11 +499,11 @@ export function FruitReceptionsTab() {
                   </div>
                   <div className="space-y-2">
                     <Label>Almacén *</Label>
-                    <ComboBox
+                    <ProductorComboBox
                       value={selectedWarehouse}
                       onChange={setSelectedWarehouse}
                       options={fruitWarehouses.map((warehouse) => ({
-                        value: warehouse.id,
+                        value: String(warehouse.id),
                         label: `${warehouse.code || warehouse.id} - ${warehouse.name}`,
                         subtitle: warehouse.code || warehouse.id
                       }))}
@@ -531,11 +532,11 @@ export function FruitReceptionsTab() {
 
                 <div className="space-y-2">
                   <Label>Producto (Fruta) *</Label>
-                  <ComboBox
+                  <ProductorComboBox
                     value={selectedProduct}
                     onChange={setSelectedProduct}
                     options={fruitProducts.map((product) => ({
-                      value: product.id,
+                      value: String(product.id),
                       label: `${product.sku} - ${product.name}`,
                       subtitle: product.sku
                     }))}
@@ -574,7 +575,7 @@ export function FruitReceptionsTab() {
                         <div key={item.id} className="grid grid-cols-12 gap-2 items-start p-3 bg-blue-50 rounded-lg border border-blue-200">
                           <div className="col-span-5">
                             <Label className="text-xs mb-1 block">Producto/Insumo</Label>
-                            <ComboBox
+                            <ProductorComboBox
                               value={item.productId}
                               onChange={(v) => updateReturnedItem(item.id, { productId: v })}
                               options={insumoProducts.map((p) => ({
@@ -606,13 +607,13 @@ export function FruitReceptionsTab() {
                           <div className="col-span-2">
                             <Label className="text-xs mb-1 block">Precio Unit.</Label>
                             <Input
-                              type="text"
-                              inputMode="decimal"
+                              type="number"
+                              step="1"
+                              min="0"
                               value={item.unitPrice}
-                              disabled
-                              placeholder="0.00"
-                              className="text-sm bg-muted"
-                              title="El precio se obtiene automáticamente de la base de datos"
+                              onChange={(e) => updateReturnedItem(item.id, { unitPrice: e.target.value })}
+                              placeholder="0"
+                              className="text-sm"
                             />
                           </div>
                           <div className="col-span-2">

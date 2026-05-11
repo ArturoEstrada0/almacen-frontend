@@ -513,7 +513,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
               <label className="text-sm font-medium">Cantidad Disponible</label>
               <Input 
                 type="number"
-                step="0.01"
+                step="1"
                 value={editAvailable} 
                 onChange={(e) => setEditAvailable(e.target.value)}
                 placeholder="0"
@@ -547,7 +547,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
               <label className="text-sm font-medium">Precio de Costo</label>
               <Input 
                 type="number"
-                step="0.01"
+                step="1"
                 value={editCostPrice} 
                 onChange={(e) => setEditCostPrice(e.target.value)}
                 placeholder="0.00"

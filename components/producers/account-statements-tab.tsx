@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ComboBox } from "@/components/ui/combobox"
+import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Label } from "@/components/ui/label"
 import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -517,11 +518,11 @@ export function AccountStatementsTab() {
             <div className="flex gap-4">
               <div className="flex-1">
                 <Label htmlFor="producer">Seleccionar Productor</Label>
-                <ComboBox
+                <ProductorComboBox
                   value={selectedProducer}
                   onChange={setSelectedProducer}
                   options={(producers || []).map((producer) => ({
-                    value: producer.id,
+                    value: String(producer.id),
                     label: `${producer.code} - ${producer.name}`,
                     subtitle: producer.code
                   }))}

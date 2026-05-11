@@ -787,7 +787,7 @@ export function CustomersDirectoryTab() {
                 id="originalAmount"
                 type="number"
                 min={0}
-                step="0.01"
+                step="1"
                 value={receivableForm.originalAmount || ""}
                 onChange={(e) => setReceivableForm((prev) => ({ ...prev, originalAmount: Number(e.target.value || 0) }))}
               />

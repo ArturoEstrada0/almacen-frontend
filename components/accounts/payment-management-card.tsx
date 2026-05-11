@@ -174,7 +174,7 @@ export default function PaymentManagementCard({
                         id="paymentAmount"
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="1"
                         value={amount || ""}
                         onChange={(e) => onAmountChange(Number(e.target.value || 0))}
                       />

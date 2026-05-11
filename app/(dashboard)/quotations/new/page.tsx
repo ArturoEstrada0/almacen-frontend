@@ -394,7 +394,7 @@ export default function NewQuotationPage() {
                           <Input
                             type="number"
                             min="0.01"
-                            step="0.01"
+                            step="1"
                             value={item.quantity}
                             onChange={(e) =>
                               updateItemQuantity(
