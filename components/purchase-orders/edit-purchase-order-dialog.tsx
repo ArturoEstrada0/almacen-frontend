@@ -11,7 +11,7 @@ import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { updatePurchaseOrder } from "@/lib/hooks/use-purchase-orders"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import { Plus, Trash2, Save } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
@@ -28,6 +28,7 @@ interface Item {
   productId: string
   quantity: number
   unitPrice: number
+  currency?: "MXN" | "USD"
 }
 
 export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: Props) {
@@ -79,10 +80,10 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
     setExpectedDeliveryDate(order.expectedDeliveryDate ? order.expectedDeliveryDate.split("T")[0] : "")
     setCreditDays(order.creditDays || 0)
     setNotes(order.notes || "")
-    setItems(order.items.map((it: any) => ({ id: it.id, productId: it.productId, quantity: it.quantity, unitPrice: it.unitPrice })))
+    setItems(order.items.map((it: any) => ({ id: it.id, productId: it.productId, quantity: it.quantity, unitPrice: it.unitPrice, currency: it.currency || order.currency || "MXN" })))
   }, [order])
 
-  const addItem = () => setItems([...items, { productId: "", quantity: 1, unitPrice: 0 }])
+  const addItem = () => setItems([...items, { productId: "", quantity: 1, unitPrice: 0, currency: (order?.currency || "MXN") as "MXN" | "USD" }])
   const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index))
   const updateItem = (index: number, field: keyof Item, value: any) => {
     const newItems = [...items]
@@ -91,6 +92,7 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
   }
 
   const calculateSubtotal = () => items.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
+  const orderCurrency = (order?.currency || items[0]?.currency || "MXN") as "MXN" | "USD"
   const calculateItemTax = (item: Item) => {
     const product = products.find((p) => p.id === item.productId)
     const appliesIva = product ? product.hasIva16 !== false : true
@@ -119,10 +121,12 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
       const payload = {
         warehouseId,
         notes,
+        currency: orderCurrency,
         items: items.map((it) => ({
           productId: it.productId,
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
+          currency: it.currency || orderCurrency,
         })),
       }
 
@@ -156,7 +160,7 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Proveedor</Label>
-              <p className="font-medium">{suppliers.find((s) => s.id === supplierId)?.businessName || suppliers.find((s) => s.id === supplierId)?.name}</p>
+              <p className="font-medium">{suppliers.find((s) => s.id === supplierId)?.name}</p>
               <p className="text-xs text-muted-foreground">El proveedor no puede modificarse desde esta pantalla</p>
             </div>
 
@@ -244,8 +248,8 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
                       <TableCell>
                         <Input type="number" min={0} step={0.01} value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", Number.parseFloat(e.target.value || "0"))} className="w-32" placeholder="0.00" />
                       </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(calculateItemTax(item))}</TableCell>
-                      <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
+                      <TableCell className="font-medium">{formatCurrencyWithDenomination(calculateItemTax(item), item.currency || orderCurrency)}</TableCell>
+                      <TableCell className="font-medium">{formatCurrencyWithDenomination(item.quantity * item.unitPrice, item.currency || orderCurrency)}</TableCell>
                       <TableCell>
                         <Button variant="ghost" size="icon" onClick={() => removeItem(idx)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -262,15 +266,15 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
             <div className="flex justify-end gap-8 border-t pt-4 mt-4">
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Subtotal</p>
-                <p className="text-lg font-medium">{formatCurrency(calculateSubtotal())}</p>
+                <p className="text-lg font-medium">{formatCurrencyWithDenomination(calculateSubtotal(), orderCurrency)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">IVA (16%)</p>
-                <p className="text-lg font-medium">{formatCurrency(calculateTax())}</p>
+                <p className="text-lg font-medium">{formatCurrencyWithDenomination(calculateTax(), orderCurrency)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold">{formatCurrency(calculateTotal())}</p>
+                <p className="text-2xl font-bold">{formatCurrencyWithDenomination(calculateTotal(), orderCurrency)}</p>
               </div>
             </div>
           )}

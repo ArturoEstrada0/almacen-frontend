@@ -13,7 +13,7 @@ import {
   type ShipmentPayableEntry,
 } from "@/lib/hooks/use-purchase-orders"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import { Search, DollarSign, AlertCircle, Calendar, FileText } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"

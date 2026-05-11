@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { mockWarehouses, mockStock, mockProducts } from "@/lib/mock-data"
-import { formatCurrency, formatNumber } from "@/lib/utils/format"
+import { formatCurrency, formatCurrencyWithDenomination, formatNumber } from "@/lib/utils/format"
 import { Plus, Warehouse, MapPin, Edit, Trash2 } from "lucide-react"
 import {
   Dialog,

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { mockProducts, mockCategories } from "@/lib/mock-data"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import { Plus, Search, Download, Upload, Edit, Trash2, ImageIcon } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -246,8 +246,8 @@ export function ProductsTab() {
                       <Badge variant="outline">{subcategory?.name || category?.name}</Badge>
                     </TableCell>
                     <TableCell>{product.unitOfMeasure}</TableCell>
-                    <TableCell>{formatCurrency(product.costPrice)}</TableCell>
-                    <TableCell>{formatCurrency(product.salePrice)}</TableCell>
+                    <TableCell>{formatCurrencyWithDenomination(product.costPrice, product.currency || "MXN")}</TableCell>
+                    <TableCell>{formatCurrencyWithDenomination(product.salePrice, product.currency || "MXN")}</TableCell>
                     <TableCell>
                       <Badge variant={margin > 30 ? "default" : margin > 15 ? "secondary" : "destructive"}>
                         {margin.toFixed(1)}%

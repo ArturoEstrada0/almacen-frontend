@@ -11,6 +11,24 @@ export function formatCurrency(amount: number | null | undefined): string {
   }).format(amount)
 }
 
+export function formatCurrencyWithDenomination(amount: number | null | undefined, currency: "MXN" | "USD" = "MXN"): string {
+  if (amount == null || isNaN(amount)) {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency,
+    }).format(0)
+  }
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency,
+  }).format(amount)
+}
+
+export function formatCurrencyShort(amount: number | null | undefined, currency: "MXN" | "USD" = "MXN"): string {
+  const formatted = formatCurrencyWithDenomination(amount, currency)
+  return `${formatted} ${currency}`
+}
+
 export function formatNumber(num: number): string {
   return new Intl.NumberFormat("es-MX").format(num)
 }

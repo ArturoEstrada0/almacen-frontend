@@ -55,6 +55,7 @@ export interface Product {
   maxStock: number
   reorderPoint: number
   hasIva16: boolean
+  currency?: "MXN" | "USD"
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -99,6 +100,7 @@ export interface Movement {
   quantity: number
   unitCost?: number
   totalCost?: number
+  currency?: "MXN" | "USD"
   fromWarehouseId?: string
   toWarehouseId?: string
   lotNumber?: string
@@ -153,6 +155,7 @@ export interface PurchaseOrder {
   supplier?: Supplier
   warehouseId: string
   warehouse?: Warehouse
+  currency?: "MXN" | "USD"
   quotationId?: string | null
   quotation?: {
     id: string
@@ -189,6 +192,7 @@ export interface PurchaseOrderItem {
   quantity: number
   receivedQuantity: number
   unitPrice: number
+  currency?: "MXN" | "USD"
   subtotal: number
   tax: number
   total: number

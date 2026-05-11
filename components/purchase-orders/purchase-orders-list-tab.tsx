@@ -13,7 +13,7 @@ import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { useProducts } from "@/lib/hooks/use-products"
 import { useMovements } from "@/lib/hooks/use-inventory"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import { useCurrentUser } from "@/lib/hooks/use-users"
 import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -408,7 +408,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                         <TableCell>{warehouse?.name}</TableCell>
                         <TableCell className="text-sm">{formatDateSafely(rowOrder.orderDate as any)}</TableCell>
                         <TableCell className="text-sm">{formatDateSafely(rowOrder.expectedDeliveryDate as any)}</TableCell>
-                        <TableCell className="font-medium">{formatCurrency(rowOrder.total)}</TableCell>
+                        <TableCell className="font-medium">{formatCurrencyWithDenomination(rowOrder.total, (rowOrder.currency || rowOrder.items?.[0]?.currency || "MXN") as "MXN" | "USD")}</TableCell>
                         <TableCell>
                           <Badge variant={getStatusColor(rowOrder.status)}>{rowOrder.status}</Badge>
                         </TableCell>
@@ -526,7 +526,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
               <div>
                 <Label htmlFor="receive-invoice-date">Fecha de Facturación *</Label>
-                <DatePicker value={receiveInvoiceDate} onChange={setReceiveInvoiceDate} disabled={isReceivingLoading} />
+                <DatePicker value={receiveInvoiceDate} onChange={setReceiveInvoiceDate} />
               </div>
 
               <div>
@@ -618,8 +618,8 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                           <TableCell>{product?.name}</TableCell>
                           <TableCell>{item.quantity}</TableCell>
                           <TableCell>{item.receivedQuantity}</TableCell>
-                          <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                          <TableCell>{formatCurrency(item.total)}</TableCell>
+                          <TableCell>{formatCurrencyWithDenomination(item.unitPrice, (detailsOrder.currency || item.currency || "MXN") as "MXN" | "USD")}</TableCell>
+                          <TableCell>{formatCurrencyWithDenomination(item.total, (detailsOrder.currency || item.currency || "MXN") as "MXN" | "USD")}</TableCell>
                         </TableRow>
                       )
                     })}
@@ -630,15 +630,15 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               <div className="flex justify-end gap-4 border-t pt-4">
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Subtotal</p>
-                  <p className="font-medium">{formatCurrency(detailsOrder.subtotal)}</p>
+                  <p className="font-medium">{formatCurrencyWithDenomination(detailsOrder.subtotal, (detailsOrder.currency || "MXN") as "MXN" | "USD")}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">IVA</p>
-                  <p className="font-medium">{formatCurrency(detailsOrder.tax)}</p>
+                  <p className="font-medium">{formatCurrencyWithDenomination(detailsOrder.tax, (detailsOrder.currency || "MXN") as "MXN" | "USD")}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Total</p>
-                  <p className="font-medium">{formatCurrency(detailsOrder.total)}</p>
+                  <p className="font-medium">{formatCurrencyWithDenomination(detailsOrder.total, (detailsOrder.currency || "MXN") as "MXN" | "USD")}</p>
                 </div>
               </div>
 
@@ -658,7 +658,8 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                           {group.movements.map((movement: any) => {
                             const item = movement.items?.[0]
                             const product = products.find((p) => p.id === item?.productId)
-                            const unitPrice = item?.cost || product?.price
+                            const movementCurrency = (movement.currency || detailsOrder.currency || item?.currency || "MXN") as "MXN" | "USD"
+                            const unitPrice = item?.cost || product?.costPrice
                             const total = unitPrice ? Number(unitPrice) * Number(item?.quantity) : 0
                             return (
                               <div key={movement.id} className="bg-gray-50 dark:bg-slate-900 p-2 rounded">
@@ -672,8 +673,8 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                                     </p>
                                   </div>
                                   <div className="text-right text-sm ml-4">
-                                    <p className="font-medium">{formatCurrency(total)}</p>
-                                    {unitPrice && <p className="text-xs text-muted-foreground">@{formatCurrency(unitPrice)}</p>}
+                                    <p className="font-medium">{formatCurrencyWithDenomination(total, movementCurrency)}</p>
+                                    {unitPrice && <p className="text-xs text-muted-foreground">@{formatCurrencyWithDenomination(unitPrice, movementCurrency)}</p>}
                                   </div>
                                 </div>
                                 {movement.notes && (

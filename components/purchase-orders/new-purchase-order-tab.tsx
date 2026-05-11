@@ -13,7 +13,7 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { cancelPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
 import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import type { PurchaseOrder } from "@/lib/types"
 import { Plus, Trash2, Save } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -36,6 +36,7 @@ interface PurchaseOrderItem {
   productId: string
   quantity: number
   unitPrice: number
+  currency?: "MXN" | "USD"
 }
 
 interface QuotationOption {
@@ -60,6 +61,7 @@ interface QuotationOption {
     supplierResponses?: Array<{
       supplierId: string
       price: number
+      currency?: "MXN" | "USD"
       available?: boolean
       notes?: string | null
     }>
@@ -90,20 +92,7 @@ export function NewPurchaseOrderTab({
   const [submitted, setSubmitted] = useState(false)
   const infoCardRef = useRef<HTMLDivElement>(null)
 
-  const addItem = () => {
-    setItems([...items, { productId: "", quantity: 1, unitPrice: 0 }])
-  }
-
   const [showImporter, setShowImporter] = useState(false)
-
-  function handleImportComplete(result: any) {
-    // Map imported items into current items array
-    const importedItems = (result.items || []).map((it: any) => ({ productId: it.productId || "", quantity: Number(it.quantity) || 1, unitPrice: Number(it.unitPrice) || 0 }))
-    setSupplierId(result.supplierId || supplierId)
-    setWarehouseId(result.warehouseId || warehouseId)
-    setItems((cur) => [...cur, ...importedItems])
-    setShowImporter(false)
-  }
 
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index))
@@ -162,6 +151,11 @@ export function NewPurchaseOrderTab({
     [quotations, selectedQuotationDetail, selectedQuotationId],
   )
 
+  const orderCurrency = useMemo<"MXN" | "USD">(() => {
+    const direct = (initialOrder as any)?.currency || selectedQuotationDetail?.items?.[0]?.supplierResponses?.find((response) => response.available !== false)?.currency || selectedQuotation?.items?.[0]?.supplierResponses?.find((response) => response.available !== false)?.currency
+    return direct === "USD" ? "USD" : "MXN"
+  }, [initialOrder, selectedQuotation, selectedQuotationDetail])
+
   const eligibleQuotations = useMemo(
     () => {
       if (!supplierId) return []
@@ -211,6 +205,19 @@ export function NewPurchaseOrderTab({
     return baseProductOptions.filter((opt) => !selectedInOtherRows.has(opt.value))
   }
 
+  const addItem = () => {
+    setItems([...items, { productId: "", quantity: 1, unitPrice: 0, currency: orderCurrency }])
+  }
+
+  function handleImportComplete(result: any) {
+    // Map imported items into current items array
+    const importedItems = (result.items || []).map((it: any) => ({ productId: it.productId || "", quantity: Number(it.quantity) || 1, unitPrice: Number(it.unitPrice) || 0 }))
+    setSupplierId(result.supplierId || supplierId)
+    setWarehouseId(result.warehouseId || warehouseId)
+    setItems((cur) => [...cur, ...importedItems.map((it: any) => ({ ...it, currency: orderCurrency }))])
+    setShowImporter(false)
+  }
+
   useEffect(() => {
     if (mode !== "edit" || !initialOrder) {
       setSupplierId("")
@@ -234,6 +241,7 @@ export function NewPurchaseOrderTab({
         productId: it.productId,
         quantity: Number(it.quantity || 0),
         unitPrice: Number((it as any).unitPrice ?? (it as any).price ?? 0),
+        currency: (it as any).currency || initialOrder.currency || "MXN",
       })),
     )
   }, [mode, initialOrder])
@@ -265,7 +273,7 @@ export function NewPurchaseOrderTab({
     return () => {
       cancelled = true
     }
-  }, [mode, selectedQuotationId])
+  }, [mode, selectedQuotationId, supplierId])
 
   useEffect(() => {
     if (mode !== "create" || !selectedQuotation) return
@@ -289,6 +297,7 @@ export function NewPurchaseOrderTab({
         productId: item.productId,
         quantity: Number(item.quantity) || 1,
         unitPrice: Number(response?.price ?? 0),
+        currency: response?.currency || "MXN",
       }
     })
 
@@ -312,11 +321,13 @@ export function NewPurchaseOrderTab({
         expectedDate: expectedDeliveryDate,
         creditDays,
         notes,
+        currency: orderCurrency,
         quotationId: selectedQuotationId || undefined,
         items: items.map((it) => ({
           productId: it.productId,
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
+          currency: it.currency || orderCurrency,
           notes: undefined,
         })),
       }
@@ -603,7 +614,7 @@ export function NewPurchaseOrderTab({
                           />
                           {product && (
                             <p className="text-xs text-muted-foreground mt-1">
-                              Stock actual: {product.minStock} • Precio sugerido: {formatCurrency(product.costPrice)}
+                              Stock actual: {product.minStock} • Precio sugerido: {formatCurrencyWithDenomination(product.costPrice, product.currency || "MXN")}
                             </p>
                           )}
                         </TableCell>
@@ -627,8 +638,8 @@ export function NewPurchaseOrderTab({
                             placeholder="0.00"
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{formatCurrency(calculateItemTax(item))}</TableCell>
-                        <TableCell className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>
+                        <TableCell className="font-medium">{formatCurrencyWithDenomination(calculateItemTax(item), item.currency || orderCurrency)}</TableCell>
+                        <TableCell className="font-medium">{formatCurrencyWithDenomination(item.quantity * item.unitPrice, item.currency || orderCurrency)}</TableCell>
                         <TableCell>
                           <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
@@ -646,15 +657,15 @@ export function NewPurchaseOrderTab({
             <div className="flex justify-end gap-8 border-t pt-4 mt-4">
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Subtotal</p>
-                <p className="text-lg font-medium">{formatCurrency(calculateSubtotal())}</p>
+                <p className="text-lg font-medium">{formatCurrencyWithDenomination(calculateSubtotal(), orderCurrency)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">IVA (16%)</p>
-                <p className="text-lg font-medium">{formatCurrency(calculateTax())}</p>
+                <p className="text-lg font-medium">{formatCurrencyWithDenomination(calculateTax(), orderCurrency)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold">{formatCurrency(calculateTotal())}</p>
+                <p className="text-2xl font-bold">{formatCurrencyWithDenomination(calculateTotal(), orderCurrency)}</p>
               </div>
             </div>
           )}

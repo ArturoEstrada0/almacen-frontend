@@ -17,7 +17,7 @@ import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { api } from "@/lib/config/api"
 import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 
 export function PaymentsHistoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
