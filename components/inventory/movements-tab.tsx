@@ -16,7 +16,7 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { useMovements, createMovement } from "@/lib/hooks/use-inventory"
 import { useInventoryByWarehouse } from "@/lib/hooks/use-inventory"
 import { formatCurrency, formatCurrencyWithDenomination, formatDate } from "@/lib/utils/format"
-import { Search, Plus, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft, X } from "lucide-react"
+import { Search, Plus, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft, X, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { toast } from "@/lib/utils/toast"
 import { mutate as globalMutate } from "swr"
@@ -121,6 +121,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
   const [movementItems, setMovementItems] = useState<Array<{ id: string; productId: string; quantityInput: string; unitCostInput: string; lotNumber: string }>>([
     { id: "i-0", productId: "", quantityInput: "", unitCostInput: "", lotNumber: "" },
   ])
+  const [isCreatingMovement, setIsCreatingMovement] = useState(false)
 
   // Transfer form state (controlled)
   const [transferFrom, setTransferFrom] = useState<string>("")
@@ -206,6 +207,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
         }
       }
 
+      setIsCreatingMovement(true)
       const loading = toast.loading("Registrando movimiento...")
       try {
         await createMovement({
@@ -266,6 +268,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
         console.error("Error creating movement", err)
       } finally {
         // dismiss loading (sonner's loading toast is auto-replaced by next toast)
+        setIsCreatingMovement(false)
       }
     } catch (err) {
       console.error("Error creating movement", err)
@@ -542,9 +545,18 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   }}>Cancelar</Button>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button type="submit">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Registrar Movimiento
+                  <Button type="submit" disabled={isCreatingMovement}>
+                    {isCreatingMovement ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Registrando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Registrar Movimiento
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

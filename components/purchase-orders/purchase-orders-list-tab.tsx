@@ -51,6 +51,11 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   const [receiveInvoiceNumber, setReceiveInvoiceNumber] = useState<string>("")
   const [isReceivingLoading, setIsReceivingLoading] = useState(false)
 
+  const clampQuantity = (value: number, min: number, max: number) => {
+    if (Number.isNaN(value)) return min
+    return Math.min(Math.max(value, min), max)
+  }
+
   const [detailsOrderId, setDetailsOrderId] = useState<string | null>(null)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
 
@@ -205,12 +210,17 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
       const userName = currentUser?.fullName || currentUser?.email || "sistema"
 
-      for (const item of order.items) {
-        const qty = receiveQuantities[item.id] ?? Math.max(0, item.quantity - item.receivedQuantity)
-        if (qty > 0) {
-          await receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber)
-        }
-      }
+      const promises = order.items
+        .map((item) => {
+          const pending = Math.max(0, item.quantity - item.receivedQuantity)
+          const qty = clampQuantity(receiveQuantities[item.id] ?? pending, 0, pending)
+          if (qty > 0) {
+            return receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber)
+          }
+          return Promise.resolve()
+        })
+
+      await Promise.all(promises)
 
       toast.success("Recepción completada", {
         description: "Los productos han sido agregados al inventario",
@@ -383,7 +393,8 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                 </TableHeader>
                 <TableBody>
                   {pagedOrders.map((rowOrder) => {
-                    const editable = (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
+                    const isFinalStatus = rowOrder.status === "completada" || rowOrder.status === "cancelada"
+                    const editable = !isFinalStatus && (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
                     const supplier = suppliers.find((s) => s.id === rowOrder.supplierId)
                     const warehouse = warehouses.find((w) => w.id === rowOrder.warehouseId)
                     const dueDate = parseDateOnly(rowOrder.dueDate as any)
@@ -436,7 +447,14 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                               </ProtectedUpdate>
                             )}
                             <ProtectedUpdate module="purchaseOrders">
-                              <Button variant="outline" size="icon" onClick={() => router.push(`/purchase-orders/${rowOrder.id}/edit`)} disabled={!editable} aria-label="Editar orden">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => router.push(`/purchase-orders/${rowOrder.id}/edit`)}
+                                disabled={!editable}
+                                aria-label={editable ? "Editar orden" : "Orden no editable"}
+                                title={editable ? "Editar orden" : "La orden no se puede editar porque está completada o cancelada"}
+                              >
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             </ProtectedUpdate>
@@ -511,9 +529,19 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                               value={receiveQuantities[item.id] ?? pending}
                               min={0}
                               max={pending}
+                              step={1}
                               className="w-24"
                               onChange={(e) =>
-                                setReceiveQuantities((prev) => ({ ...prev, [item.id]: Number.parseInt(e.target.value || "0") }))
+                                setReceiveQuantities((prev) => ({
+                                  ...prev,
+                                  [item.id]: clampQuantity(Number.parseInt(e.target.value || "0"), 0, pending),
+                                }))
+                              }
+                              onBlur={(e) =>
+                                setReceiveQuantities((prev) => ({
+                                  ...prev,
+                                  [item.id]: clampQuantity(Number.parseInt(e.target.value || "0"), 0, pending),
+                                }))
                               }
                             />
                           </TableCell>
