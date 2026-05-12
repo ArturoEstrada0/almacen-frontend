@@ -230,7 +230,8 @@ export function FruitReceptionsTab() {
     }
   }
 
-  const resetForm = () => {
+  const clearFormData = () => {
+    // Solo limpia los datos del formulario sin afectar el estado del diálogo
     setSelectedProducer("")
     setSelectedWarehouse("")
     setSelectedProduct("")
@@ -242,9 +243,26 @@ export function FruitReceptionsTab() {
     setReturnedBoxesValue("")
     setReturnedItems([])
     setNotes("")
-    setIsDialogOpen(false)
     setIsEditMode(false)
     setEditingReceptionId(null)
+  }
+
+  const resetForm = () => {
+    clearFormData()
+    setIsDialogOpen(false)
+  }
+
+  const handleOpenNewReception = () => {
+    clearFormData()
+    setIsDialogOpen(true)
+  }
+
+  const handleCloseDialog = (open: boolean) => {
+    setIsDialogOpen(open)
+    if (!open) {
+      // Limpia el formulario cuando se cierra el diálogo (ESC, clic afuera, etc)
+      clearFormData()
+    }
   }
 
   const handleEditReception = (reception: any) => {
@@ -467,14 +485,12 @@ export function FruitReceptionsTab() {
               <ChevronsUpDown className="mr-2 h-4 w-4" />
               {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
             </Button>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
               <ProtectedCreate module="producers">
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nueva Recepción
-                  </Button>
-                </DialogTrigger>
+                <Button onClick={handleOpenNewReception}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva Recepción
+                </Button>
               </ProtectedCreate>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
