@@ -14,6 +14,7 @@ import { ProtectedCreate } from "@/components/auth/protected-action"
 export default function PurchaseOrdersPage() {
   const searchParams = useSearchParams()
   const initialTab = (searchParams?.get("tab") as string) || "list"
+  const initialPayableId = (searchParams?.get("payableId") as string) || null
   const [activeTab, setActiveTab] = useState(initialTab)
   const router = useRouter()
   const pathname = usePathname()
@@ -101,7 +102,7 @@ export default function PurchaseOrdersPage() {
         </TabsContent>
 
         <TabsContent value="payables" className="space-y-4">
-          <AccountsPayableTab />
+          <AccountsPayableTab initialSelectedPayableId={initialPayableId} />
         </TabsContent>
 
         <TabsContent value="payments" className="space-y-4">

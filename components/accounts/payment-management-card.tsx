@@ -27,6 +27,7 @@ export type PaymentHistoryItem = {
 }
 
 export type SelectedPaymentDocument = {
+  accountLabel?: string
   invoiceNumber: string
   invoiceDateText: string
   dueDateText: string
@@ -115,7 +116,8 @@ export default function PaymentManagementCard({
             <div className="space-y-3 rounded-md border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold">{selectedDocument.invoiceNumber}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Cuenta mostrada</p>
+                  <p className="text-sm font-semibold">{selectedDocument.accountLabel || selectedDocument.invoiceNumber}</p>
                   <p className="text-xs text-muted-foreground">
                     Emitida el {selectedDocument.invoiceDateText} · Vence el {selectedDocument.dueDateText}
                   </p>
@@ -174,7 +176,7 @@ export default function PaymentManagementCard({
                         id="paymentAmount"
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="1"
                         value={amount || ""}
                         onChange={(e) => onAmountChange(Number(e.target.value || 0))}
                       />

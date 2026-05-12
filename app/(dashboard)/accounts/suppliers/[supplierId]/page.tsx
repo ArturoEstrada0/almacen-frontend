@@ -1,7 +1,7 @@
 "use client"
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CalendarClock, Wallet } from "lucide-react"
 import PaymentManagementCard from "@/components/accounts/payment-management-card"
 import { Button } from "@/components/ui/button"
@@ -49,6 +49,7 @@ type SupplierPayablePayment = {
 export default function SupplierAccountDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const supplierId = Array.isArray(params?.supplierId) ? params.supplierId[0] : (params?.supplierId as string | undefined)
   const { suppliers, isLoading } = useSuppliers()
   const { purchaseOrders, isLoading: isLoadingOrders, mutate } = usePurchaseOrders()
@@ -102,6 +103,8 @@ export default function SupplierAccountDetailPage() {
         const paidAmount = Number(order.amountPaid || 0)
         const balanceAmount = Math.max(originalAmount - paidAmount, 0)
         const due = parseDateOnly(order.dueDate as any)
+        const invoiceDate = parseDateOnly(order.invoiceDate || order.orderDate)
+        const dueDate = parseDateOnly(order.dueDate)
         const isOverdue = !!due && balanceAmount > 0 && due.getTime() < today.getTime()
         const status = balanceAmount <= 0 ? "pagada" : isOverdue ? "vencida" : paidAmount > 0 ? "parcial" : "pendiente"
         const rawPayments = Array.isArray(order.payments)
@@ -122,8 +125,8 @@ export default function SupplierAccountDetailPage() {
         return {
           id: order.id,
           invoiceNumber: String(order.invoiceNumber || order.orderNumber || "-"),
-          invoiceDate: order.invoiceDate || order.orderDate,
-          dueDate: order.dueDate,
+          invoiceDate,
+          dueDate,
           originalAmount,
           paidAmount,
           balanceAmount,
@@ -172,6 +175,7 @@ export default function SupplierAccountDetailPage() {
   const selectedPayableCard = useMemo(() => {
     if (!selectedPayable) return null
     return {
+      accountLabel: `Cuenta ${selectedPayable.invoiceNumber}`,
       invoiceNumber: selectedPayable.invoiceNumber,
       invoiceDateText: formatLocalDateOnly(selectedPayable.invoiceDate as any),
       dueDateText: formatLocalDateOnly(selectedPayable.dueDate as any),
@@ -199,6 +203,16 @@ export default function SupplierAccountDetailPage() {
   const isPayablePaid =
     !!selectedPayable &&
     (selectedPayable.balanceAmount <= 0 || selectedPayable.status === "pagada")
+
+  useEffect(() => {
+    const payableId = searchParams?.get("payableId")
+    if (!payableId) return
+
+    const exists = payables.some((row) => row.id === payableId)
+    if (exists) {
+      setSelectedPayableId(payableId)
+    }
+  }, [searchParams, payables])
 
   useEffect(() => {
     if (!selectedPayable) return
@@ -432,7 +446,10 @@ export default function SupplierAccountDetailPage() {
                   </TableHeader>
                   <TableBody>
                     {payables.map((row) => (
-                      <TableRow key={row.id}>
+                      <TableRow
+                        key={row.id}
+                        className={`transition-colors hover:bg-slate-100/80 dark:hover:bg-slate-800/60 ${selectedPayable?.id === row.id ? "bg-slate-100/80 dark:bg-slate-800/50" : ""}`}
+                      >
                         <TableCell className="font-medium">{row.invoiceNumber}</TableCell>
                         <TableCell>{formatLocalDateOnly(row.invoiceDate as any)}</TableCell>
                         <TableCell>

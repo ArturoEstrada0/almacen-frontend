@@ -332,6 +332,8 @@ export function NewPurchaseOrderTab({
         })),
       }
 
+      console.log('[DEBUG] Payload being sent to API:', JSON.stringify(payload, null, 2))
+
       if (mode === "edit" && initialOrder?.id) {
         await updatePurchaseOrder(initialOrder.id, payload)
         toast.success("Orden de compra actualizada exitosamente")

@@ -10,11 +10,18 @@ import { AccountStatementsTab } from "@/components/producers/account-statements-
 import { PaymentReportsTab } from "@/components/producers/payment-reports-tab"
 
 export default function ProducersPage() {
+  const allowedTabs = new Set(['directory', 'assignments', 'receptions', 'shipments', 'accounts', 'payments'])
+
+  const normalizeTab = (value: string | null | undefined) => {
+    const tab = String(value || '').trim()
+    return allowedTabs.has(tab) ? tab : 'directory'
+  }
+
   const [activeTab, setActiveTab] = useState(() => {
     try {
       if (typeof window === 'undefined') return 'directory'
       const params = new URL(window.location.href).searchParams
-      return params.get('tab') || 'directory'
+      return normalizeTab(params.get('tab'))
     } catch {
       return 'directory'
     }
@@ -36,7 +43,7 @@ export default function ProducersPage() {
     const onPop = () => {
       try {
         const params = new URL(window.location.href).searchParams
-        setActiveTab(params.get('tab') || 'directory')
+        setActiveTab(normalizeTab(params.get('tab')))
       } catch {
         setActiveTab('directory')
       }

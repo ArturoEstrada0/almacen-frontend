@@ -16,7 +16,7 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { useMovements, createMovement } from "@/lib/hooks/use-inventory"
 import { useInventoryByWarehouse } from "@/lib/hooks/use-inventory"
 import { formatCurrency, formatCurrencyWithDenomination, formatDate } from "@/lib/utils/format"
-import { Search, Plus, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft, X } from "lucide-react"
+import { Search, Plus, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft, X, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { toast } from "@/lib/utils/toast"
 import { mutate as globalMutate } from "swr"
@@ -32,15 +32,22 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState<string>("all")
 
+  const normalizeType = (value: any) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+
   const { movements, mutate: mutateMovements } = useMovements({ warehouseId })
   const { products } = useProducts()
   const { warehouses } = useWarehouses()
   const { mutate: mutateInventory } = useInventoryByWarehouse(warehouseId || null)
 
   const currentWarehouse = (warehouses || []).find((warehouse: any) => warehouse.id === warehouseId)
-  const currentWarehouseType = (currentWarehouse as any)?.type as "insumo" | "fruta" | undefined
+  const currentWarehouseType = normalizeType((currentWarehouse as any)?.type) as "insumo" | "fruta" | ""
   const availableWarehouses = currentWarehouseType
-    ? (warehouses || []).filter((warehouse: any) => warehouse.type === currentWarehouseType)
+    ? (warehouses || []).filter((warehouse: any) => normalizeType(warehouse.type) === currentWarehouseType)
     : warehouses || []
 
   // Pre-fill warehouseId with the first available warehouse (helps UX)
@@ -121,6 +128,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
   const [movementItems, setMovementItems] = useState<Array<{ id: string; productId: string; quantityInput: string; unitCostInput: string; lotNumber: string }>>([
     { id: "i-0", productId: "", quantityInput: "", unitCostInput: "", lotNumber: "" },
   ])
+  const [isCreatingMovement, setIsCreatingMovement] = useState(false)
 
   // Transfer form state (controlled)
   const [transferFrom, setTransferFrom] = useState<string>("")
@@ -147,16 +155,44 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
   }, [availableWarehouses, warehouseId])
 
   const selectedWarehouse = (warehouses || []).find((warehouse: any) => warehouse.id === form.warehouseId)
-  const selectedWarehouseType = (selectedWarehouse as any)?.type as "insumo" | "fruta" | undefined
+  const selectedWarehouseType = normalizeType((selectedWarehouse as any)?.type) as "insumo" | "fruta" | ""
   const availableProductsForMovement = selectedWarehouseType
-    ? products.filter((product: any) => product.type === selectedWarehouseType)
+    ? products.filter((product: any) => normalizeType(product.type) === selectedWarehouseType)
     : products
 
   const transferSourceWarehouse = (warehouses || []).find((warehouse: any) => warehouse.id === transferFrom)
-  const transferSourceType = (transferSourceWarehouse as any)?.type as "insumo" | "fruta" | undefined
+  const transferSourceType = normalizeType((transferSourceWarehouse as any)?.type) as "insumo" | "fruta" | ""
   const availableProductsForTransfer = transferSourceType
-    ? products.filter((product: any) => product.type === transferSourceType)
+    ? products.filter((product: any) => normalizeType(product.type) === transferSourceType)
     : products
+
+  const [transferItems, setTransferItems] = useState<Array<{ id: string; productId: string; quantityInput: string; lotNumber: string }>>([
+    { id: "t-0", productId: "", quantityInput: "", lotNumber: "" },
+  ])
+
+  const getAvailableProductsForTransferRow = (rowId: string) => {
+    const selectedElsewhere = new Set(
+      transferItems
+        .filter((item) => item.id !== rowId)
+        .map((item) => item.productId)
+        .filter(Boolean),
+    )
+
+    return availableProductsForTransfer.filter((product: any) => !selectedElsewhere.has(String(product.id)))
+  }
+
+  const getAvailableProductsForMovementRow = (rowId: string) => {
+    const selectedElsewhere = new Set(
+      movementItems
+        .filter((item) => item.id !== rowId)
+        .map((item) => item.productId)
+        .filter(Boolean),
+    )
+
+    return availableProductsForMovement.filter(
+      (product: any) => !selectedElsewhere.has(String(product.id)),
+    )
+  }
 
   useEffect(() => {
     // if warehouse type changes, drop any selected products that are no longer available
@@ -178,6 +214,89 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
     }
   }, [transferFrom, transferSourceType, transferProduct])
 
+  const [adjustmentWarehouseId, setAdjustmentWarehouseId] = useState<string>(warehouseId || "")
+  const [adjustmentItems, setAdjustmentItems] = useState<Array<{
+    id: string
+    productId: string
+    currentStockInput: string
+    physicalQuantityInput: string
+  }>>([{ id: "a-0", productId: "", currentStockInput: "", physicalQuantityInput: "" }])
+  const [adjustmentReason, setAdjustmentReason] = useState("")
+  const [adjustmentNotes, setAdjustmentNotes] = useState("")
+  const [adjustmentLoading, setAdjustmentLoading] = useState(false)
+
+  const adjustmentWarehouse = (warehouses || []).find((warehouse: any) => warehouse.id === adjustmentWarehouseId)
+  const adjustmentWarehouseType = normalizeType((adjustmentWarehouse as any)?.type) as "insumo" | "fruta" | ""
+  const availableProductsForAdjustment = adjustmentWarehouseType
+    ? products.filter((product: any) => normalizeType(product.type) === adjustmentWarehouseType)
+    : products
+
+  const getAvailableProductsForAdjustmentRow = (rowId: string) => {
+    const selectedElsewhere = new Set(
+      adjustmentItems
+        .filter((item) => item.id !== rowId)
+        .map((item) => item.productId)
+        .filter(Boolean),
+    )
+
+    return availableProductsForAdjustment.filter((product: any) => !selectedElsewhere.has(String(product.id)))
+  }
+
+  useEffect(() => {
+    if (!adjustmentWarehouseId) return
+
+    let active = true
+
+    const syncCurrentStocks = async () => {
+      try {
+        setAdjustmentLoading(true)
+        const inventory = await api.get(`/api/inventory?warehouseId=${adjustmentWarehouseId}`)
+        if (!active) return
+
+        const inventoryList = Array.isArray(inventory) ? inventory : inventory?.data || []
+        const stockByProduct = new Map<string, number>()
+        inventoryList.forEach((item: any) => {
+          const productId = String(item.product?.id || item.productId || "")
+          if (!productId) return
+          stockByProduct.set(productId, Number(item.quantity || item.currentStock || 0))
+        })
+
+        setAdjustmentItems((prev) =>
+          prev.map((row) => {
+            if (!row.productId) return row
+            const stock = stockByProduct.get(String(row.productId))
+            return {
+              ...row,
+              currentStockInput: stock !== undefined ? String(stock) : row.currentStockInput,
+            }
+          }),
+        )
+      } catch (err) {
+        console.error("Error loading adjustment stock", err)
+      } finally {
+        if (active) setAdjustmentLoading(false)
+      }
+    }
+
+    syncCurrentStocks()
+
+    return () => {
+      active = false
+    }
+  }, [adjustmentWarehouseId, adjustmentItems.map((item) => item.productId).join("|")])
+
+  useEffect(() => {
+    setAdjustmentItems((items) =>
+      items.map((item) => {
+        if (!item.productId) return item
+        if (!availableProductsForAdjustment.some((product: any) => product.id === item.productId)) {
+          return { ...item, productId: "", currentStockInput: "" }
+        }
+        return item
+      }),
+    )
+  }, [adjustmentWarehouseId, adjustmentWarehouseType])
+
   const handleCreateMovement = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -196,8 +315,9 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
       // type/product compatibility checks
       for (const it of validItems) {
         const selectedProduct: any = products.find((product) => product.id === it.productId)
-        if (selectedWarehouseType && selectedProduct?.type && selectedProduct.type !== selectedWarehouseType) {
-          toast.error(`El producto ${selectedProduct?.name || it.productId} es tipo ${selectedProduct.type} y el almacén acepta ${selectedWarehouseType}`)
+        const selectedProductType = normalizeType(selectedProduct?.type)
+        if (selectedWarehouseType && selectedProductType && selectedProductType !== selectedWarehouseType) {
+          toast.error(`El producto ${selectedProduct?.name || it.productId} es tipo ${selectedProductType} y el almacén acepta ${selectedWarehouseType}`)
           return
         }
         if (!/^[0-9a-fA-F-]{36}$/.test(it.productId)) {
@@ -206,6 +326,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
         }
       }
 
+      setIsCreatingMovement(true)
       const loading = toast.loading("Registrando movimiento...")
       try {
         await createMovement({
@@ -266,6 +387,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
         console.error("Error creating movement", err)
       } finally {
         // dismiss loading (sonner's loading toast is auto-replaced by next toast)
+        setIsCreatingMovement(false)
       }
     } catch (err) {
       console.error("Error creating movement", err)
@@ -321,6 +443,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                     <TableHead>Producto</TableHead>
                     <TableHead className="text-right">Precio Unitario</TableHead>
                     <TableHead>Almacén</TableHead>
+                    <TableHead>Proveedor</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
                     <TableHead>Usuario</TableHead>
                     <TableHead className="text-right">Costo Total</TableHead>
@@ -353,6 +476,11 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                         })()}
                       </TableCell>
                       <TableCell>{movement.warehouse?.name}</TableCell>
+                      <TableCell className="text-sm">
+                        <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">
+                          {(movement as any).providerName || (movement as any).supplierName || "-"}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {movement.type === "salida" ? "-" : "+"}
                         {(movement as any).items?.[0]?.quantity}
@@ -452,7 +580,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
                 {/* Dynamic list of product items */}
                 {movementItems.map((it, idx) => (
-                  <div key={it.id} className="md:col-span-2 space-y-2 border rounded p-3">
+                  <div key={it.id} className="md:col-span-2 space-y-3 rounded-lg border border-slate-300 bg-slate-50/70 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
                     <div className="flex items-start justify-between">
                       <Label>Producto {idx + 1}</Label>
                       <div className="flex items-center gap-2">
@@ -467,14 +595,14 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                     <ComboBox
                       value={it.productId}
                       onChange={(v) => setMovementItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, productId: v } : p)))}
-                      options={availableProductsForMovement.map((product) => ({
+                      options={getAvailableProductsForMovementRow(it.id).map((product) => ({
                         value: String(product.id),
                         label: `${product.name}`,
                         subtitle: product.sku || product.type,
                       }))}
                       placeholder="Seleccionar producto"
                       searchPlaceholder="Buscar producto..."
-                      emptyMessage="No hay productos para este tipo de almacén"
+                      emptyMessage="No hay más productos disponibles para este tipo de almacén"
                     />
 
                     <div className="grid gap-4 md:grid-cols-3 mt-2">
@@ -542,9 +670,18 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   }}>Cancelar</Button>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button type="submit">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Registrar Movimiento
+                  <Button type="submit" disabled={isCreatingMovement}>
+                    {isCreatingMovement ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Registrando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Registrar Movimiento
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -573,8 +710,10 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   toast.error("Debe seleccionar origen y destino")
                   return
                 }
-                if (!transferProduct) {
-                  toast.error("Debe seleccionar un producto")
+                const validTransferItems = transferItems.filter((item) => item.productId && item.quantityInput && Number(item.quantityInput) > 0)
+
+                if (validTransferItems.length === 0) {
+                  toast.error("Debe agregar al menos un producto con cantidad válida")
                   return
                 }
 
@@ -587,13 +726,16 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   return
                 }
 
-                if (sourceType && transferSelectedProduct?.type && transferSelectedProduct.type !== sourceType) {
-                  toast.error(`El producto es tipo ${transferSelectedProduct.type} y el almacén origen acepta ${sourceType}`)
-                  return
-                }
-                if (!transferQuantity || Number(transferQuantity) <= 0) {
-                  toast.error("Cantidad debe ser mayor que 0")
-                  return
+                for (const item of validTransferItems) {
+                  const transferSelectedProduct = products.find((product) => product.id === item.productId)
+                  if (sourceType && transferSelectedProduct?.type && normalizeType(transferSelectedProduct.type) !== normalizeType(sourceType)) {
+                    toast.error(`El producto ${transferSelectedProduct?.name || item.productId} es tipo ${transferSelectedProduct.type} y el almacén origen acepta ${sourceType}`)
+                    return
+                  }
+                  if (!Number(item.quantityInput) || Number(item.quantityInput) <= 0) {
+                    toast.error("Cantidad debe ser mayor que 0")
+                    return
+                  }
                 }
 
                 try {
@@ -604,13 +746,11 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                     warehouseId: transferFrom,
                     destinationWarehouseId: transferTo as any,
                     notes: transferNotes || undefined,
-                    items: [
-                      {
-                        productId: transferProduct,
-                        quantity: Number(transferQuantity),
-                        lotNumber: transferLot || undefined,
-                      },
-                    ],
+                    items: validTransferItems.map((item) => ({
+                      productId: item.productId,
+                      quantity: Number(item.quantityInput),
+                      lotNumber: item.lotNumber || undefined,
+                    })),
                   } as any)
 
                   // revalidate movements and inventory for both warehouses
@@ -626,10 +766,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   // reset transfer form
                   setTransferFrom(warehouses && warehouses.length > 0 ? warehouses[0].id : "")
                   setTransferTo(warehouses && warehouses.length > 1 ? warehouses[1].id : "")
-                  setTransferProduct("")
-                  setTransferQuantity(0)
-                  setTransferQuantityInput("")
-                  setTransferLot("")
+                  setTransferItems([{ id: `t-${Date.now()}`, productId: "", quantityInput: "", lotNumber: "" }])
                   setTransferNotes("")
                 } catch (err: any) {
                   console.error("Error creating transfer", err)
@@ -639,19 +776,10 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
             >
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="from-warehouse">Almacén Origen</Label>
-                  <Select value={transferFrom} onValueChange={(v) => setTransferFrom(v)}>
-                    <SelectTrigger id="from-warehouse">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableWarehouses.map((warehouse: any, index: number) => (
-                        <SelectItem key={`from-${warehouse.id || index}`} value={warehouse.id}>
-                          {warehouse.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Almacén Origen</Label>
+                  <div className="rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
+                    {transferSourceWarehouse?.name || "No seleccionado"}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -672,42 +800,72 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
 
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="transfer-product">Producto</Label>
-                  <ComboBox
-                    value={transferProduct}
-                    onChange={(v) => setTransferProduct(v)}
-                    options={availableProductsForTransfer.map((product) => ({
-                      value: String(product.id),
-                      label: `${product.name}`,
-                      subtitle: product.sku || product.type,
-                    }))}
-                    placeholder="Seleccionar producto"
-                    searchPlaceholder="Buscar producto..."
-                    emptyMessage="No hay productos para este tipo de almacén"
-                  />
-                </div>
+                  <div className="space-y-3">
+                    {transferItems.map((item, index) => (
+                      <div key={item.id} className="space-y-3 rounded-lg border border-slate-300 bg-slate-50/70 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+                        <div className="flex items-start justify-between">
+                          <Label>Producto {index + 1}</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            onClick={() => setTransferItems((prev) => prev.filter((row) => row.id !== item.id))}
+                            disabled={transferItems.length === 1}
+                          >
+                            <X className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="transfer-quantity">Cantidad a Transferir</Label>
-                  <Input 
-                    id="transfer-quantity" 
-                    type="text" 
-                    inputMode="decimal"
-                    placeholder="0" 
-                    value={transferQuantityInput} 
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      // Permitir números, punto decimal y entrada vacía
-                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                        setTransferQuantityInput(value)
-                        setTransferQuantity(value === '' ? 0 : parseFloat(value) || 0)
-                      }
-                    }} 
-                  />
-                </div>
+                        <ComboBox
+                          value={item.productId}
+                          onChange={(v) => setTransferItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, productId: v } : row)))}
+                          options={getAvailableProductsForTransferRow(item.id).map((product) => ({
+                            value: String(product.id),
+                            label: `${product.name}`,
+                            subtitle: product.sku || product.type,
+                          }))}
+                          placeholder="Seleccionar producto"
+                          searchPlaceholder="Buscar producto..."
+                          emptyMessage="No hay más productos disponibles para este almacén"
+                        />
 
-                <div className="space-y-2">
-                  <Label htmlFor="transfer-lot">Número de Lote</Label>
-                  <Input id="transfer-lot" placeholder="LOT-2024-001" value={transferLot} onChange={(e) => setTransferLot(e.target.value)} />
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Cantidad a Transferir</Label>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0"
+                              value={item.quantityInput}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                  setTransferItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, quantityInput: value } : row)))
+                                }
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Número de Lote</Label>
+                            <Input
+                              placeholder="LOT-2024-001"
+                              value={item.lotNumber}
+                              onChange={(e) => setTransferItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, lotNumber: e.target.value } : row)))}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => setTransferItems((prev) => [...prev, { id: `t-${Date.now()}`, productId: "", quantityInput: "", lotNumber: "" }])}
+                    >
+                      Agregar otro producto
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -721,10 +879,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   // simple reset
                   setTransferFrom(warehouses && warehouses.length > 0 ? warehouses[0].id : "")
                   setTransferTo(warehouses && warehouses.length > 1 ? warehouses[1].id : "")
-                  setTransferProduct("")
-                  setTransferQuantity(0)
-                  setTransferQuantityInput("")
-                  setTransferLot("")
+                  setTransferItems([{ id: `t-${Date.now()}`, productId: "", quantityInput: "", lotNumber: "" }])
                   setTransferNotes("")
                 }}>Cancelar</Button>
                 <Button type="submit">
@@ -746,64 +901,201 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
               <CardDescription>Corrige diferencias en el inventario físico vs sistema</CardDescription>
             </CardHeader>
           <CardContent>
-            <form className="space-y-4">
+            <form
+              className="space-y-4"
+              onSubmit={async (e) => {
+                e.preventDefault()
+
+                const validAdjustmentItems = adjustmentItems.filter((item) => item.productId && item.physicalQuantityInput !== "")
+
+                if (!adjustmentWarehouseId) {
+                  toast.error("Debe seleccionar un almacén")
+                  return
+                }
+                if (validAdjustmentItems.length === 0) {
+                  toast.error("Debe agregar al menos un producto")
+                  return
+                }
+                if (!adjustmentReason.trim()) {
+                  toast.error("Debe seleccionar un motivo")
+                  return
+                }
+                if (!adjustmentNotes.trim()) {
+                  toast.error("Debe escribir una nota")
+                  return
+                }
+
+                const itemsToSend: Array<{ productId: string; quantity: number; adjustmentType: "entrada" | "salida" }> = []
+
+                for (const item of validAdjustmentItems) {
+                  const current = Number(item.currentStockInput || 0)
+                  const physical = Number(item.physicalQuantityInput)
+                  if (Number.isNaN(physical)) {
+                    toast.error("La cantidad física debe ser numérica")
+                    return
+                  }
+                  const diff = physical - current
+                  if (diff === 0) continue
+                  itemsToSend.push({
+                    productId: item.productId,
+                    quantity: Math.abs(diff),
+                    adjustmentType: diff > 0 ? "entrada" : "salida",
+                  })
+                }
+
+                if (itemsToSend.length === 0) {
+                  toast.error("No hay diferencias para ajustar")
+                  return
+                }
+
+                try {
+                  const loading = toast.loading("Registrando ajuste...")
+                  await createMovement({
+                    type: "ajuste",
+                    warehouseId: adjustmentWarehouseId,
+                    notes: `${adjustmentReason}: ${adjustmentNotes}`.trim(),
+                    items: itemsToSend as any,
+                  } as any)
+
+                  await mutateMovements()
+                  if (adjustmentWarehouseId) await globalMutate(`/inventory/warehouse/${adjustmentWarehouseId}`)
+                  await globalMutate(`/inventory/movements?warehouseId=${adjustmentWarehouseId}`)
+                  await globalMutate("warehouses")
+
+                  toast.success("Ajuste registrado")
+
+                  setAdjustmentWarehouseId(warehouseId || "")
+                  setAdjustmentItems([{ id: `a-${Date.now()}`, productId: "", currentStockInput: "", physicalQuantityInput: "" }])
+                  setAdjustmentReason("")
+                  setAdjustmentNotes("")
+                  toast.dismiss(loading)
+                } catch (err: any) {
+                  console.error("Error creating adjustment", err)
+                  toast.error("Error creando ajuste: " + (err?.message || "Error"))
+                }
+              }}
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="adj-warehouse">Almacén</Label>
-                  <Select>
-                    <SelectTrigger id="adj-warehouse">
-                      <SelectValue placeholder="Seleccionar almacén" />
+                  <Label>Almacén</Label>
+                  <div className="rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
+                    {adjustmentWarehouse?.name || "No seleccionado"}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="adj-reason">Motivo del Ajuste</Label>
+                  <Select value={adjustmentReason} onValueChange={setAdjustmentReason}>
+                    <SelectTrigger id="adj-reason">
+                      <SelectValue placeholder="Seleccionar motivo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableWarehouses.map((warehouse: any, index: number) => (
-                        <SelectItem key={`adj-${warehouse.id || index}`} value={warehouse.id}>
-                          {warehouse.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Inventario Físico">Inventario Físico</SelectItem>
+                      <SelectItem value="Producto Dañado">Producto Dañado</SelectItem>
+                      <SelectItem value="Producto Vencido">Producto Vencido</SelectItem>
+                      <SelectItem value="Producto Extraviado">Producto Extraviado</SelectItem>
+                      <SelectItem value="Producto Encontrado">Producto Encontrado</SelectItem>
+                      <SelectItem value="Error de Registro">Error de Registro</SelectItem>
+                      <SelectItem value="Otro">Otro</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="adj-product">Producto</Label>
-                  <Select>
-                    <SelectTrigger id="adj-product">
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product, index) => (
-                        <SelectItem key={`adj-prod-${product.id || index}`} value={product.id}>
-                          {product.name} ({product.sku})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <div className="md:col-span-2 space-y-3">
+                  <Label>Productos a Ajustar</Label>
+                  <div className="space-y-3">
+                    {adjustmentItems.map((item, index) => {
+                      const current = Number(item.currentStockInput || 0)
+                      const physical = item.physicalQuantityInput !== "" ? Number(item.physicalQuantityInput) : null
+                      const diff = physical !== null && !Number.isNaN(physical) ? physical - current : null
 
-                <div className="space-y-2">
-                  <Label htmlFor="system-qty">Cantidad en Sistema</Label>
-                  <Input id="system-qty" type="number" placeholder="0" disabled />
-                </div>
+                      return (
+                        <div key={item.id} className="space-y-3 rounded-lg border border-slate-300 bg-slate-50/70 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+                          <div className="flex items-start justify-between">
+                            <Label>Producto {index + 1}</Label>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              onClick={() => setAdjustmentItems((prev) => prev.filter((row) => row.id !== item.id))}
+                              disabled={adjustmentItems.length === 1}
+                            >
+                              <X className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="physical-qty">Cantidad Física</Label>
-                  <Input id="physical-qty" type="number" placeholder="0" />
-                </div>
+                          <ComboBox
+                            value={item.productId}
+                            onChange={(v) => setAdjustmentItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, productId: v } : row)))}
+                            options={getAvailableProductsForAdjustmentRow(item.id).map((product: any) => ({
+                              value: String(product.id),
+                              label: `${product.name}`,
+                              subtitle: product.sku || product.type,
+                            }))}
+                            placeholder="Seleccionar producto"
+                            searchPlaceholder="Buscar producto..."
+                            emptyMessage="No hay más productos disponibles para este almacén"
+                          />
 
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="difference">Diferencia</Label>
-                  <Input id="difference" type="number" placeholder="0" disabled className="font-bold" />
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="space-y-2">
+                              <Label>Cantidad en Sistema</Label>
+                              <div className="relative">
+                                <Input type="number" placeholder={adjustmentLoading ? "Cargando..." : "0"} value={item.currentStockInput} disabled className="bg-muted" />
+                                {adjustmentLoading && (
+                                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Cantidad Física *</Label>
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                value={item.physicalQuantityInput}
+                                onChange={(e) => setAdjustmentItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, physicalQuantityInput: e.target.value } : row)))}
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Diferencia</Label>
+                              <Input type="number" placeholder="0" disabled className="font-bold" value={diff !== null && !Number.isNaN(diff) ? diff : ""} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => setAdjustmentItems((prev) => [...prev, { id: `a-${Date.now()}`, productId: "", currentStockInput: "", physicalQuantityInput: "" }])}
+                    >
+                      Agregar otro producto
+                    </Button>
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="adj-reason">Motivo del Ajuste</Label>
-                <Textarea id="adj-reason" placeholder="Explica el motivo del ajuste de inventario..." />
+                <Label htmlFor="adj-notes">Notas *</Label>
+                <Textarea
+                  id="adj-notes"
+                  placeholder="Explicación detallada del ajuste..."
+                  value={adjustmentNotes}
+                  onChange={(e) => setAdjustmentNotes(e.target.value)}
+                />
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button variant="outline">Cancelar</Button>
-                <Button>
+                <Button variant="outline" type="button" onClick={() => {
+                  setAdjustmentWarehouseId(warehouseId || "")
+                  setAdjustmentItems([{ id: `a-${Date.now()}`, productId: "", currentStockInput: "", physicalQuantityInput: "" }])
+                  setAdjustmentReason("")
+                  setAdjustmentNotes("")
+                }}>Cancelar</Button>
+                <Button type="submit">
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Aplicar Ajuste
                 </Button>

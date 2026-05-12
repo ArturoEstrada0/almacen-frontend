@@ -27,6 +27,8 @@ export default function EditPurchaseOrderPage({ params }: Params) {
 
   const { purchaseOrder, isLoading } = usePurchaseOrder(resolvedId ?? "")
 
+  const isFinalStatus = purchaseOrder?.status === "completada" || purchaseOrder?.status === "cancelada"
+
   if (isLoading || !resolvedId) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
@@ -40,6 +42,26 @@ export default function EditPurchaseOrderPage({ params }: Params) {
       <Link href="/purchase-orders?tab=list">
         <Button variant="outline">Volver a órdenes</Button>
       </Link>
+    </div>
+  )
+
+  if (isFinalStatus) return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/purchase-orders?tab=list">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Orden no editable</h1>
+          <p className="text-muted-foreground">Esta orden está {purchaseOrder.status} y no puede modificarse.</p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border p-6 text-sm text-muted-foreground">
+        Para cambiarla, crea una nueva orden o consulta el detalle desde la lista.
+      </div>
     </div>
   )
 

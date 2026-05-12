@@ -63,6 +63,7 @@ export default function EditProductPage({ params }: Params) {
   })
 
   const [pendingSuppliers, setPendingSuppliers] = useState<{ supplierId: string; price: string; supplierSku: string; leadTimeDays: string; minimumOrder: string; preferred: boolean }[]>([])
+  const [confirmedSupplier, setConfirmedSupplier] = useState<{ supplierId: string; price: string; supplierSku: string; leadTimeDays: string; minimumOrder: string; preferred: boolean } | null>(null)
 
   const { productSuppliers, mutate: mutateSuppliers } = useProductSuppliers(resolvedId)
 
@@ -316,7 +317,12 @@ export default function EditProductPage({ params }: Params) {
       }
       
       // Add all pending suppliers
-      for (const ps of pendingSuppliers) {
+      const suppliersToAdd = [...pendingSuppliers]
+      if (confirmedSupplier?.supplierId) {
+        suppliersToAdd.push(confirmedSupplier)
+      }
+
+      for (const ps of suppliersToAdd) {
         if (ps.supplierId) {
           try {
             await addProductSupplier(id, {
@@ -332,7 +338,10 @@ export default function EditProductPage({ params }: Params) {
           }
         }
       }
+
       mutateSuppliers()
+      setPendingSuppliers([])
+      setConfirmedSupplier(null)
 
       toast.dismiss(loadingToast)
       toast.success("Producto actualizado")
@@ -537,26 +546,41 @@ export default function EditProductPage({ params }: Params) {
                           (s: any) => !registeredIds.has(s.id) && !selectedInOtherPending.has(s.id),
                         )
                         return (
-                        <div key={index} className="flex items-center gap-3 rounded-md border border-dashed p-3">
-                          <div className="flex-1">
+                        <div key={`pending-supplier-${index}`} className="space-y-2 rounded-md border border-dashed p-3">
+                          <div className="flex items-start justify-between">
                             <Label className="mb-1 block">Proveedor</Label>
-                            <ComboBox
-                              options={availableSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
-                              value={ps.supplierId}
-                              onChange={(v) => updatePendingSupplier(index, "supplierId", v)}
-                              placeholder="Seleccionar proveedor..."
-                              searchPlaceholder="Buscar proveedor..."
-                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              onClick={() => removePendingSupplier(index)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="shrink-0 mt-5 text-destructive hover:text-destructive"
-                            onClick={() => removePendingSupplier(index)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <ComboBox
+                            key={`combobox-${index}-${ps.supplierId}`}
+                            options={availableSuppliers.map((s: any) => ({ value: s.id, label: s.name }))}
+                            value={ps.supplierId}
+                            onChange={(v) => updatePendingSupplier(index, "supplierId", v)}
+                            placeholder="Seleccionar proveedor..."
+                            searchPlaceholder="Buscar proveedor..."
+                          />
+                          {ps.supplierId && (
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                setConfirmedSupplier(ps)
+                                removePendingSupplier(index)
+                              }}
+                            >
+                              Confirmar y Mover
+                            </Button>
+                          )}
                         </div>
                       )
                       })}
@@ -570,13 +594,30 @@ export default function EditProductPage({ params }: Params) {
                     </Button>
                   </div>
 
-                  {/* Right: existing registered suppliers */}
+                  {/* Right: existing associated suppliers */}
                   <div className="space-y-3">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Proveedores registrados {productSuppliers.length > 0 && `(${productSuppliers.length})`}
+                      Proveedores asociados {productSuppliers.length > 0 && `(${productSuppliers.length})`}
                     </p>
                     <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1">
-                      {productSuppliers.length === 0 ? (
+                      {confirmedSupplier && (
+                        <div className="flex items-center gap-3 rounded-md border p-3 bg-blue-50 dark:bg-blue-950">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{allSuppliers.find((s: any) => s.id === confirmedSupplier.supplierId)?.name}</p>
+                            <p className="text-xs text-muted-foreground">Por confirmar</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-destructive hover:text-destructive"
+                            onClick={() => setConfirmedSupplier(null)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      {productSuppliers.length === 0 && !confirmedSupplier ? (
                         <p className="text-sm text-muted-foreground text-center py-4">Sin proveedores asociados</p>
                       ) : (
                         productSuppliers.map((ps: any) => {

@@ -136,7 +136,10 @@ export function SuppliersDirectoryTab() {
       console.error("Error eliminando proveedor:", error)
       // If backend responds with a clear message, show it (e.g., FK violation because of assigned purchases)
       const errMsg = (error as any)?.message || "No se pudo eliminar el proveedor. Revisa la consola para más detalles."
-      toast({ title: "No se puede eliminar", description: errMsg })
+      const raw = (error as any)?.raw
+      const rawDetails = raw && typeof raw === 'object' ? (raw.message || JSON.stringify(raw)) : raw
+      const description = rawDetails ? `${errMsg} — ${rawDetails}` : errMsg
+      toast({ title: "No se puede eliminar", description })
     } finally {
       setIsDeleting(false)
     }

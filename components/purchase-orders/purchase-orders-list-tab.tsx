@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { PayableDocumentsList } from "@/components/purchase-orders/payable-documents-list"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
@@ -49,7 +50,13 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     return `${year}-${month}-${day}`
   })
   const [receiveInvoiceNumber, setReceiveInvoiceNumber] = useState<string>("")
+  const [receiveInvoiceFile, setReceiveInvoiceFile] = useState<File | null>(null)
   const [isReceivingLoading, setIsReceivingLoading] = useState(false)
+
+  const clampQuantity = (value: number, min: number, max: number) => {
+    if (Number.isNaN(value)) return min
+    return Math.min(Math.max(value, min), max)
+  }
 
   const [detailsOrderId, setDetailsOrderId] = useState<string | null>(null)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
@@ -205,12 +212,17 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
       const userName = currentUser?.fullName || currentUser?.email || "sistema"
 
-      for (const item of order.items) {
-        const qty = receiveQuantities[item.id] ?? Math.max(0, item.quantity - item.receivedQuantity)
-        if (qty > 0) {
-          await receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber)
-        }
-      }
+      const promises = order.items
+          .map((item) => {
+          const pending = Math.max(0, item.quantity - item.receivedQuantity)
+          const qty = clampQuantity(receiveQuantities[item.id] ?? pending, 0, pending)
+          if (qty > 0) {
+            return receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber, receiveInvoiceFile)
+          }
+          return Promise.resolve()
+        })
+
+      await Promise.all(promises)
 
       toast.success("Recepción completada", {
         description: "Los productos han sido agregados al inventario",
@@ -222,6 +234,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       const today = new Date()
       setReceiveInvoiceDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`)
       setReceiveInvoiceNumber("")
+      setReceiveInvoiceFile(null)
     } catch (e: any) {
       toast.error(e?.message || "Error al registrar la recepción")
     } finally {
@@ -383,7 +396,8 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                 </TableHeader>
                 <TableBody>
                   {pagedOrders.map((rowOrder) => {
-                    const editable = (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
+                    const isFinalStatus = rowOrder.status === "completada" || rowOrder.status === "cancelada"
+                    const editable = !isFinalStatus && (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
                     const supplier = suppliers.find((s) => s.id === rowOrder.supplierId)
                     const warehouse = warehouses.find((w) => w.id === rowOrder.warehouseId)
                     const dueDate = parseDateOnly(rowOrder.dueDate as any)
@@ -436,7 +450,14 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                               </ProtectedUpdate>
                             )}
                             <ProtectedUpdate module="purchaseOrders">
-                              <Button variant="outline" size="icon" onClick={() => router.push(`/purchase-orders/${rowOrder.id}/edit`)} disabled={!editable} aria-label="Editar orden">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => router.push(`/purchase-orders/${rowOrder.id}/edit`)}
+                                disabled={!editable}
+                                aria-label={editable ? "Editar orden" : "Orden no editable"}
+                                title={editable ? "Editar orden" : "La orden no se puede editar porque está completada o cancelada"}
+                              >
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             </ProtectedUpdate>
@@ -511,9 +532,19 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                               value={receiveQuantities[item.id] ?? pending}
                               min={0}
                               max={pending}
+                              step={1}
                               className="w-24"
                               onChange={(e) =>
-                                setReceiveQuantities((prev) => ({ ...prev, [item.id]: Number.parseInt(e.target.value || "0") }))
+                                setReceiveQuantities((prev) => ({
+                                  ...prev,
+                                  [item.id]: clampQuantity(Number.parseInt(e.target.value || "0"), 0, pending),
+                                }))
+                              }
+                              onBlur={(e) =>
+                                setReceiveQuantities((prev) => ({
+                                  ...prev,
+                                  [item.id]: clampQuantity(Number.parseInt(e.target.value || "0"), 0, pending),
+                                }))
                               }
                             />
                           </TableCell>
@@ -538,6 +569,22 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                   placeholder="Opcional"
                   disabled={isReceivingLoading}
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="receive-invoice-file">Archivo de Factura</Label>
+                <Input
+                  id="receive-invoice-file"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.xml"
+                  onChange={(e) => setReceiveInvoiceFile(e.target.files?.[0] || null)}
+                  disabled={isReceivingLoading}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Formatos acepta dos: PDF, JPG, PNG, XML</p>
+                {receiveInvoiceFile && (
+                  <p className="text-xs text-green-600 mt-1">Archivo seleccionado: {receiveInvoiceFile.name}</p>
+                )}
               </div>
 
               <div>
@@ -643,6 +690,21 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Factura</Label>
+                  {detailsOrder.invoiceFileUrl ? (
+                    <div className="text-sm text-muted-foreground">Factura adjunta</div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No hay factura adjunta</div>
+                  )}
+                </div>
+
+                {detailsOrder.invoiceFileUrl && (
+                  <div className="mt-2">
+                    <PayableDocumentsList documents={[{ label: "Factura", url: detailsOrder.invoiceFileUrl }]} />
+                  </div>
+                )}
+
                 <Label className="text-xs text-muted-foreground">Historial de Movimientos</Label>
                 {detailsLoading ? (
                   <p className="text-sm text-muted-foreground mt-2">Cargando historial...</p>

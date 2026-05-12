@@ -424,7 +424,7 @@ export default function SupplierQuotationPortal() {
                           id={`price-${item.id}`}
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="1"
                           value={response.price || ""}
                           onChange={(e) =>
                             updateResponse(
@@ -434,7 +434,7 @@ export default function SupplierQuotationPortal() {
                             )
                           }
                           className="rounded-l-none"
-                          placeholder="0.00"
+                          placeholder="0"
                           disabled={isExpired}
                         />
                       </div>

@@ -16,6 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { ComboBox } from "@/components/ui/combobox"
+import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -623,7 +624,7 @@ export function InputAssignmentsTab() {
                   <div className="grid grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <Label>Productor *</Label>
-                      <ComboBox
+                      <ProductorComboBox
                         value={selectedProducer}
                         onChange={setSelectedProducer}
                         options={producers.map((p) => ({
@@ -636,7 +637,7 @@ export function InputAssignmentsTab() {
                     </div>
                     <div className="space-y-2">
                       <Label>Almacén *</Label>
-                      <ComboBox
+                      <ProductorComboBox
                         value={selectedWarehouse}
                         onChange={setSelectedWarehouse}
                         options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
@@ -659,7 +660,7 @@ export function InputAssignmentsTab() {
                       {selectedItems.map((it) => (
                         <div key={it.id} className="grid grid-cols-6 gap-2 items-end">
                           <div className="col-span-2">
-                            <ComboBox value={it.productId} onChange={(v) => updateItem(it.id, { productId: v })} options={insumoProducts.map(p => ({ value: String(p.id), label: `${p.sku || ''} - ${p.name}` }))} placeholder="Seleccionar insumo" />
+                            <ProductorComboBox value={it.productId} onChange={(v) => updateItem(it.id, { productId: v })} options={insumoProducts.map(p => ({ value: String(p.id), label: `${p.sku || ''} - ${p.name}` }))} placeholder="Seleccionar insumo" />
                           </div>
                           <div>
                             <Input type="number" step="1" min="1" inputMode="numeric" value={it.quantity} onChange={(e) => updateItem(it.id, { quantity: e.target.value.replace(/\D/g, "") })} placeholder="Cantidad" />
@@ -747,7 +748,7 @@ export function InputAssignmentsTab() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Productor *</Label>
-                    <ComboBox
+                    <ProductorComboBox
                       value={selectedProducer}
                       onChange={setSelectedProducer}
                       options={producers.map((p) => ({
@@ -762,7 +763,7 @@ export function InputAssignmentsTab() {
                   </div>
                   <div className="space-y-2">
                     <Label>Almacén *</Label>
-                    <ComboBox
+                    <ProductorComboBox
                       value={selectedWarehouse}
                       onChange={setSelectedWarehouse}
                       options={warehouses.map((w) => ({
@@ -797,7 +798,7 @@ export function InputAssignmentsTab() {
                   <div className="space-y-2">
                     {selectedItems.map((it) => (
                       <div key={it.id} className="grid grid-cols-4 gap-2">
-                        <ComboBox
+                        <ProductorComboBox
                           value={it.productId}
                           onChange={(v) => updateItem(it.id, { productId: v })}
                           options={insumoProducts.map((p) => ({

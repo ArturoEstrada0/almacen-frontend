@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -53,77 +54,75 @@ export default function NewWarehousePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/inventory">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/inventory">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Nuevo Almacén</h1>
+            <p className="text-muted-foreground">Crear un nuevo almacén</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link href="/inventory">Cancelar</Link>
           </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Nuevo Almacén</h1>
-          <p className="text-muted-foreground">Crear un nuevo almacén</p>
+          <Button type="submit" form="new-warehouse-form">
+            <Save className="mr-2 h-4 w-4" />
+            Crear Almacén
+          </Button>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Detalles</CardTitle>
-                <CardDescription>Información básica del almacén</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nombre *</Label>
-                  <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="code">Código *</Label>
-                  <Input id="code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Tipo *</Label>
-                  <Select value={form.type} onValueChange={(value: "insumo" | "fruta") => setForm({ ...form, type: value })}>
-                    <SelectTrigger id="type">
-                      <SelectValue placeholder="Seleccionar tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fruta">Fruta</SelectItem>
-                      <SelectItem value="insumo">Insumo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Ubicación</Label>
-                  <Input id="address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Input id="description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle>Acciones</CardTitle>
-                <CardDescription>Guardar o cancelar</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                <Button type="submit" className="w-full">
-                  <Save className="mr-2 h-4 w-4" />
-                  Crear Almacén
-                </Button>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href="/inventory">Cancelar</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+      <form id="new-warehouse-form" onSubmit={handleSubmit}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Detalles</CardTitle>
+            <CardDescription>Información básica del almacén</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nombre *</Label>
+                <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="code">Código *</Label>
+                <Input id="code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Tipo *</Label>
+                <Select value={form.type} onValueChange={(value: "insumo" | "fruta") => setForm({ ...form, type: value })}>
+                  <SelectTrigger id="type">
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fruta">Fruta</SelectItem>
+                    <SelectItem value="insumo">Insumo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="address">Ubicación</Label>
+                <Input id="address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="description">Descripción</Label>
+                <Textarea
+                  id="description"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  rows={5}
+                  className="min-h-[140px]"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </form>
     </div>
   )
