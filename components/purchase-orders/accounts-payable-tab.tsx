@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -49,9 +50,10 @@ type PayableRow = {
 type AccountsPayableTabProps = {
   supplierId?: string
   onRegister?: (row: PayableRow) => void
+  initialSelectedPayableId?: string | null
 }
 
-export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTabProps = {}) {
+export function AccountsPayableTab({ supplierId, onRegister, initialSelectedPayableId }: AccountsPayableTabProps = {}) {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -67,27 +69,57 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
   const { purchaseOrders, isLoading: ordersLoading, mutate } = usePurchaseOrders()
   const { shipmentPayables, isLoading: shipmentPayablesLoading, mutate: mutateShipmentPayables } = useShipmentPayables()
   const { suppliers } = useSuppliers()
+  const router = useRouter()
+
+  const parseDateOnly = (value?: string | Date | null): Date | null => {
+    if (!value) return null
+    if (typeof value === "string") {
+      const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    }
+    const d = new Date(value as any)
+    if (Number.isNaN(d.getTime())) return null
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  }
+
+  const formatDateSafely = (value?: string | Date | null) => {
+    const d = parseDateOnly(value)
+    return d ? d.toLocaleDateString() : "-"
+  }
+
+  const MS_PER_DAY = 1000 * 60 * 60 * 24
+  const todayDateOnly = (() => {
+    const t = new Date()
+    return new Date(t.getFullYear(), t.getMonth(), t.getDate())
+  })()
 
   const payableRows = useMemo<PayableRow[]>(() => {
-    const purchaseOrderRows: PayableRow[] = (purchaseOrders || []).map((order) => {
-      const supplier = suppliers.find((s) => s.id === order.supplierId)
-      return {
-        id: order.id,
-        source: "purchase-order",
-        supplierId: order.supplierId,
-        orderNumber: order.orderNumber,
-        supplierName: supplier?.name || "Proveedor",
-        supplierCode: supplier?.code,
-        orderDate: order.orderDate,
-        dueDate: order.dueDate,
-        creditDays: Number(order.creditDays || 0),
-        total: Number(order.total || 0),
-        amountPaid: Number((order as any).amountPaid || 0),
-        paymentStatus: (order.paymentStatus as any) || "pendiente",
-        invoiceDate: order.invoiceDate || null,
-        invoiceNumber: order.invoiceNumber || null,
-      }
-    })
+    const purchaseOrderRows: PayableRow[] = (purchaseOrders || [])
+      // Filter: Only show purchase orders that have received items (at least one item with receivedQuantity > 0)
+      .filter((order) => {
+        const hasReceivedItems = (order.items || []).some((item: any) => Number(item.receivedQuantity || 0) > 0)
+        return hasReceivedItems
+      })
+      .map((order) => {
+        const supplier = suppliers.find((s) => s.id === order.supplierId)
+        return {
+          id: order.id,
+          source: "purchase-order",
+          supplierId: order.supplierId,
+          orderNumber: order.orderNumber,
+          supplierName: supplier?.name || "Proveedor",
+          supplierCode: supplier?.code,
+          orderDate: order.orderDate,
+          dueDate: order.dueDate,
+          creditDays: Number(order.creditDays || 0),
+          total: Number(order.total || 0),
+          amountPaid: Number((order as any).amountPaid || 0),
+          paymentStatus: (order.paymentStatus as any) || "pendiente",
+          invoiceDate: order.invoiceDate || null,
+          invoiceNumber: order.invoiceNumber || null,
+          documents: order.invoiceFileUrl ? [{ label: "Factura", url: order.invoiceFileUrl }] : [],
+        }
+      })
 
     const shipmentRows: PayableRow[] = (shipmentPayables || []).map((entry: ShipmentPayableEntry) => {
       const status = (entry.paymentStatus as any) || "pendiente"
@@ -121,7 +153,7 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
   })
 
   const totalPayable = filteredOrders.reduce((sum, row) => sum + Math.max(row.total - row.amountPaid, 0), 0)
-  const { pagedItems: pagedOrders, paginationProps } = usePagination(filteredOrders, 20)
+  const { pagedItems: pagedOrders, paginationProps, setCurrentPage, pageSize } = usePagination(filteredOrders, 5)
   const overdueOrders = filteredOrders.filter((row) => row.dueDate && new Date() > new Date(row.dueDate))
   const totalOverdue = overdueOrders.reduce((sum, row) => sum + Math.max(row.total - row.amountPaid, 0), 0)
 
@@ -132,12 +164,13 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
       return
     }
 
-    setSelectedPayableId(payableId)
-    setPaymentDialogOpen(true)
-    setPaymentAmount("")
-    setPaymentMethod("")
-    setPaymentReference("")
-    setPaymentNotes("")
+    const targetSupplierId = supplierId || row?.supplierId
+    if (targetSupplierId) {
+      router.push(`/accounts/suppliers/${targetSupplierId}?payableId=${encodeURIComponent(payableId)}`)
+      return
+    }
+
+    router.push(`/accounts?tab=suppliers`)
   }
 
   const handleViewInvoice = (payableId: string) => {
@@ -147,6 +180,20 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
 
   const selectedPayable = selectedPayableId ? filteredOrders.find((row) => row.id === selectedPayableId) || payableRows.find((row) => row.id === selectedPayableId) : null
   const selectedInvoicePayable = selectedInvoicePayableId ? filteredOrders.find((row) => row.id === selectedInvoicePayableId) || payableRows.find((row) => row.id === selectedInvoicePayableId) : null
+
+  useEffect(() => {
+    if (!initialSelectedPayableId) return
+
+    const targetIndex = filteredOrders.findIndex((row) => row.id === initialSelectedPayableId)
+    const targetRow = filteredOrders.find((row) => row.id === initialSelectedPayableId) || payableRows.find((row) => row.id === initialSelectedPayableId)
+    if (!targetRow) return
+
+    if (targetIndex >= 0) {
+      setCurrentPage(Math.max(1, Math.floor(targetIndex / pageSize) + 1))
+    }
+
+    setSelectedPayableId(targetRow.id)
+  }, [initialSelectedPayableId, filteredOrders, payableRows, pageSize, setCurrentPage])
 
   const handleCompletePayment = async () => {
     if (!selectedPayable || !paymentAmount || Number(paymentAmount) <= 0) {
@@ -227,7 +274,9 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
               {
                 filteredOrders.filter((row) => {
                   if (!row.dueDate) return false
-                  const daysUntilDue = Math.ceil((new Date(row.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                  const due = parseDateOnly(row.dueDate)
+                  if (!due) return false
+                  const daysUntilDue = Math.ceil((due.getTime() - todayDateOnly.getTime()) / MS_PER_DAY)
                   return daysUntilDue > 0 && daysUntilDue <= 7
                 }).length
               }
@@ -292,14 +341,17 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                 </TableHeader>
                 <TableBody>
                   {pagedOrders.map((row) => {
-                    const isOverdue = !!row.dueDate && new Date() > new Date(row.dueDate)
-                    const daysUntilDue = row.dueDate
-                      ? Math.ceil((new Date(row.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-                      : null
+                    const dueParsed = row.dueDate ? parseDateOnly(row.dueDate) : null
+                    const isOverdue = !!dueParsed && todayDateOnly > dueParsed
+                    const daysUntilDue = dueParsed ? Math.ceil((dueParsed.getTime() - todayDateOnly.getTime()) / MS_PER_DAY) : null
 
                     const isPoWithoutInvoice = row.source === "purchase-order" && !row.invoiceDate
+                    const isSelectedRow = row.id === selectedPayableId || row.id === initialSelectedPayableId
                     return (
-                      <TableRow key={`${row.source}-${row.id}`} className={isPoWithoutInvoice ? "bg-amber-50 dark:bg-amber-950/20" : ""}>
+                      <TableRow
+                        key={`${row.source}-${row.id}`}
+                        className={`${isPoWithoutInvoice ? "bg-amber-50 dark:bg-amber-950/20" : ""} ${isSelectedRow ? "ring-2 ring-primary/40 bg-primary/5" : ""}`}
+                      >
                         <TableCell className="font-mono font-medium">{row.orderNumber}</TableCell>
                         <TableCell>
                           <div>
@@ -309,12 +361,12 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                             </p>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{row.orderDate ? new Date(row.orderDate).toLocaleDateString() : "-"}</TableCell>
+                        <TableCell className="text-sm">{formatDateSafely(row.orderDate)}</TableCell>
                         <TableCell>
                           {row.dueDate ? (
                             <div>
                               <p className={`text-sm font-medium ${isOverdue ? "text-red-500" : ""}`}>
-                                {new Date(row.dueDate).toLocaleDateString()}
+                                {formatDateSafely(row.dueDate)}
                               </p>
                               {!isOverdue && daysUntilDue !== null && daysUntilDue <= 7 && (
                                 <p className="text-xs text-orange-500">Vence en {daysUntilDue} días</p>
@@ -332,7 +384,7 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                             <>
                               {row.invoiceDate ? (
                                 <div className="text-sm">
-                                  <p className="font-medium">{new Date(row.invoiceDate).toLocaleDateString()}</p>
+                                  <p className="font-medium">{formatDateSafely(row.invoiceDate)}</p>
                                   {row.invoiceNumber && <p className="text-xs text-muted-foreground">{row.invoiceNumber}</p>}
                                 </div>
                               ) : (
@@ -373,7 +425,7 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                   })}
                 </TableBody>
               </Table>
-              <TablePagination {...paginationProps} />
+              <TablePagination {...paginationProps} pageSizeOptions={[5]} />
             </div>
           )}
         </CardContent>
@@ -402,7 +454,7 @@ export function AccountsPayableTab({ supplierId, onRegister }: AccountsPayableTa
                   <>
                     <div>
                       <Label className="text-xs text-muted-foreground">Fecha de Factura</Label>
-                      <p className="font-medium">{new Date(selectedInvoicePayable.invoiceDate).toLocaleDateString()}</p>
+                      <p className="font-medium">{formatDateSafely(selectedInvoicePayable.invoiceDate)}</p>
                     </div>
                     {selectedInvoicePayable.invoiceNumber && (
                       <div>

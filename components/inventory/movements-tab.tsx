@@ -443,6 +443,7 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                     <TableHead>Producto</TableHead>
                     <TableHead className="text-right">Precio Unitario</TableHead>
                     <TableHead>Almacén</TableHead>
+                    <TableHead>Proveedor</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
                     <TableHead>Usuario</TableHead>
                     <TableHead className="text-right">Costo Total</TableHead>
@@ -475,6 +476,11 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                         })()}
                       </TableCell>
                       <TableCell>{movement.warehouse?.name}</TableCell>
+                      <TableCell className="text-sm">
+                        <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">
+                          {(movement as any).providerName || (movement as any).supplierName || "-"}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {movement.type === "salida" ? "-" : "+"}
                         {(movement as any).items?.[0]?.quantity}

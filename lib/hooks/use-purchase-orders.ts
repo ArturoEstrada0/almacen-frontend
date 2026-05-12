@@ -70,7 +70,18 @@ export async function receivePurchaseOrder(
   userName?: string,
   invoiceDate?: string,
   invoiceNumber?: string,
+  invoiceFile?: File | null,
 ) {
+  if (invoiceFile) {
+    const body = new FormData()
+    body.append('quantity', String(quantity))
+    if (userName) body.append('userName', userName)
+    if (invoiceDate) body.append('invoiceDate', invoiceDate)
+    if (invoiceNumber) body.append('invoiceNumber', invoiceNumber as string)
+    body.append('invoiceFile', invoiceFile)
+    return ApiClient.patchFormData<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.receive(orderId, itemId), body)
+  }
+
   return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.receive(orderId, itemId), {
     quantity,
     userName,

@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { PayableDocumentsList } from "@/components/purchase-orders/payable-documents-list"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
@@ -49,6 +50,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     return `${year}-${month}-${day}`
   })
   const [receiveInvoiceNumber, setReceiveInvoiceNumber] = useState<string>("")
+  const [receiveInvoiceFile, setReceiveInvoiceFile] = useState<File | null>(null)
   const [isReceivingLoading, setIsReceivingLoading] = useState(false)
 
   const clampQuantity = (value: number, min: number, max: number) => {
@@ -211,11 +213,11 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       const userName = currentUser?.fullName || currentUser?.email || "sistema"
 
       const promises = order.items
-        .map((item) => {
+          .map((item) => {
           const pending = Math.max(0, item.quantity - item.receivedQuantity)
           const qty = clampQuantity(receiveQuantities[item.id] ?? pending, 0, pending)
           if (qty > 0) {
-            return receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber)
+            return receivePurchaseOrder(order.id, item.id, qty, userName, receiveInvoiceDate, receiveInvoiceNumber, receiveInvoiceFile)
           }
           return Promise.resolve()
         })
@@ -232,6 +234,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       const today = new Date()
       setReceiveInvoiceDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`)
       setReceiveInvoiceNumber("")
+      setReceiveInvoiceFile(null)
     } catch (e: any) {
       toast.error(e?.message || "Error al registrar la recepción")
     } finally {
@@ -569,6 +572,22 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div>
+                <Label htmlFor="receive-invoice-file">Archivo de Factura</Label>
+                <Input
+                  id="receive-invoice-file"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.xml"
+                  onChange={(e) => setReceiveInvoiceFile(e.target.files?.[0] || null)}
+                  disabled={isReceivingLoading}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Formatos acepta dos: PDF, JPG, PNG, XML</p>
+                {receiveInvoiceFile && (
+                  <p className="text-xs text-green-600 mt-1">Archivo seleccionado: {receiveInvoiceFile.name}</p>
+                )}
+              </div>
+
+              <div>
                 <Label>Notas de Recepción</Label>
                 <Textarea placeholder="Observaciones sobre la recepción..." />
               </div>
@@ -671,6 +690,21 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
 
               <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Factura</Label>
+                  {detailsOrder.invoiceFileUrl ? (
+                    <div className="text-sm text-muted-foreground">Factura adjunta</div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No hay factura adjunta</div>
+                  )}
+                </div>
+
+                {detailsOrder.invoiceFileUrl && (
+                  <div className="mt-2">
+                    <PayableDocumentsList documents={[{ label: "Factura", url: detailsOrder.invoiceFileUrl }]} />
+                  </div>
+                )}
+
                 <Label className="text-xs text-muted-foreground">Historial de Movimientos</Label>
                 {detailsLoading ? (
                   <p className="text-sm text-muted-foreground mt-2">Cargando historial...</p>

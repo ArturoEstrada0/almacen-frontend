@@ -260,61 +260,109 @@ export class ApiClient {
 
   static async get<T>(url: string): Promise<T> {
     const headers = await this.getAuthHeaders()
-    const response = await fetch(url, {
-      method: "GET",
-      headers,
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        headers,
+      })
+    } catch (err: any) {
+      const error: any = new Error(`Network error fetching ${url}: ${err?.message || err}`)
+      error.original = err
+      throw error
+    }
+
     return this.handleResponse<T>(response)
   }
 
   static async post<T>(url: string, data: any): Promise<T> {
     const headers = await this.getAuthHeaders()
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(data),
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      })
+    } catch (err: any) {
+      const error: any = new Error(`Network error POST ${url}: ${err?.message || err}`)
+      error.original = err
+      throw error
+    }
+
     return this.handleResponse<T>(response)
   }
 
   static async postFormData<T>(url: string, data: FormData): Promise<T> {
     const headers = await this.getAuthHeaders()
     delete headers["Content-Type"]
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: data,
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: data,
+      })
+    } catch (err: any) {
+      const error: any = new Error(`Network error POST (form) ${url}: ${err?.message || err}`)
+      error.original = err
+      throw error
+    }
+
     return this.handleResponse<T>(response)
   }
 
   static async patch<T>(url: string, data: any): Promise<T> {
     const headers = await this.getAuthHeaders()
-    const response = await fetch(url, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify(data),
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(data),
+      })
+    } catch (err: any) {
+      const error: any = new Error(`Network error PATCH ${url}: ${err?.message || err}`)
+      error.original = err
+      throw error
+    }
+
     return this.handleResponse<T>(response)
   }
 
   static async patchFormData<T>(url: string, data: FormData): Promise<T> {
     const headers = await this.getAuthHeaders()
     delete headers["Content-Type"]
-    const response = await fetch(url, {
-      method: "PATCH",
-      headers,
-      body: data,
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: "PATCH",
+        headers,
+        body: data,
+      })
+    } catch (err: any) {
+      const error: any = new Error(`Network error PATCH (form) ${url}: ${err?.message || err}`)
+      error.original = err
+      throw error
+    }
+
     return this.handleResponse<T>(response)
   }
 
   static async delete<T>(url: string): Promise<T> {
     const headers = await this.getAuthHeaders()
-    const response = await fetch(url, {
-      method: "DELETE",
-      headers,
-    })
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: "DELETE",
+        headers,
+      })
+    } catch (err: any) {
+      const error: any = new Error(`Network error DELETE ${url}: ${err?.message || err}`)
+      error.original = err
+      throw error
+    }
+
     return this.handleResponse<T>(response)
   }
 }
