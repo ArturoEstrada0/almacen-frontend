@@ -12,6 +12,7 @@ import { useProducts, updateProduct } from "@/lib/hooks/use-products"
 import { formatNumber } from "@/lib/utils/format"
 import { Search, AlertTriangle, Download, Upload, ArrowLeftRight, Loader2, Edit } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import {
   Dialog,
   DialogContent,
@@ -102,6 +103,9 @@ export function StockTab({ warehouseId }: StockTabProps) {
 
     return matchesSearch && matchesWarehouse && matchesStatus
   })
+
+  // Client-side pagination for stock list
+  const { pagedItems, paginationProps } = usePagination(filteredStock, 10)
 
   const getStockStatus = (stock: any) => {
     const product = products.find((p) => p.id === stock.productId)
@@ -418,7 +422,7 @@ export function StockTab({ warehouseId }: StockTabProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStock.map((stock) => {
+              {pagedItems.map((stock) => {
                 const product = products.find((p) => p.id === stock.productId)
                 const status = getStockStatus(stock)
 
@@ -492,6 +496,9 @@ export function StockTab({ warehouseId }: StockTabProps) {
               })}
             </TableBody>
           </Table>
+          <div>
+            <TablePagination {...paginationProps} />
+          </div>
         </CardContent>
       </Card>
 

@@ -114,9 +114,7 @@ export async function updateProduct(id: string, data: Partial<Product>) {
   delete payload.isActive
   // Remove undefined values to avoid overwriting with null
   Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key])
-  console.log('🔄 [updateProduct hook] Payload a enviar:', { hasIva16: payload.hasIva16, categoryId: payload.categoryId, sku: payload.sku })
   const response = await ApiClient.patch<any>(API_ENDPOINTS.products.update(id), payload)
-  console.log('📥 [updateProduct hook] Respuesta recibida:', { hasIva16: response?.hasIva16, categoryId: response?.categoryId })
   return response
 }
 
