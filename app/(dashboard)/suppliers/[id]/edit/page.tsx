@@ -33,7 +33,7 @@ export default function EditSupplierPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const supplierId = Array.isArray(params?.id) ? params.id[0] : params?.id
-  const { supplier, isLoading } = useSupplier(supplierId || "")
+  const { supplier, isLoading, mutate: mutateSupplier } = useSupplier(supplierId || "")
   const { supplierProducts, isLoading: loadingProducts, mutate: mutateSupplierProducts } = useSupplierProducts(supplierId)
 
   const [pendingProducts, setPendingProducts] = useState<{ productId: string }[]>([{ productId: "" }])
@@ -81,7 +81,7 @@ export default function EditSupplierPage() {
       accountNumberUsd: (supplier as any).accountNumberUsd || "",
       swiftCodeUsd: (supplier as any).swiftCodeUsd || "",
     })
-  }, [supplier?.id])
+  }, [supplier])
 
   const currentSupplierType = form.supplierType || supplier?.supplierType || undefined
   const { products: productsByType, isLoading: loadingProductsByType } = useProductsByType(currentSupplierType as string)
@@ -110,6 +110,31 @@ export default function EditSupplierPage() {
     } catch (err: any) {
       toast.dismiss(loadingToast)
       toast.error(err?.message || "Error asociando producto")
+    }
+  }
+
+  const associateAllProducts = async () => {
+    if (!supplierId) return
+    const productsToAssociate = pendingProducts.filter(p => p.productId)
+    if (productsToAssociate.length === 0) {
+      toast.error("Selecciona al menos un producto")
+      return
+    }
+
+    const loadingToast = toast.loading(`Asociando ${productsToAssociate.length} producto${productsToAssociate.length !== 1 ? "s" : ""}...`)
+    try {
+      await Promise.all(
+        productsToAssociate.map((row) =>
+          addProductSupplier(row.productId, { supplierId, price: 0, preferred: false })
+        )
+      )
+      if (mutateSupplierProducts) await mutateSupplierProducts()
+      setPendingProducts([{ productId: "" }])
+      toast.dismiss(loadingToast)
+      toast.success(`${productsToAssociate.length} producto${productsToAssociate.length !== 1 ? "s" : ""} asociado${productsToAssociate.length !== 1 ? "s" : ""}`)
+    } catch (err: any) {
+      toast.dismiss(loadingToast)
+      toast.error(err?.message || "Error asociando productos")
     }
   }
 
@@ -184,6 +209,33 @@ export default function EditSupplierPage() {
       }
 
       await updateSupplier(supplierId, payload)
+
+      // Revalidate supplier data
+      if (mutateSupplier) {
+        const updatedSupplier = await mutateSupplier()
+        if (updatedSupplier) {
+          setForm({
+            code: updatedSupplier.code || "",
+            name: updatedSupplier.name || "",
+            taxId: updatedSupplier.rfc || "",
+            email: updatedSupplier.email || "",
+            phone: updatedSupplier.phone || "",
+            address: updatedSupplier.address || "",
+            contactName: updatedSupplier.contactName || "",
+            businessType: updatedSupplier.businessType || "",
+            supplierType: updatedSupplier.supplierType || "",
+            creditDays: updatedSupplier.paymentTerms?.toString?.() || "",
+            isActive: updatedSupplier.active ?? true,
+            bankNameMxn: (updatedSupplier as any).bankNameMxn || "",
+            accountNumberMxn: (updatedSupplier as any).accountNumberMxn || "",
+            clabeMxn: (updatedSupplier as any).clabeMxn || "",
+            bankNameUsd: (updatedSupplier as any).bankNameUsd || "",
+            accountNumberUsd: (updatedSupplier as any).accountNumberUsd || "",
+            swiftCodeUsd: (updatedSupplier as any).swiftCodeUsd || "",
+          })
+        }
+      }
+
       if (loadingId) toast.dismiss(loadingId)
       toast.success("Proveedor actualizado")
       router.push("/suppliers")
@@ -286,7 +338,7 @@ export default function EditSupplierPage() {
                     <div className="grid gap-4 md:grid-cols-3">
                       <div className="space-y-2">
                         <Label htmlFor="supplierType">Tipo de proveedor *</Label>
-                        <Select value={form.supplierType} onValueChange={(value) => setForm({ ...form, supplierType: value })}>
+                        <Select value={form.supplierType || supplier?.supplierType || ""} onValueChange={(value) => setForm({ ...form, supplierType: value })}>
                           <SelectTrigger id="supplierType">
                             <SelectValue placeholder="Selecciona un tipo" />
                           </SelectTrigger>
@@ -403,10 +455,21 @@ export default function EditSupplierPage() {
                 ))}
               </div>
 
-              <Button type="button" variant="outline" onClick={addPendingProduct} className="w-full">
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar otro producto
-              </Button>
+              <div className="space-y-3">
+                {pendingProducts.filter(p => p.productId).length > 1 && (
+                  <Button
+                    type="button"
+                    onClick={associateAllProducts}
+                    className="w-full"
+                  >
+                    Asociar {pendingProducts.filter(p => p.productId).length} productos
+                  </Button>
+                )}
+                <Button type="button" variant="outline" onClick={addPendingProduct} className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  {pendingProducts.length > 1 ? "Agregar más productos" : "Agregar otro producto"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
