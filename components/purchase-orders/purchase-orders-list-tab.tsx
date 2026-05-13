@@ -113,11 +113,11 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
   }
 
   const getDaysUntilDueText = (dueDateValue?: string | Date | null) => {
-    const dueDate = parseDateOnly(dueDateValue)
-    if (!dueDate) return "Vence: -"
-
+    const parsed = parseDateOnly(dueDateValue)
     const today = new Date()
     const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    // If due date is missing or invalid, use today's date so displays agree with system date
+    const dueDate = parsed || todayDate
     const diffMs = dueDate.getTime() - todayDate.getTime()
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
 
@@ -403,6 +403,8 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                     const dueDate = parseDateOnly(rowOrder.dueDate as any)
                     const today = new Date()
                     const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                    // Use system date as fallback so displayed vencimiento matches system when dueDate is missing
+                    const displayDueDate = dueDate || todayDate
                     const isOverdue = rowOrder.paymentStatus === "pendiente" && dueDate && todayDate > dueDate
 
                     return (
@@ -433,7 +435,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                             </Badge>
                             {rowOrder.paymentStatus !== "pagado" && (
                               <>
-                                <p className="text-xs text-muted-foreground">Vence: {dueDate ? dueDate.toLocaleDateString() : "-"}</p>
+                                <p className="text-xs text-muted-foreground">Vence: {displayDueDate ? displayDueDate.toLocaleDateString() : "-"}</p>
                                 <p className="text-xs text-muted-foreground">{getDaysUntilDueText(rowOrder.dueDate as any)}</p>
                               </>
                             )}

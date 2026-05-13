@@ -134,8 +134,7 @@ export function CustomersDirectoryTab() {
 
     setIsSubmitting(true)
     try {
-      // DEBUG: mostrar payload enviado al backend
-      console.debug("Updating customer payload:", data)
+      // Updating customer payload (debug logging removed)
       const updated = await updateCustomer(selectedCustomer.id, data)
       setEditDialogOpen(false)
       setSelectedCustomer(null)

@@ -259,12 +259,10 @@ export function QuotationsTab() {
         items: quotationItems.map((i) => ({ productId: i.productId, quantity: i.quantity })),
         supplierIds: selectedSuppliers,
       }
-      console.log("Sending payload:", JSON.stringify(payload, null, 2))
-      console.log("quotationItems state:", quotationItems)
       const created = await createQuotation(payload)
       toast.dismiss()
       toast.success("Cotización creada y correos enviados")
-      console.log("Created quotation", created)
+      // created quotation
       // Limpiar el formulario
       setQuotationItems([])
       setSelectedSuppliers([])

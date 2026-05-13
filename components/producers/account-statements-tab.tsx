@@ -302,6 +302,7 @@ export function AccountStatementsTab() {
   const generatePrintableReport = (report: any) => {
     const formatCurrency = (val: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val)
     const formatDate = (date: string) => new Date(date).toLocaleDateString('es-MX')
+    const formatDateSystem = () => new Date().toLocaleDateString('es-MX')
     
     return `
       <!DOCTYPE html>
@@ -346,7 +347,7 @@ export function AccountStatementsTab() {
           </div>
           <div style="text-align: right;">
             <p><strong>Fecha de Generación:</strong></p>
-            <p>${formatDate(report.generatedAt)}</p>
+            <p>${formatDateSystem()}</p>
           </div>
         </div>
 
@@ -490,7 +491,7 @@ export function AccountStatementsTab() {
 
         <div style="margin-top: 40px; page-break-inside: avoid;">
           <p style="font-size: 10px; color: #666;">
-            Reporte generado automáticamente el ${formatDate(report.generatedAt)}
+            Reporte generado automáticamente el ${formatDateSystem()}
           </p>
         </div>
 

@@ -75,9 +75,38 @@ export function FruitReceptionsTab() {
   const [receptionToPrint, setReceptionToPrint] = useState<any | null>(null)
 
   // Filtrar productos por tipo - definir antes de los handlers
-  const fruitProducts = products.filter((p) => p.type === "fruta")
-  const insumoProducts = products.filter((p) => p.type === "insumo")
-  const fruitWarehouses = warehouses.filter((warehouse) => warehouse.type === "fruta")
+  const normalizeType = (v: any) => {
+    if (v === null || v === undefined) return ""
+    if (typeof v === "string") return v.toLowerCase().trim()
+    if (typeof v === "number") return String(v).toLowerCase().trim()
+    if (typeof v === "object") {
+      // try common object shapes
+      const maybe = v.name || v.type || v.label || v.nombre || v.nombreTipo
+      if (maybe) return String(maybe).toLowerCase().trim()
+      try {
+        return JSON.stringify(v).toLowerCase().trim()
+      } catch {
+        return ""
+      }
+    }
+    return String(v).toLowerCase().trim()
+  }
+
+  const getProductType = (p: any) => {
+    // Try several fields that may contain the product type
+    return (
+      normalizeType(p.type) ||
+      normalizeType(p.product_type) ||
+      normalizeType(p.typeName) ||
+      normalizeType(p.type?.name) ||
+      normalizeType(p.category?.type) ||
+      normalizeType(p.category?.name)
+    )
+  }
+
+  const fruitProducts = products.filter((p) => getProductType(p) === "fruta")
+  const insumoProducts = products.filter((p) => getProductType(p) === "insumo")
+  const fruitWarehouses = warehouses.filter((warehouse) => normalizeType(warehouse.type) === "fruta")
 
   useEffect(() => {
     let mounted = true

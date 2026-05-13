@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { formatLocalDateOnly } from "@/lib/date-utils"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
@@ -59,8 +60,34 @@ export default function EditPurchaseOrderPage({ params }: Params) {
         </div>
       </div>
 
-      <div className="rounded-lg border p-6 text-sm text-muted-foreground">
-        Para cambiarla, crea una nueva orden o consulta el detalle desde la lista.
+      <div className="rounded-lg border p-6 text-sm">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Número</p>
+            <p className="font-medium">{purchaseOrder.orderNumber || purchaseOrder.code || purchaseOrder.id}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Proveedor</p>
+            <p className="font-medium">{purchaseOrder.supplierName || (purchaseOrder.supplier && purchaseOrder.supplier.name) || "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Almacén</p>
+            <p className="font-medium">{purchaseOrder.warehouse?.name || purchaseOrder.warehouseName || "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Fecha Orden</p>
+            <p className="font-medium">{formatLocalDateOnly(purchaseOrder.orderDate)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Fecha Entrega Esperada</p>
+            <p className="font-medium">{formatLocalDateOnly(purchaseOrder.expectedDeliveryDate)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="font-medium">{purchaseOrder.total != null ? `$${Number(purchaseOrder.total).toFixed(2)}` : "-"}</p>
+          </div>
+        </div>
+        <div className="mt-4 text-sm text-muted-foreground">Para cambiarla, crea una nueva orden o consulta el detalle desde la lista.</div>
       </div>
     </div>
   )

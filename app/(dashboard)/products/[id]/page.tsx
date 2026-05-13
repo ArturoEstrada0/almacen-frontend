@@ -186,7 +186,6 @@ export default function EditProductPage({ params }: Params) {
       hasIva16: (product as any).hasIva16 !== undefined ? Boolean((product as any).hasIva16) : true,
       isActive: (product as any).isActive !== undefined ? (product as any).isActive : true,
     }
-    console.log('📥 [Edit] Producto cargado:', { id: product.id, hasIva16: newFormData.hasIva16, categoryId: newFormData.categoryId })
     setFormData(newFormData)
   }, [product?.id])
 
@@ -293,11 +292,10 @@ export default function EditProductPage({ params }: Params) {
         hasIva16: formData.hasIva16,
         active: formData.isActive,
       }
-      console.log('📤 [handleSubmit] Payload enviado:', { hasIva16: payload.hasIva16, categoryId: payload.categoryId, sku: payload.sku })
       
       // Actualizar producto base
       const response = await updateProduct(id, payload)
-      console.log('✅ [handleSubmit] Respuesta del servidor:', { id: response?.id, hasIva16: response?.hasIva16, categoryId: response?.categoryId })
+      // respuesta procesada correctamente
       
       // Actualizar inventario por almacén
       for (const warehouseId in warehouseInventory) {

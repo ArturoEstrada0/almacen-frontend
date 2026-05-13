@@ -364,13 +364,11 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
       // might not be rendering new rows. The user can paste these logs if needed.
       try {
         if (form.warehouseId) {
-          const inv = await api.get(`/api/inventory?warehouseId=${form.warehouseId}`)
-          console.debug("[debug] inventory response:", inv)
-          const mov = await api.get(`/api/inventory/movements?warehouseId=${form.warehouseId}`)
-          console.debug("[debug] movements response:", mov)
+          // debug endpoints removed from logs
+          await api.get(`/api/inventory?warehouseId=${form.warehouseId}`)
+          await api.get(`/api/inventory/movements?warehouseId=${form.warehouseId}`)
         } else {
-          const movAll = await api.get(`/api/inventory/movements?`)
-          console.debug("[debug] movements response:", movAll)
+          await api.get(`/api/inventory/movements?`)
         }
       } catch (err) {
         console.error("[debug] error fetching debug endpoints", err)
