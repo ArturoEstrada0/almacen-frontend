@@ -193,7 +193,7 @@ export function useCustomers() {
     if (!session?.access_token) return null
 
     try {
-      console.debug("createCustomer request:", data)
+      // createCustomer request
       const response = await fetch(`${API_ROOT}/customers`, {
         method: "POST",
         headers: {
@@ -233,7 +233,7 @@ export function useCustomers() {
     if (!session?.access_token) return null
 
     try {
-      console.debug("updateCustomer request:", id, data)
+      // updateCustomer request
       const response = await fetch(`${API_ROOT}/customers/${id}`, {
         method: "PATCH",
         headers: {

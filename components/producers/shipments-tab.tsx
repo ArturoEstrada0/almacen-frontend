@@ -18,11 +18,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ComboBox } from "@/components/ui/combobox"
+import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Label } from "@/components/ui/label"
 import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck, Loader2 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { getLocalDateInputValue } from "@/lib/date-utils"
 import { compressDocument } from "@/lib/document-compression"
 import type { ShipmentStatus } from "@/lib/types"
 import {
@@ -69,7 +70,7 @@ export function ShipmentsTab() {
   const [shipmentInvoiceFile, setShipmentInvoiceFile] = useState<File | null>(null)
   const [carrierInvoiceFile, setCarrierInvoiceFile] = useState<File | null>(null)
   const [waybillFile, setWaybillFile] = useState<File | null>(null)
-  const [shipmentDate, setShipmentDate] = useState(new Date().toISOString().split("T")[0])
+  const [shipmentDate, setShipmentDate] = useState(getLocalDateInputValue(new Date()))
   const [notes, setNotes] = useState("")
 
   // For edit dialog (edit general shipment info and receptions)
@@ -96,8 +97,8 @@ export function ShipmentsTab() {
   const [updateStatus, setUpdateStatus] = useState<ShipmentStatus>("embarcada")
   const [arrivalDate, setArrivalDate] = useState("")
   const [salePrice, setSalePrice] = useState("")
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().split("T")[0])
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0])
+  const [saleDate, setSaleDate] = useState(getLocalDateInputValue(new Date()))
+  const [invoiceDate, setInvoiceDate] = useState(getLocalDateInputValue(new Date()))
   const [invoiceNumber, setInvoiceNumber] = useState("")
   const [updateNotes, setUpdateNotes] = useState("")
 
@@ -224,7 +225,7 @@ export function ShipmentsTab() {
     if (Number.isNaN(baseDate.getTime())) return ""
     const creditDays = Number(selectedShipmentCustomer?.creditDays || 0)
     baseDate.setDate(baseDate.getDate() + creditDays)
-    return baseDate.toISOString().split("T")[0]
+    return getLocalDateInputValue(baseDate)
   })()
 
   const handleToggleReception = (receptionId: string) => {
@@ -290,10 +291,9 @@ export function ShipmentsTab() {
           setShipmentInvoiceFile(null)
           setCarrierInvoiceFile(null)
           setWaybillFile(null)
-          setShipmentDate(new Date().toISOString().split("T")[0])
+          setShipmentDate(getLocalDateInputValue(new Date()))
           setNotes("")
           setIsCreateDialogOpen(false)
-          console.log("Created shipment", created)
           return
         }
         const created: any = await apiCreateShipment(payload)
@@ -312,10 +312,9 @@ export function ShipmentsTab() {
         setShipmentInvoiceFile(null)
         setCarrierInvoiceFile(null)
         setWaybillFile(null)
-        setShipmentDate(new Date().toISOString().split("T")[0])
+        setShipmentDate(getLocalDateInputValue(new Date()))
         setNotes("")
         setIsCreateDialogOpen(false)
-        console.log("Created shipment", created)
       } catch (err) {
         const e: any = err || {}
         console.error("Failed creating shipment", e)
@@ -363,7 +362,6 @@ export function ShipmentsTab() {
         await mutateShipments()
         await globalMutate("accounts-receivable")
         setIsUpdateDialogOpen(false)
-        console.log("Updated shipment", updated)
       } catch (err) {
         console.warn("Failed updating shipment", err)
         alert("Error al actualizar embarque: " + (err as any)?.message || err)
@@ -443,10 +441,9 @@ export function ShipmentsTab() {
       setShipmentInvoiceFile(null)
       setCarrierInvoiceFile(null)
       setWaybillFile(null)
-      setShipmentDate(new Date().toISOString().split("T")[0])
+      setShipmentDate(getLocalDateInputValue(new Date()))
       setNotes("")
       setIsCreateDialogOpen(false)
-      console.log("Created shipment", created)
     } catch (err) {
       console.warn("Failed creating shipment", err)
       openShipmentErrorDialog(`Error al crear embarque: ${(err as any)?.message || String(err)}`)
@@ -812,24 +809,25 @@ export function ShipmentsTab() {
                       <Label htmlFor="carrier" className="text-sm font-semibold">
                         Transportista <span className="text-red-500">*</span>
                       </Label>
-                      <ComboBox
-                        options={(suppliers || []).map((s: any) => ({
-                          value: String(s.businessName || s.name || s.id),
-                          label: String(s.businessName || s.name || s.id),
-                          subtitle: String(s.rfc || ""),
-                        }))}
-                        value={carrier}
-                        onChange={(v) => setCarrier(v)}
-                        placeholder="Seleccionar transportista"
-                        className="h-10 text-sm"
-                      />
+                        <ProductorComboBox
+                          options={(suppliers || []).map((s: any) => ({
+                            value: String(s.businessName || s.name || s.id),
+                            label: String(s.businessName || s.name || s.id),
+                            subtitle: String(s.rfc || ""),
+                          }))}
+                          value={carrier}
+                          onChange={(v) => setCarrier(v)}
+                          placeholder="Seleccionar transportista"
+                          searchPlaceholder="Buscar..."
+                          className="h-10 text-sm"
+                        />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="carrierContact" className="text-sm font-semibold">
                         Cliente
                       </Label>
-                      <ComboBox
+                      <ProductorComboBox
                         options={(customers || []).map((c) => ({
                           value: String(c.name),
                           label: String(c.name),
@@ -838,6 +836,7 @@ export function ShipmentsTab() {
                         value={carrierContact}
                         onChange={(v) => setCarrierContact(v)}
                         placeholder="Seleccionar cliente"
+                        searchPlaceholder="Buscar..."
                         emptyMessage="No se encontraron clientes"
                         className="h-10 text-sm"
                       />
@@ -1172,11 +1171,11 @@ export function ShipmentsTab() {
                                   setSelectedShipment(shipment.id)
                                   setUpdateStatus((shipment as any).status)
                                   setSalePrice((shipment as any).salePricePerBox ? String((shipment as any).salePricePerBox) : "")
-                                  setSaleDate(new Date().toISOString().split("T")[0])
+                                  setSaleDate(getLocalDateInputValue(new Date()))
                                   setInvoiceDate(
                                     (shipment as any).invoiceRegisteredAt
-                                      ? new Date((shipment as any).invoiceRegisteredAt).toISOString().split("T")[0]
-                                      : new Date().toISOString().split("T")[0],
+                                      ? getLocalDateInputValue(new Date((shipment as any).invoiceRegisteredAt))
+                                      : getLocalDateInputValue(new Date()),
                                   )
                                   setInvoiceNumber(String((shipment as any).code || ""))
                                   setIsUpdateDialogOpen(true)
@@ -1387,7 +1386,7 @@ export function ShipmentsTab() {
                       <Label htmlFor="editCarrier" className="text-sm font-semibold">
                         Transportista <span className="text-red-500">*</span>
                       </Label>
-                      <ComboBox
+                      <ProductorComboBox
                         options={(suppliers || []).map((s: any) => ({
                           value: String(s.businessName || s.name || s.id),
                           label: String(s.businessName || s.name || s.id),
@@ -1396,6 +1395,7 @@ export function ShipmentsTab() {
                         value={editCarrier}
                         onChange={(v) => setEditCarrier(v)}
                         placeholder="Seleccionar transportista"
+                        searchPlaceholder="Buscar..."
                         className="h-10 text-sm"
                       />
                     </div>
@@ -1404,7 +1404,7 @@ export function ShipmentsTab() {
                       <Label htmlFor="editCarrierContact" className="text-sm font-semibold">
                         Cliente
                       </Label>
-                      <ComboBox
+                      <ProductorComboBox
                         options={(customers || []).map((c) => ({
                           value: String(c.name),
                           label: String(c.name),
@@ -1413,6 +1413,7 @@ export function ShipmentsTab() {
                         value={editCarrierContact}
                         onChange={(v) => setEditCarrierContact(v)}
                         placeholder="Seleccionar cliente"
+                        searchPlaceholder="Buscar..."
                         emptyMessage="No se encontraron clientes"
                         className="h-10 text-sm"
                       />

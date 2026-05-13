@@ -68,7 +68,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.debug('notification-provider: fetchNotifications error', err);
+      // notification-provider: fetchNotifications error
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.debug('notification-provider: refreshUnreadCount error', err);
+      // notification-provider: refreshUnreadCount error
     }
   }, [API_ROOT, getToken]);
 
@@ -192,7 +192,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       } catch (err) {
         // ignore socket init errors
         // eslint-disable-next-line no-console
-        console.debug('notification-provider: socket init failed', err);
+        // notification-provider: socket init failed
       }
     })();
 

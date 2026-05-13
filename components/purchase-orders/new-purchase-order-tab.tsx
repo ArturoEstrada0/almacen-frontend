@@ -14,8 +14,9 @@ import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { cancelPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
 import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
+import { getLocalDateInputValue } from "@/lib/date-utils"
 import type { PurchaseOrder } from "@/lib/types"
-import { Plus, Trash2, Save } from "lucide-react"
+import { Plus, Trash2, Save, Loader2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
@@ -84,12 +85,13 @@ export function NewPurchaseOrderTab({
   const [supplierId, setSupplierId] = useState("")
   const [warehouseId, setWarehouseId] = useState("")
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("")
-  const [creditDays, setCreditDays] = useState(0)
+  const [creditDays, setCreditDays] = useState("")
   const [items, setItems] = useState<PurchaseOrderItem[]>([])
   const [notes, setNotes] = useState("")
   const [selectedQuotationId, setSelectedQuotationId] = useState("")
   const [selectedQuotationDetail, setSelectedQuotationDetail] = useState<QuotationOption | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const infoCardRef = useRef<HTMLDivElement>(null)
 
   const [showImporter, setShowImporter] = useState(false)
@@ -173,6 +175,8 @@ export function NewPurchaseOrderTab({
 
   const baseProductOptions = useMemo(() => {
     const selectedWarehouseType = normalizeType((selectedWarehouse as any)?.type)
+    const selSupplier = suppliers.find((s) => s.id === supplierId)
+    const supplierTypeNormalized = normalizeType(selSupplier?.supplierType || selSupplier?.businessType)
 
     let baseProducts: any[]
     if (supplierId && supplierProducts.length > 0) {
@@ -183,13 +187,16 @@ export function NewPurchaseOrderTab({
       baseProducts = products
     }
 
+    // If a supplier type is selected and no warehouse type is present, filter by supplier type
+    const effectiveType = selectedWarehouseType || supplierTypeNormalized
+
     return baseProducts
       .filter((product: any) => product?.isActive !== false)
       .filter((product: any) => {
-        if (!selectedWarehouseType) return true
+        if (!effectiveType) return true
         const productType = normalizeType(product?.type)
         if (!productType) return true
-        return productType === selectedWarehouseType
+        return productType === effectiveType
       })
       .map((product: any) => ({
         value: product.id,
@@ -223,7 +230,7 @@ export function NewPurchaseOrderTab({
       setSupplierId("")
       setWarehouseId("")
       setExpectedDeliveryDate("")
-      setCreditDays(0)
+      setCreditDays("")
       setItems([])
       setNotes("")
       setSelectedQuotationId("")
@@ -233,7 +240,7 @@ export function NewPurchaseOrderTab({
     setSupplierId(initialOrder.supplierId || "")
     setWarehouseId(initialOrder.warehouseId || "")
     setExpectedDeliveryDate(initialOrder.expectedDeliveryDate ? String(initialOrder.expectedDeliveryDate).split("T")[0] : "")
-    setCreditDays(initialOrder.creditDays || 0)
+    setCreditDays(initialOrder.creditDays !== undefined && initialOrder.creditDays !== null ? String(initialOrder.creditDays) : "")
     setNotes(initialOrder.notes || "")
     setSelectedQuotationId(initialOrder.quotationId || "")
     setItems(
@@ -307,19 +314,25 @@ export function NewPurchaseOrderTab({
 
   const handleSubmit = async () => {
     setSubmitted(true)
+    setIsSaving(true)
     if (!supplierId || !warehouseId || !expectedDeliveryDate || items.length === 0) {
       toast.error("Por favor completa todos los campos requeridos")
       // Scroll hasta el card de información general dentro del contenedor del layout
       infoCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      setIsSaving(false)
       return
     }
 
     try {
+      const creditDaysNumber = creditDays === "" ? 0 : Number(creditDays) || 0
+
       const payload = {
         supplierId,
         warehouseId,
-        expectedDate: expectedDeliveryDate,
-        creditDays,
+        // Use local date-only value to avoid UTC timezone shifts on the backend
+        orderDate: getLocalDateInputValue(new Date()),
+        expectedDeliveryDate: expectedDeliveryDate,
+        creditDays: creditDaysNumber,
         notes,
         currency: orderCurrency,
         quotationId: selectedQuotationId || undefined,
@@ -331,8 +344,6 @@ export function NewPurchaseOrderTab({
           notes: undefined,
         })),
       }
-
-      console.log('[DEBUG] Payload being sent to API:', JSON.stringify(payload, null, 2))
 
       if (mode === "edit" && initialOrder?.id) {
         await updatePurchaseOrder(initialOrder.id, payload)
@@ -355,11 +366,11 @@ export function NewPurchaseOrderTab({
         : backendMessage || (mode === "edit" ? "Error actualizando la orden de compra" : "Error creando la orden de compra")
 
       // If there's a raw payload, include it in console for inspection
-      if (e?.raw && typeof e.raw !== "string") {
-        console.info("Backend error payload:", e.raw)
-      }
+      // (removed verbose logging in production)
 
       toast.error(errorMessage)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -388,7 +399,17 @@ export function NewPurchaseOrderTab({
     setSupplierId(value)
     const selectedSupplier = suppliers.find((s) => s.id === value)
     if (selectedSupplier) {
-      setCreditDays(selectedSupplier.paymentTerms || 0)
+      setCreditDays(selectedSupplier.paymentTerms !== undefined && selectedSupplier.paymentTerms !== null ? String(selectedSupplier.paymentTerms) : "")
+    }
+    // If the currently selected warehouse is not compatible with the new supplier type, clear it
+    const selSupplier = suppliers.find((s) => s.id === value)
+    const supplierTypeNormalized = normalizeType(selSupplier?.supplierType || selSupplier?.businessType)
+    if (warehouseId && supplierTypeNormalized) {
+      const currentWarehouse = warehouses.find((w) => String(w.id) === String(warehouseId))
+      const warehouseTypeNormalized = normalizeType((currentWarehouse as any)?.type)
+      if (warehouseTypeNormalized && warehouseTypeNormalized !== supplierTypeNormalized) {
+        setWarehouseId("")
+      }
     }
   }
 
@@ -406,7 +427,7 @@ export function NewPurchaseOrderTab({
       setSupplierId(quotation.winningSupplierId)
       const selectedSupplier = suppliers.find((s) => s.id === quotation.winningSupplierId)
       if (selectedSupplier) {
-        setCreditDays(selectedSupplier.paymentTerms || 0)
+        setCreditDays(selectedSupplier.paymentTerms !== undefined && selectedSupplier.paymentTerms !== null ? String(selectedSupplier.paymentTerms) : "")
       }
     }
   }
@@ -445,14 +466,23 @@ export function NewPurchaseOrderTab({
 
             <div className="space-y-2">
               <Label>Almacén de Destino *</Label>
-              <ComboBox
-                options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
-                value={warehouseId}
-                onChange={setWarehouseId}
-                placeholder="Selecciona un almacén"
-                searchPlaceholder="Buscar almacén..."
-                className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}
-              />
+                <ComboBox
+                  options={(warehouses || [])
+                    .filter((w) => {
+                      if (!supplierId) return true
+                      const supplierTypeNormalized = normalizeType(supplier?.supplierType || supplier?.businessType)
+                      if (!supplierTypeNormalized) return true
+                      const warehouseType = normalizeType((w as any)?.type)
+                      if (!warehouseType) return true
+                      return warehouseType === supplierTypeNormalized
+                    })
+                    .map((w) => ({ value: w.id, label: w.name }))}
+                  value={warehouseId}
+                  onChange={setWarehouseId}
+                  placeholder="Selecciona un almacén"
+                  searchPlaceholder="Buscar almacén..."
+                  className={submitted && !warehouseId ? 'border-red-500 ring-1 ring-red-500' : ''}
+                />
               {submitted && !warehouseId && (
                 <p className="text-xs text-red-500">Selecciona un almacén de destino</p>
               )}
@@ -476,7 +506,8 @@ export function NewPurchaseOrderTab({
                 type="number"
                 min="0"
                 value={creditDays}
-                onChange={(e) => setCreditDays(Number(e.target.value))}
+                onChange={(e) => setCreditDays(e.target.value)}
+                placeholder=""
               />
             </div>
           </div>
@@ -701,9 +732,13 @@ export function NewPurchaseOrderTab({
           <Button variant="outline" onClick={() => (mode === "edit" ? onCancelEdit?.() : onSuccess())}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit}>
-            <Save className="mr-2 h-4 w-4" />
-            {mode === "edit" ? "Guardar Cambios" : "Crear Orden de Compra"}
+          <Button onClick={handleSubmit} disabled={isSaving}>
+            {isSaving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            {isSaving ? (mode === "edit" ? "Guardando..." : "Creando orden...") : (mode === "edit" ? "Guardar Cambios" : "Crear Orden de Compra")}
           </Button>
         </div>
       </div>

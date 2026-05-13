@@ -39,7 +39,7 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
   const [supplierId, setSupplierId] = useState("")
   const [warehouseId, setWarehouseId] = useState("")
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("")
-  const [creditDays, setCreditDays] = useState(0)
+  const [creditDays, setCreditDays] = useState("")
   const [items, setItems] = useState<Item[]>([])
   const [notes, setNotes] = useState("")
 
@@ -78,7 +78,7 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
     setSupplierId(order.supplierId)
     setWarehouseId(order.warehouseId)
     setExpectedDeliveryDate(order.expectedDeliveryDate ? order.expectedDeliveryDate.split("T")[0] : "")
-    setCreditDays(order.creditDays || 0)
+    setCreditDays(order.creditDays !== undefined && order.creditDays !== null ? String(order.creditDays) : "")
     setNotes(order.notes || "")
     setItems(order.items.map((it: any) => ({ id: it.id, productId: it.productId, quantity: it.quantity, unitPrice: it.unitPrice, currency: it.currency || order.currency || "MXN" })))
   }, [order])
@@ -118,10 +118,13 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
     }
 
     try {
+      const creditDaysNumber = creditDays === "" ? 0 : Number(creditDays) || 0
+
       const payload = {
         warehouseId,
         notes,
         currency: orderCurrency,
+        creditDays: creditDaysNumber,
         items: items.map((it) => ({
           productId: it.productId,
           quantity: Number(it.quantity),
@@ -182,7 +185,7 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
 
             <div className="space-y-2">
               <Label>Días de Crédito</Label>
-              <Input type="number" min="0" value={creditDays} onChange={(e) => setCreditDays(Number(e.target.value))} />
+              <Input type="number" min="0" value={creditDays} onChange={(e) => setCreditDays(e.target.value)} />
             </div>
           </div>
 
