@@ -15,7 +15,7 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { useMovements } from "@/lib/hooks/use-inventory"
 import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import { useCurrentUser } from "@/lib/hooks/use-users"
-import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Link2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -413,6 +413,9 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 text-muted-foreground" />
                             <span className="font-mono font-medium">{rowOrder.orderNumber}</span>
+                            {rowOrder.quotationId && (
+                              <Link2 className="h-3.5 w-3.5 text-blue-600" title="Basada en cotización" />
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -646,6 +649,14 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                   <p className="font-medium">{formatDateSafely(detailsOrder.expectedDeliveryDate as any)}</p>
                 </div>
               </div>
+
+              {detailsOrder.quotationId && detailsOrder.quotation && (
+                <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-md border border-blue-200 dark:border-blue-800">
+                  <Label className="text-xs text-blue-900 dark:text-blue-100 font-semibold">Cotización Vinculada</Label>
+                  <p className="font-medium text-blue-900 dark:text-blue-100">{detailsOrder.quotation.code}</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">Estado: {detailsOrder.quotation.status}</p>
+                </div>
+              )}
 
               <div>
                 <Label className="text-xs text-muted-foreground">Productos</Label>

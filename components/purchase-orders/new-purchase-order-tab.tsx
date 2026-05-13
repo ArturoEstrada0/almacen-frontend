@@ -16,7 +16,7 @@ import { API_ENDPOINTS, ApiClient } from "@/lib/config/api"
 import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import { getLocalDateInputValue } from "@/lib/date-utils"
 import type { PurchaseOrder } from "@/lib/types"
-import { Plus, Trash2, Save, Loader2 } from "lucide-react"
+import { Plus, Trash2, Save, Loader2, Lock } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
@@ -389,7 +389,8 @@ export function NewPurchaseOrderTab({
   }
 
   const supplier = suppliers.find((s) => s.id === supplierId)
-  
+  const isFromQuotation = mode === "create" ? !!selectedQuotationId : !!initialOrder?.quotationId
+
   const handleSupplierChange = (value: string) => {
     if (value !== supplierId) {
       setItems([])
@@ -586,10 +587,10 @@ export function NewPurchaseOrderTab({
               <CardDescription>Agrega los productos a la orden de compra</CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline" disabled={!supplierId}>
+              <Button onClick={() => setShowImporter(true)} size="sm" variant="outline" disabled={!supplierId || isFromQuotation}>
                 Importar XML
               </Button>
-              <Button onClick={addItem} size="sm" disabled={!supplierId}>
+              <Button onClick={addItem} size="sm" disabled={!supplierId || isFromQuotation}>
                 <Plus className="mr-2 h-4 w-4" />
                 Agregar Producto
               </Button>
@@ -597,6 +598,15 @@ export function NewPurchaseOrderTab({
           </div>
         </CardHeader>
         <CardContent>
+          {isFromQuotation && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md flex items-start gap-2">
+              <Lock className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-blue-900">Orden basada en cotización</p>
+                <p className="text-xs text-blue-700 mt-1">La cantidad y precio unitario están bloqueados para mantener las condiciones de la cotización</p>
+              </div>
+            </div>
+          )}
           {showImporter && (
             <div className="mb-4">
               <InvoiceImportForm initialSupplierId={supplierId} initialWarehouseId={warehouseId} onImportComplete={handleImportComplete} />
@@ -644,6 +654,7 @@ export function NewPurchaseOrderTab({
                             placeholder="Selecciona un producto"
                             searchPlaceholder="Buscar producto..."
                             className="w-full"
+                            disabled={isFromQuotation}
                           />
                           {product && (
                             <p className="text-xs text-muted-foreground mt-1">
@@ -658,6 +669,7 @@ export function NewPurchaseOrderTab({
                             value={item.quantity}
                             onChange={(e) => updateItem(index, "quantity", Number.parseInt(e.target.value) || 0)}
                             className="w-24"
+                            disabled={isFromQuotation}
                           />
                         </TableCell>
                         <TableCell>
@@ -669,12 +681,13 @@ export function NewPurchaseOrderTab({
                             onChange={(e) => updateItem(index, "unitPrice", Number.parseFloat(e.target.value) || 0)}
                             className="w-32"
                             placeholder="0.00"
+                            disabled={isFromQuotation}
                           />
                         </TableCell>
                         <TableCell className="font-medium">{formatCurrencyWithDenomination(calculateItemTax(item), item.currency || orderCurrency)}</TableCell>
                         <TableCell className="font-medium">{formatCurrencyWithDenomination(item.quantity * item.unitPrice, item.currency || orderCurrency)}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
+                          <Button variant="ghost" size="icon" onClick={() => removeItem(index)} disabled={isFromQuotation}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </TableCell>
