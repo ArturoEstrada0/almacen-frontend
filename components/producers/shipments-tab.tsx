@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useAuth } from "@/lib/context/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,6 +56,7 @@ const statusConfig: Record<
 }
 
 export function ShipmentsTab() {
+  const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [sortBy, setSortBy] = useState<"producer" | "code" | "date">("producer")
@@ -356,6 +358,8 @@ export function ShipmentsTab() {
                 saleDate,
                 invoiceDate,
                 invoiceNumber: invoiceNumber?.trim() || (selectedShipmentData as any)?.code,
+                closedByUserId: user?.id,
+                closedByUserName: user?.user_metadata?.full_name || user?.email || undefined,
               }
             : undefined,
         )
@@ -1053,6 +1057,7 @@ export function ShipmentsTab() {
                 <TableHead>Llegada</TableHead>
                 <TableHead>Precio Venta</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Estado Transportista</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -1147,6 +1152,25 @@ export function ShipmentsTab() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={config?.variant || "default"}>{config?.label || (shipment as any).status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {(shipment as any).carrierPaymentStatus ? (
+                        <Badge
+                          variant={
+                            (shipment as any).carrierPaymentStatus === "pendiente" ? "secondary" :
+                            (shipment as any).carrierPaymentStatus === "parcial" ? "default" :
+                            (shipment as any).carrierPaymentStatus === "pagado" ? "outline" :
+                            "default"
+                          }
+                        >
+                          {(shipment as any).carrierPaymentStatus === "pendiente" ? "Pendiente de Pago" :
+                           (shipment as any).carrierPaymentStatus === "parcial" ? "Pago Parcial" :
+                           (shipment as any).carrierPaymentStatus === "pagado" ? "Pagado" :
+                           (shipment as any).carrierPaymentStatus}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

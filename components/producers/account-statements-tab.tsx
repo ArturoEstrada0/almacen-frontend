@@ -196,6 +196,11 @@ export function AccountStatementsTab() {
   const handleSavePayment = () => {
     ;(async () => {
       try {
+        // Validación: productor seleccionado
+        if (!selectedProducer) {
+          return alert("Por favor selecciona un productor")
+        }
+
         // Traducir método de pago a inglés
         const methodMap: Record<string, string> = {
           efectivo: "cash",
@@ -203,13 +208,18 @@ export function AccountStatementsTab() {
           cheque: "check",
           deposito: "other",
         }
-        
+
         // Si hay movimientos seleccionados, usar el total calculado
-        const finalAmount = selectedMovements.length > 0 
-          ? calculateTotalFromSelectedMovements() 
+        const finalAmount = selectedMovements.length > 0
+          ? calculateTotalFromSelectedMovements()
           : parseAmountToNumber(amount)
         const retention = hasRetention ? parseAmountToNumber(retentionAmount) : 0
-        
+
+        // Validación: monto
+        if (finalAmount <= 0) {
+          return alert("El monto debe ser mayor a 0")
+        }
+
         const payload = {
           producerId: selectedProducer,
           amount: finalAmount,
@@ -222,7 +232,7 @@ export function AccountStatementsTab() {
             notes: retentionNotes
           } : undefined
         }
-        
+
         await apiCreatePayment(payload)
         // Refresh account statement and producers list (balance)
         await mutateAccount()
@@ -238,8 +248,41 @@ export function AccountStatementsTab() {
         setRetentionPaymentFile(null)
         setIsPaymentDialogOpen(false)
       } catch (err) {
-        console.error("Failed saving payment", err)
-        alert("Error al guardar pago: " + (err as any)?.message || err)
+        console.error("Failed saving payment - Full error:", err)
+        const error = err as any
+        let errorMessage = error?.message || "Error desconocido"
+
+        // Log completo del error para debugging
+        console.log("Error details:", {
+          message: error?.message,
+          statusCode: error?.statusCode,
+          status: error?.status,
+          technicalDetails: error?.technicalDetails,
+          errors: error?.errors,
+          raw: error?.raw,
+        })
+
+        // Si hay detalles técnicos disponibles, incluirlos para debugging
+        if (error?.technicalDetails) {
+          errorMessage += ` (Detalles técnicos: ${error.technicalDetails})`
+        }
+
+        // Mostrar status code si está disponible
+        if (error?.statusCode || error?.status) {
+          errorMessage += ` (Status: ${error?.statusCode || error?.status})`
+        }
+
+        // Si hay errores de validación, incluirlos
+        if (error?.errors && Array.isArray(error.errors)) {
+          const validationErrors = error.errors
+            .map((e: any) => e.property ? `${e.property}: ${Object.values(e.constraints || {}).join(', ')}` : String(e))
+            .join('; ')
+          if (validationErrors) {
+            errorMessage += ` (Validación: ${validationErrors})`
+          }
+        }
+
+        alert("Error al guardar pago: " + errorMessage)
       }
     })()
   }
