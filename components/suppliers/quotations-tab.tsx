@@ -15,6 +15,7 @@ import { toast } from "@/lib/utils/toast"
 import { Plus, Trash2, Send, Building2, Package, Eye, RefreshCw, FileText, Clock, Mail, CheckCircle } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ComboBox } from "@/components/ui/combobox"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ProtectedCreate, ProtectedDelete } from "@/components/auth/protected-action"
 import Spinner2 from "@/components/ui/spinner2"
@@ -708,18 +709,19 @@ export function QuotationsTab() {
           <div className="flex gap-4">
             <div className="flex-1">
               <Label htmlFor="product">Producto</Label>
-              <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                <SelectTrigger id="product">
-                  <SelectValue placeholder="Seleccionar producto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((product) => (
-                    <SelectItem key={product.id} value={product.id}>
-                      {product.name} ({product.sku})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ComboBox
+                options={products
+                  .filter((p) => p.isActive !== false && !quotationItems.some((item) => item.productId === p.id))
+                  .map((product) => ({
+                    value: product.id,
+                    label: `${product.name} (${product.sku})`,
+                    subtitle: product.sku,
+                  }))}
+                value={selectedProduct}
+                onChange={setSelectedProduct}
+                placeholder="Selecciona un producto"
+                searchPlaceholder="Buscar producto..."
+              />
             </div>
             <div className="w-32">
               <Label htmlFor="quantity">Cantidad</Label>
