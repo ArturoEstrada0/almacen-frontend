@@ -153,6 +153,7 @@ export const API_ENDPOINTS = {
       updateStatus: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}/status`,
       delete: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}`,
     },
+    uploadFile: () => `${API_BASE_URL}/api/producers/upload-file`,
   },
 
   // Quotations

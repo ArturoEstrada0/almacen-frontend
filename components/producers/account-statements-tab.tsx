@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { uploadFileToSupabase } from "@/lib/services/file-upload"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ComboBox } from "@/components/ui/combobox"
 import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Label } from "@/components/ui/label"
-import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Plus, Download, DollarSign, TrendingUp, TrendingDown, FileText, ChevronsUpDown, ArrowUp, ArrowDown, Eye, Trash2 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import type { PaymentMethod } from "@/lib/types"
 import { useProducers, useProducerAccountStatement, createPayment as apiCreatePayment, getProducerReport } from "@/lib/hooks/use-producers"
@@ -95,6 +96,12 @@ export function AccountStatementsTab() {
   const [retentionAmount, setRetentionAmount] = useState("")
   const [retentionNotes, setRetentionNotes] = useState("")
   const [retentionPaymentFile, setRetentionPaymentFile] = useState<File | null>(null)
+  const [retentionPaymentUrl, setRetentionPaymentUrl] = useState("")
+  const [isUploadingFile, setIsUploadingFile] = useState(false)
+
+  // Modal para detalles de movimiento
+  const [isMovementDetailsOpen, setIsMovementDetailsOpen] = useState(false)
+  const [selectedMovementDetails, setSelectedMovementDetails] = useState<any | null>(null)
 
   const { producers } = useProducers()
   const { accountStatement, mutate: mutateAccount, isLoading: accountLoading } = useProducerAccountStatement(selectedProducer)
@@ -148,6 +155,7 @@ export function AccountStatementsTab() {
       referenceNumber: m.referenceCode || m.reference_code || m.referenceNumber || "",
       amount: amount,
       balance: Number(m.balance),
+      evidenceUrl: m.evidenceUrl || m.evidence_url || "",
     }
   }).sort((a, b) => {
     switch (sortBy) {
@@ -230,7 +238,8 @@ export function AccountStatementsTab() {
           retention: retention > 0 ? {
             amount: retention,
             notes: retentionNotes
-          } : undefined
+          } : undefined,
+          evidenceUrl: retentionPaymentUrl || undefined
         }
 
         await apiCreatePayment(payload)
@@ -813,13 +822,53 @@ export function AccountStatementsTab() {
                                                 id="retentionPaymentFile"
                                                 type="file"
                                                 accept="application/pdf"
-                                                onChange={(e) => setRetentionPaymentFile(e.target.files?.[0] || null)}
+                                                onChange={async (e) => {
+                                                  const file = e.target.files?.[0]
+                                                  if (file) {
+                                                    setRetentionPaymentFile(file)
+                                                    setIsUploadingFile(true)
+                                                    try {
+                                                      const url = await uploadFileToSupabase(file, "payment-complements")
+                                                      setRetentionPaymentUrl(url)
+                                                    } catch (err) {
+                                                      alert("Error al subir el archivo: " + (err as any).message)
+                                                      setRetentionPaymentFile(null)
+                                                    } finally {
+                                                      setIsUploadingFile(false)
+                                                    }
+                                                  }
+                                                }}
                                                 className="flex-1"
+                                                disabled={isUploadingFile}
                                               />
                                               {retentionPaymentFile && (
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setRetentionPaymentFile(null)}>
-                                                  Quitar
-                                                </Button>
+                                                <>
+                                                  <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                      if (retentionPaymentUrl) {
+                                                        window.open(retentionPaymentUrl, '_blank')
+                                                      }
+                                                    }}
+                                                    title="Ver documento"
+                                                    disabled={isUploadingFile || !retentionPaymentUrl}
+                                                  >
+                                                    {isUploadingFile ? "Subiendo..." : <Eye className="h-4 w-4" />}
+                                                  </Button>
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                      setRetentionPaymentFile(null)
+                                                      setRetentionPaymentUrl("")
+                                                    }}
+                                                  >
+                                                    <Trash2 className="h-4 w-4" />
+                                                  </Button>
+                                                </>
                                               )}
                                             </div>
                                             {retentionPaymentFile && (
@@ -854,23 +903,14 @@ export function AccountStatementsTab() {
                                       }
 
                                       // For 'abono' and 'devolucion' create account movements via API
-                                      const typePayload = selectedAction === "abono" ? "abono" : "cargo"
-                                      // Map Spanish UI payment methods to API values
-                                      const methodMap: Record<string, string> = {
-                                        efectivo: "cash",
-                                        transferencia: "transfer",
-                                        cheque: "check",
-                                        deposito: "other",
-                                      }
-
+                                      // Both are "abono" type since they credit the producer
                                       const payload: any = {
                                         producerId: selectedProducer,
                                         amount: parseAmountToNumber(amount),
-                                        // Map to API enum; fallback to 'other' if unknown
-                                        method: paymentMethod ? methodMap[paymentMethod] || "other" : undefined,
+                                        type: "abono",
+                                        movementSubType: selectedAction === "devolucion" ? "devolucion" : undefined,
                                         reference,
                                         notes: paymentNotes,
-                                        type: typePayload,
                                       }
 
                                       await apiCreatePayment(payload)
@@ -1009,6 +1049,7 @@ export function AccountStatementsTab() {
                         <TableHead>Referencia</TableHead>
                         <TableHead className="text-right">Monto</TableHead>
                         <TableHead className="text-right">Saldo</TableHead>
+                        <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1069,6 +1110,18 @@ export function AccountStatementsTab() {
                               {safeCurrency(movement.balance)}
                             </span>
                           </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedMovementDetails(movement)
+                                setIsMovementDetailsOpen(true)
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1083,6 +1136,94 @@ export function AccountStatementsTab() {
               )}
             </CardContent>
           </Card>
+
+          {/* Modal de detalles del movimiento */}
+          <Dialog open={isMovementDetailsOpen} onOpenChange={setIsMovementDetailsOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Detalles del Movimiento</DialogTitle>
+              </DialogHeader>
+              {selectedMovementDetails && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Fecha</Label>
+                      <div className="font-medium">{formatDate(selectedMovementDetails.date)}</div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Tipo</Label>
+                      <div>
+                        <Badge variant="outline">
+                          {selectedMovementDetails.type === "asignacion"
+                            ? "Asignación"
+                            : selectedMovementDetails.type === "venta"
+                              ? "Venta"
+                              : selectedMovementDetails.type === "devolucion"
+                                ? "Devolución"
+                                : selectedMovementDetails.type === "pago"
+                                  ? "Pago"
+                                  : selectedMovementDetails.type === "retencion"
+                                    ? "Abono"
+                                    : selectedMovementDetails.type === "abono"
+                                      ? "Abono"
+                                      : selectedMovementDetails.type}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Descripción</Label>
+                    <div className="text-sm bg-muted p-2 rounded">{selectedMovementDetails.description}</div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Referencia</Label>
+                      <div className="font-mono text-sm">{selectedMovementDetails.referenceNumber || "—"}</div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Monto</Label>
+                      <div className={selectedMovementDetails.amount > 0 ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                        {selectedMovementDetails.amount > 0 ? "+" : ""}
+                        {safeCurrency(selectedMovementDetails.amount)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Saldo</Label>
+                    <div className={selectedMovementDetails.balance > 0 ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                      {safeCurrency(selectedMovementDetails.balance)}
+                    </div>
+                  </div>
+
+                  {selectedMovementDetails.evidenceUrl && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Documento Adjunto (PDF)</Label>
+                          <div className="text-sm mt-1 text-green-700">Archivo disponible</div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(selectedMovementDetails.evidenceUrl, "_blank")}
+                        >
+                          <Eye className="mr-2 h-4 w-4" /> Ver
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsMovementDetailsOpen(false)}>
+                  Cerrar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>
