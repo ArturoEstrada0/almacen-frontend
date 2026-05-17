@@ -106,6 +106,8 @@ export const API_ENDPOINTS = {
     registerInvoice: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/invoice`,
     pending: () => `${API_BASE_URL}/api/purchase-orders/pending`,
     payments: () => `${API_BASE_URL}/api/purchase-orders/payments`,
+    getReceipts: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/receipts`,
+    registerReceiptPayment: (receiptId: string) => `${API_BASE_URL}/api/purchase-orders/receipts/${receiptId}/payment`,
   },
 
   accounting: {

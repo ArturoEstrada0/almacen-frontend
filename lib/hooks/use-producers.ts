@@ -162,6 +162,18 @@ export async function createPayment(data: any) {
   return ApiClient.post(API_ENDPOINTS.producers.payments.create(), data)
 }
 
+export async function savePaymentDocument(data: any) {
+  return ApiClient.post(API_ENDPOINTS.producers.list() + "/documents", data)
+}
+
+export async function getProducerDocuments(producerId: string) {
+  return ApiClient.get(API_ENDPOINTS.producers.list() + `/documents/${producerId}`)
+}
+
+export async function getReportDocuments(reportId: string) {
+  return ApiClient.get(API_ENDPOINTS.producers.paymentReports.list() + `/${reportId}/documents`)
+}
+
 export async function createPaymentReport(data: any) {
   return ApiClient.post<PaymentReport>(API_ENDPOINTS.producers.paymentReports.create(), data)
 }
@@ -180,4 +192,16 @@ export async function deletePaymentReport(id: string) {
 
 export async function getProducerReport(producerId: string) {
   return ApiClient.get(API_ENDPOINTS.producers.report(producerId))
+}
+
+export async function registerCarrierPayment(entryId: string, data: {
+  amount: number
+  documentUrl: string
+  paymentMethod?: string
+  reference?: string
+  notes?: string
+  paidByUserId?: string
+  paidByUserName?: string
+}) {
+  return ApiClient.post(API_ENDPOINTS.accounting.registerShipmentPayablePayment(entryId), data)
 }

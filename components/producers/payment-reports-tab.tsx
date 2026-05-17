@@ -1,10 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
@@ -20,36 +19,55 @@ import {
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
-import { Search, Eye, ChevronsUpDown, ArrowUp, ArrowDown, CalendarIcon, X } from "lucide-react"
+import { Search, Eye, ChevronsUpDown, ArrowUp, ArrowDown, CalendarIcon, X, FileText } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import type { PaymentReport, PaymentReportStatus } from "@/lib/types"
+import type { PaymentReport } from "@/lib/types"
 import { usePaymentReports } from "@/lib/hooks/use-producers"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
 import Spinner2 from "@/components/ui/spinner2"
 import { useToast } from "@/hooks/use-toast"
 
-const statusConfig: Record<
-  PaymentReportStatus,
-  { label: string; variant: "default" | "secondary" | "outline" | "destructive" }
-> = {
-  pendiente: { label: "Pendiente", variant: "secondary" },
-  pagado: { label: "Pagado", variant: "default" },
-  cancelado: { label: "Cancelado", variant: "destructive" },
-}
-
 export function PaymentReportsTab() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
-  const [sortBy, setSortBy] = useState<"producer" | "code" | "date" | "total">("producer")
+  const [sortBy, setSortBy] = useState<"producer" | "code" | "date" | "total">("date")
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [viewReport, setViewReport] = useState<PaymentReport | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string>("")
   const [dateFrom, setDateFrom] = useState<Date | undefined>()
   const [dateTo, setDateTo] = useState<Date | undefined>()
 
   const { paymentReports, mutate, isLoading } = usePaymentReports()
   const { toast } = useToast()
+
+  // Cargar filtros desde localStorage al montar
+  useEffect(() => {
+    const savedFilters = localStorage.getItem("paymentReportsFilters")
+    if (savedFilters) {
+      try {
+        const filters = JSON.parse(savedFilters)
+        setSearchTerm(filters.searchTerm || "")
+        setSortOrder(filters.sortOrder || "desc")
+        setSortBy(filters.sortBy || "date")
+        if (filters.dateFrom) setDateFrom(new Date(filters.dateFrom))
+        if (filters.dateTo) setDateTo(new Date(filters.dateTo))
+      } catch (e) {
+        console.error("Error loading filters:", e)
+      }
+    }
+  }, [])
+
+  // Guardar filtros en localStorage cuando cambian
+  useEffect(() => {
+    const filters = {
+      searchTerm,
+      sortOrder,
+      sortBy,
+      dateFrom: dateFrom?.toISOString(),
+      dateTo: dateTo?.toISOString(),
+    }
+    localStorage.setItem("paymentReportsFilters", JSON.stringify(filters))
+  }, [searchTerm, sortOrder, sortBy, dateFrom, dateTo])
 
   const sortedReports = useMemo(() => {
     const items = [...(paymentReports || [])]
@@ -95,17 +113,14 @@ export function PaymentReportsTab() {
           (report.producer?.email || "").toLowerCase().includes(searchLower) ||
           (report.producer?.city || "").toLowerCase().includes(searchLower)
 
-        // Filtro de estado
-        const matchesStatus = !statusFilter || statusFilter === "all" || report.status === statusFilter
-
         // Filtro de fecha
         const reportDate = report.date ? new Date(report.date) : null
         const matchesDateFrom = !dateFrom || (reportDate && reportDate >= dateFrom)
         const matchesDateTo = !dateTo || (reportDate && reportDate <= dateTo)
 
-        return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo
+        return matchesSearch && matchesDateFrom && matchesDateTo
       }),
-    [sortedReports, searchTerm, statusFilter, dateFrom, dateTo]
+    [sortedReports, searchTerm, dateFrom, dateTo]
   )
 
   const { pagedItems, paginationProps } = usePagination(filteredReports, 20)
@@ -173,26 +188,14 @@ export function PaymentReportsTab() {
                 </PopoverContent>
               </Popover>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="pagado">Pagado</SelectItem>
-                  <SelectItem value="cancelado">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
-
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Ordenar por..." />
+                <SelectTrigger className="w-44">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="date">Fecha</SelectItem>
                   <SelectItem value="producer">Productor (A–Z)</SelectItem>
                   <SelectItem value="code">Código</SelectItem>
-                  <SelectItem value="date">Fecha</SelectItem>
                   <SelectItem value="total">Total a pagar</SelectItem>
                 </SelectContent>
               </Select>
@@ -208,8 +211,7 @@ export function PaymentReportsTab() {
                   setSearchTerm("")
                   setDateFrom(undefined)
                   setDateTo(undefined)
-                  setStatusFilter("")
-                  setSortBy("producer")
+                  setSortBy("date")
                   setSortOrder("desc")
                 }}
                 className="px-3"
@@ -233,22 +235,16 @@ export function PaymentReportsTab() {
                     <TableHead>Productor</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Total</TableHead>
-                    <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedItems.map((r) => (
-                    <TableRow key={r.id}>
+                  {pagedItems.map((r, idx) => (
+                    <TableRow key={r.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <TableCell className="font-mono font-medium">{r.code}</TableCell>
                       <TableCell>{r.producer?.name || "-"}</TableCell>
                       <TableCell className="text-sm">{r.date ? formatDate(r.date) : "-"}</TableCell>
                       <TableCell className="font-medium">{formatCurrency(Number(r.totalToPay || r.total || 0))}</TableCell>
-                      <TableCell>
-                        <Badge variant={statusConfig[r.status as PaymentReportStatus]?.variant || "outline"}>
-                          {statusConfig[r.status as PaymentReportStatus]?.label || r.status}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-right">
                         <Button size="sm" variant="outline" onClick={() => openViewDialog(r)}>
                           <Eye className="mr-2 h-4 w-4" /> Ver
@@ -266,24 +262,17 @@ export function PaymentReportsTab() {
       </Card>
 
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0">
+          <DialogHeader className="sticky top-0 bg-white z-10 border-b px-6 py-4">
             <DialogTitle>Detalles del Reporte</DialogTitle>
           </DialogHeader>
           {viewReport && (
-            <div className="space-y-6">
+            <div className="overflow-y-auto flex-1 px-6">
+            <div className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground">Código</Label>
                   <div className="font-mono font-medium text-lg">{viewReport.code}</div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Estado</Label>
-                  <div className="mt-2">
-                    <Badge variant={statusConfig[viewReport.status as PaymentReportStatus]?.variant || "outline"}>
-                      {statusConfig[viewReport.status as PaymentReportStatus]?.label || viewReport.status}
-                    </Badge>
-                  </div>
                 </div>
               </div>
 
@@ -336,23 +325,51 @@ export function PaymentReportsTab() {
                 </div>
               )}
 
-              {viewReport.evidenceUrl && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Complemento de Pago (PDF)</Label>
-                      <div className="text-sm mt-1 text-green-700">Archivo adjunto</div>
+              <div className="p-3 border rounded-md space-y-3">
+                <Label className="text-xs text-muted-foreground">Complementos de Pago (PDF)</Label>
+
+                {(() => {
+                  const complementUrl = (viewReport as any).paymentComplementUrl || (viewReport as any).receiptUrl || (viewReport as any).invoiceUrl
+                  return complementUrl ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md p-3">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-green-600" />
+                        <div>
+                          <p className="text-sm font-medium text-green-700">Documento del reporte</p>
+                          <p className="text-xs text-muted-foreground">PDF disponible</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(complementUrl, "_blank")}
+                        >
+                          <Eye className="mr-2 h-4 w-4" /> Ver
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const link = document.createElement("a")
+                            link.href = complementUrl
+                            link.download = `complemento-pago-${viewReport.code}.pdf`
+                            document.body.appendChild(link)
+                            link.click()
+                            document.body.removeChild(link)
+                          }}
+                        >
+                          Descargar
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => window.open(viewReport.evidenceUrl, "_blank")}
-                    >
-                      <Eye className="mr-2 h-4 w-4" /> Ver PDF
-                    </Button>
-                  </div>
-                </div>
-              )}
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-muted-foreground">
+                      Sin complemento...
+                    </div>
+                  )
+                })()}
+              </div>
 
               {viewReport.items && viewReport.items.length > 0 && (
                 <div className="space-y-2">
@@ -380,9 +397,10 @@ export function PaymentReportsTab() {
                 </div>
               )}
 
-              <DialogFooter>
+              <DialogFooter className="sticky bottom-0 bg-white border-t px-6 py-4">
                 <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Cerrar</Button>
               </DialogFooter>
+            </div>
             </div>
           )}
         </DialogContent>

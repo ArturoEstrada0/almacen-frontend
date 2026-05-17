@@ -135,3 +135,11 @@ export async function registerShipmentPayablePayment(entryId: string, data: {
 export async function updatePurchaseOrder(id: string, data: any) {
   return ApiClient.patch<PurchaseOrder>(API_ENDPOINTS.purchaseOrders.update(id), data)
 }
+
+export async function getReceiptsByOrder(orderId: string) {
+  return ApiClient.get<any[]>(API_ENDPOINTS.purchaseOrders.getReceipts(orderId))
+}
+
+export async function registerReceiptPayment(receiptId: string, amount: number) {
+  return ApiClient.post<any>(API_ENDPOINTS.purchaseOrders.registerReceiptPayment(receiptId), { amount })
+}

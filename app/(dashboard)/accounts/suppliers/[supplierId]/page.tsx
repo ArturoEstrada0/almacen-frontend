@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Spinner2 from "@/components/ui/spinner2"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { formatLocalDateOnly, getLocalDateInputValue, parseDateOnly } from "@/lib/date-utils"
-import { registerPayment, usePurchaseOrders } from "@/lib/hooks/use-purchase-orders"
+import { registerPayment, usePurchaseOrders, getReceiptsByOrder, registerReceiptPayment } from "@/lib/hooks/use-purchase-orders"
 import { toast } from "sonner"
 
 const PAYMENT_REFERENCE_OPTIONS = [
@@ -58,6 +58,8 @@ export default function SupplierAccountDetailPage() {
   const [attachedInvoiceFile, setAttachedInvoiceFile] = useState<File | null>(null)
   const [attachedInvoicePreviewUrl, setAttachedInvoicePreviewUrl] = useState<string | null>(null)
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
+  const [receiptsMap, setReceiptsMap] = useState<Record<string, any[]>>({})
+  const [loadingReceipts, setLoadingReceipts] = useState(false)
   const [paymentForm, setPaymentForm] = useState({
     paymentDate: getLocalDateInputValue(),
     amount: 0,
@@ -91,51 +93,139 @@ export default function SupplierAccountDetailPage() {
     return labels[status] || status
   }
 
+  useEffect(() => {
+    if (!supplierId || !purchaseOrders?.length) {
+      setReceiptsMap({})
+      return
+    }
+
+    let isMounted = true
+    const fetchAllReceipts = async () => {
+      setLoadingReceipts(true)
+      const newReceiptsMap: Record<string, any[]> = {}
+
+      const relevantOrders = (purchaseOrders || []).filter(
+        (order) => order.supplierId === supplierId &&
+          (Number((order as any).receivedTotal || 0) > 0 || Number(order.amountPaid || 0) > 0)
+      )
+
+      for (const order of relevantOrders) {
+        try {
+          const receipts = await getReceiptsByOrder(order.id)
+          if (Array.isArray(receipts) && receipts.length > 0) {
+            newReceiptsMap[order.id] = receipts
+          }
+        } catch (error) {
+          console.error(`Failed to fetch receipts for order ${order.id}:`, error)
+        }
+      }
+
+      if (isMounted) {
+        setReceiptsMap(newReceiptsMap)
+        setLoadingReceipts(false)
+      }
+    }
+
+    fetchAllReceipts()
+    return () => {
+      isMounted = false
+    }
+  }, [supplierId])
+
   const payables = useMemo<SupplierPayable[]>(() => {
     if (!supplierId) return []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    return (purchaseOrders || [])
+    const relevantOrders = (purchaseOrders || [])
       .filter((order) => order.supplierId === supplierId)
-      .map((order: any) => {
-        const originalAmount = Number(order.total || 0)
+      .filter((order) => {
+        const receivedTotal = Number((order as any).receivedTotal || 0)
+        const amountPaid = Number(order.amountPaid || 0)
+        return receivedTotal > 0 || amountPaid > 0
+      })
+
+    const allPayables: SupplierPayable[] = []
+
+    for (const order of relevantOrders) {
+      const receipts = receiptsMap[order.id] || []
+
+      if (receipts.length > 0) {
+        // Consolidate all receipts for this order into a single payable entry
+        let totalReceivedAmount = 0
+        let totalPaidAmount = 0
+        let earliestDueDate: Date | null = null
+        let hasOverdue = false
+        let allPaymentStatuses = new Set<string>()
+
+        for (const receipt of receipts) {
+          const receivedAmount = Number(receipt.receivedTotal || 0)
+          const paidAmount = Number(receipt.amountPaid || 0)
+          totalReceivedAmount += receivedAmount
+          totalPaidAmount += paidAmount
+          allPaymentStatuses.add(receipt.paymentStatus || "pendiente")
+
+          const dueDate = parseDateOnly(receipt.dueDate)
+          if (dueDate) {
+            if (!earliestDueDate || dueDate.getTime() < earliestDueDate.getTime()) {
+              earliestDueDate = dueDate
+            }
+            if (receivedAmount - paidAmount > 0 && dueDate.getTime() < today.getTime()) {
+              hasOverdue = true
+            }
+          }
+        }
+
+        const balanceAmount = Math.max(totalReceivedAmount - totalPaidAmount, 0)
+        let status: "pendiente" | "parcial" | "pagada" | "vencida" = "pendiente"
+        if (balanceAmount <= 0) {
+          status = "pagada"
+        } else if (hasOverdue) {
+          status = "vencida"
+        } else if (totalPaidAmount > 0) {
+          status = "parcial"
+        }
+
+        allPayables.push({
+          id: order.id,
+          invoiceNumber: String(order.invoiceNumber || order.orderNumber || "-"),
+          invoiceDate: parseDateOnly(order.invoiceDate || order.orderDate),
+          dueDate: earliestDueDate,
+          originalAmount: totalReceivedAmount,
+          paidAmount: totalPaidAmount,
+          balanceAmount,
+          status,
+          isOverdue: hasOverdue,
+          payments: [],
+        })
+      } else {
+        const receivedTotal = Number((order as any).receivedTotal || 0)
+        const originalAmount = receivedTotal > 0 ? receivedTotal : Number(order.total || 0)
         const paidAmount = Number(order.amountPaid || 0)
         const balanceAmount = Math.max(originalAmount - paidAmount, 0)
         const due = parseDateOnly(order.dueDate as any)
-        const invoiceDate = parseDateOnly(order.invoiceDate || order.orderDate)
-        const dueDate = parseDateOnly(order.dueDate)
         const isOverdue = !!due && balanceAmount > 0 && due.getTime() < today.getTime()
         const status = balanceAmount <= 0 ? "pagada" : isOverdue ? "vencida" : paidAmount > 0 ? "parcial" : "pendiente"
-        const rawPayments = Array.isArray(order.payments)
-          ? order.payments
-          : Array.isArray(order.paymentHistory)
-            ? order.paymentHistory
-            : []
 
-        const payments = rawPayments.map((payment: any, index: number) => ({
-          id: String(payment?.id || `${order.id}-payment-${index}`),
-          paymentDate: payment?.paymentDate || payment?.date || payment?.createdAt || null,
-          amount: Number(payment?.amount || 0),
-          reference: payment?.reference || payment?.paymentMethod || undefined,
-          notes: payment?.notes || undefined,
-          invoiceUrl: payment?.invoiceFileUrl || payment?.invoiceUrl || payment?.evidenceUrl || null,
-        }))
-
-        return {
-          id: order.id,
-          invoiceNumber: String(order.invoiceNumber || order.orderNumber || "-"),
-          invoiceDate,
-          dueDate,
-          originalAmount,
-          paidAmount,
-          balanceAmount,
-          status,
-          isOverdue,
-          payments,
+        if (balanceAmount > 0 || paidAmount > 0) {
+          allPayables.push({
+            id: order.id,
+            invoiceNumber: String(order.invoiceNumber || order.orderNumber || "-"),
+            invoiceDate: parseDateOnly(order.invoiceDate || order.orderDate),
+            dueDate: due,
+            originalAmount,
+            paidAmount,
+            balanceAmount,
+            status,
+            isOverdue,
+            payments: [],
+          })
         }
-      })
-  }, [purchaseOrders, supplierId])
+      }
+    }
+
+    return allPayables
+  }, [purchaseOrders, supplierId, receiptsMap])
 
   const totals = useMemo(
     () =>
@@ -213,6 +303,12 @@ export default function SupplierAccountDetailPage() {
       setSelectedPayableId(payableId)
     }
   }, [searchParams, payables])
+
+  useEffect(() => {
+    if (payables.length > 0 && !selectedPayableId) {
+      setSelectedPayableId(payables[0].id)
+    }
+  }, [payables, selectedPayableId])
 
   useEffect(() => {
     if (!selectedPayable) return
@@ -295,6 +391,15 @@ export default function SupplierAccountDetailPage() {
     ? attachedInvoiceFile.name
     : "Adjuntar factura"
 
+  const isReceiptPayable = (payableId: string): boolean => {
+    for (const receipts of Object.values(receiptsMap)) {
+      if (receipts.some((r) => r.id === payableId)) {
+        return true
+      }
+    }
+    return false
+  }
+
   const handleRegisterPayment = async () => {
     if (!selectedPayable) return
 
@@ -311,14 +416,21 @@ export default function SupplierAccountDetailPage() {
 
     setIsSaving(true)
     try {
-      await registerPayment(selectedPayable.id, {
-        amount,
-        paymentMethod: paymentForm.reference,
-        reference: paymentForm.reference,
-        notes: paymentForm.notes || undefined,
-        paymentDate: paymentForm.paymentDate || undefined,
-        invoiceFile: attachedInvoiceFile,
-      })
+      const isReceipt = isReceiptPayable(selectedPayable.id)
+
+      if (isReceipt) {
+        await registerReceiptPayment(selectedPayable.id, amount)
+      } else {
+        await registerPayment(selectedPayable.id, {
+          amount,
+          paymentMethod: paymentForm.reference,
+          reference: paymentForm.reference,
+          notes: paymentForm.notes || undefined,
+          paymentDate: paymentForm.paymentDate || undefined,
+          invoiceFile: attachedInvoiceFile,
+        })
+      }
+
       await mutate()
       setPaymentForm((prev) => ({
         ...prev,
@@ -343,7 +455,7 @@ export default function SupplierAccountDetailPage() {
     }
   }
 
-  if (isLoading || isLoadingOrders) {
+  if (isLoading || isLoadingOrders || loadingReceipts) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <Spinner2 />

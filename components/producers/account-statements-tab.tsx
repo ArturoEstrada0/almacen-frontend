@@ -612,11 +612,12 @@ export function AccountStatementsTab() {
                           Registrar movimiento
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                        <DialogHeader>
+                      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0">
+                        <DialogHeader className="sticky top-0 bg-white z-10 border-b px-6 py-4">
                           <DialogTitle>Registrar Movimiento</DialogTitle>
                           <DialogDescription>Selecciona el tipo de movimiento que quieres registrar para {producer?.name}</DialogDescription>
                         </DialogHeader>
+                        <div className="overflow-y-auto flex-1 px-6">
                         <div className="grid gap-4 py-4">
                           <div className="grid grid-cols-3 gap-4">
                             <div
@@ -817,66 +818,75 @@ export function AccountStatementsTab() {
                                           </div>
                                           <div className="space-y-2 col-span-2">
                                             <Label htmlFor="retentionPaymentFile">Complemento de Pago (PDF)</Label>
-                                            <div className="flex items-center gap-2">
-                                              <Input
-                                                id="retentionPaymentFile"
-                                                type="file"
-                                                accept="application/pdf"
-                                                onChange={async (e) => {
-                                                  const file = e.target.files?.[0]
-                                                  if (file) {
-                                                    setRetentionPaymentFile(file)
-                                                    setIsUploadingFile(true)
-                                                    try {
-                                                      const url = await uploadFileToSupabase(file, "payment-complements")
-                                                      setRetentionPaymentUrl(url)
-                                                    } catch (err) {
-                                                      alert("Error al subir el archivo: " + (err as any).message)
-                                                      setRetentionPaymentFile(null)
-                                                    } finally {
-                                                      setIsUploadingFile(false)
-                                                    }
-                                                  }
-                                                }}
-                                                className="flex-1"
-                                                disabled={isUploadingFile}
-                                              />
-                                              {retentionPaymentFile && (
-                                                <>
-                                                  <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                      if (retentionPaymentUrl) {
-                                                        window.open(retentionPaymentUrl, '_blank')
+                                            <div className="border rounded-md p-3 bg-gray-50">
+                                              {!retentionPaymentFile ? (
+                                                <div className="space-y-2">
+                                                  <p className="text-sm text-muted-foreground">Sin complemento...</p>
+                                                  <Input
+                                                    id="retentionPaymentFile"
+                                                    type="file"
+                                                    accept="application/pdf"
+                                                    onChange={async (e) => {
+                                                      const file = e.target.files?.[0]
+                                                      if (file) {
+                                                        setRetentionPaymentFile(file)
+                                                        setIsUploadingFile(true)
+                                                        try {
+                                                          const url = await uploadFileToSupabase(file, "payment-complements")
+                                                          setRetentionPaymentUrl(url)
+                                                        } catch (err) {
+                                                          alert("Error al subir el archivo: " + (err as any).message)
+                                                          setRetentionPaymentFile(null)
+                                                        } finally {
+                                                          setIsUploadingFile(false)
+                                                        }
                                                       }
                                                     }}
-                                                    title="Ver documento"
-                                                    disabled={isUploadingFile || !retentionPaymentUrl}
-                                                  >
-                                                    {isUploadingFile ? "Subiendo..." : <Eye className="h-4 w-4" />}
-                                                  </Button>
-                                                  <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                      setRetentionPaymentFile(null)
-                                                      setRetentionPaymentUrl("")
-                                                    }}
-                                                  >
-                                                    <Trash2 className="h-4 w-4" />
-                                                  </Button>
-                                                </>
+                                                    disabled={isUploadingFile}
+                                                  />
+                                                </div>
+                                              ) : (
+                                                <div className="flex items-center justify-between">
+                                                  <div className="flex items-center gap-2 flex-1">
+                                                    <FileText className="h-4 w-4 text-blue-600" />
+                                                    <div className="flex-1">
+                                                      <p className="text-sm font-medium truncate">{retentionPaymentFile.name}</p>
+                                                      <p className="text-xs text-muted-foreground">
+                                                        {isUploadingFile ? "Subiendo archivo..." : "Archivo cargado"}
+                                                      </p>
+                                                    </div>
+                                                  </div>
+                                                  <div className="flex gap-2">
+                                                    <Button
+                                                      type="button"
+                                                      variant="outline"
+                                                      size="sm"
+                                                      onClick={() => {
+                                                        if (retentionPaymentUrl) {
+                                                          window.open(retentionPaymentUrl, '_blank')
+                                                        }
+                                                      }}
+                                                      title="Ver documento"
+                                                      disabled={isUploadingFile || !retentionPaymentUrl}
+                                                    >
+                                                      <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={() => {
+                                                        setRetentionPaymentFile(null)
+                                                        setRetentionPaymentUrl("")
+                                                      }}
+                                                      disabled={isUploadingFile}
+                                                    >
+                                                      <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
                                               )}
                                             </div>
-                                            {retentionPaymentFile && (
-                                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                                <FileText className="h-3 w-3" />
-                                                {retentionPaymentFile.name}
-                                              </p>
-                                            )}
                                           </div>
                                         </div>
                                       )}
@@ -890,10 +900,10 @@ export function AccountStatementsTab() {
                                 </Button>
                                 <Button
                                   onClick={async () => {
-                                    const finalAmount = selectedAction === "pago" && selectedMovements.length > 0 
-                                      ? calculateTotalFromSelectedMovements() 
+                                    const finalAmount = selectedAction === "pago" && selectedMovements.length > 0
+                                      ? calculateTotalFromSelectedMovements()
                                       : parseAmountToNumber(amount)
-                                    
+
                                     if (finalAmount <= 0) return
 
                                     try {
@@ -928,7 +938,7 @@ export function AccountStatementsTab() {
                                     }
                                   }}
                                   disabled={
-                                    selectedAction === "pago" && selectedMovements.length > 0 
+                                    selectedAction === "pago" && selectedMovements.length > 0
                                       ? selectedMovements.length === 0 || calculateTotalFromSelectedMovements() <= 0
                                       : !amount || parseAmountToNumber(amount) <= 0
                                   }
@@ -940,6 +950,7 @@ export function AccountStatementsTab() {
                           ) : (
                             <div className="text-sm text-muted-foreground">Selecciona una tarjeta arriba para iniciar el registro.</div>
                           )}
+                        </div>
                         </div>
                       </DialogContent>
                   </Dialog>

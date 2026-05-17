@@ -113,7 +113,7 @@ export function AccountsPayableTab({ supplierId, onRegister, initialSelectedPaya
           orderDate: order.orderDate,
           dueDate: order.dueDate,
           creditDays: Number(order.creditDays || 0),
-          total: Number(order.total || 0),
+          total: Number((order as any).receivedTotal || order.total || 0),
           amountPaid: Number((order as any).amountPaid || 0),
           paymentStatus: (order.paymentStatus as any) || "pendiente",
           invoiceDate: order.invoiceDate || null,

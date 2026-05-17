@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/context/auth-context"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +16,14 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ComboBox } from "@/components/ui/combobox"
 import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Badge } from "@/components/ui/badge"
@@ -39,6 +48,7 @@ interface AssignmentItem {
 
 export function InputAssignmentsTab() {
   const router = useRouter()
+  const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [sortBy, setSortBy] = useState<"producer" | "folio" | "date" | "total">("producer")
@@ -286,21 +296,30 @@ export function InputAssignmentsTab() {
 
   // Estado para mostrar error en pantalla
   const [saveError, setSaveError] = useState("")
+  const [errorModalOpen, setErrorModalOpen] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+
+  const showError = (message: string) => {
+    setErrorMessage(message)
+    setErrorModalOpen(true)
+  }
 
   const handleSave = async () => {
     setSaveError("")
     try {
       setSaving(true)
+      const userName = user?.email?.split('@')[0] || user?.email || "Unknown"
       const payload = {
         producerId: Number(selectedProducer) || selectedProducer,
         warehouseId: Number(selectedWarehouse) || selectedWarehouse,
         date: assignmentDate,
         trackingFolio,
         notes,
-        items: selectedItems.map((it) => ({ 
-          productId: it.productId, 
-          quantity: parseFloat(it.quantity) || 0, 
-          unitPrice: parseFloat(it.unitPrice) || 0 
+        createdByUserName: userName,
+        items: selectedItems.map((it) => ({
+          productId: it.productId,
+          quantity: Math.trunc(Number(it.quantity)) || 0,
+          unitPrice: parseFloat(it.unitPrice) || 0
         })),
       }
       
@@ -334,14 +353,22 @@ export function InputAssignmentsTab() {
       setIsDialogOpen(false)
     } catch (err) {
       const msg = (err as any)?.message || String(err)
+      let errorTitle = "Error al guardar la asignación"
+      let errorMsg = msg
+
       if (msg.includes("Insufficient stock")) {
-        setSaveError("No hay suficiente stock para uno o más insumos asignados.")
-      } else {
-        setSaveError(msg)
+        errorTitle = "Stock insuficiente"
+        errorMsg = "No hay suficiente stock para uno o más insumos asignados."
+      } else if (msg.includes("is not allowed in warehouse")) {
+        errorTitle = "Tipo de producto incompatible"
+        errorMsg = msg
       }
+
+      setSaveError(errorMsg)
+      showError(errorMsg)
       toast({
-        title: "Error",
-        description: msg,
+        title: errorTitle,
+        description: errorMsg,
         variant: "destructive"
       })
     } finally {
@@ -354,6 +381,7 @@ export function InputAssignmentsTab() {
     setSaveError("")
     try {
       setIsReturnSaving(true)
+      const userName = user?.email?.split('@')[0] || user?.email || "Unknown"
       const payload = {
         producerId: Number(selectedProducer) || selectedProducer,
         warehouseId: Number(selectedWarehouse) || selectedWarehouse,
@@ -361,10 +389,11 @@ export function InputAssignmentsTab() {
         trackingFolio,
         notes,
         reason: returnReason,
-        items: selectedItems.map((it) => ({ 
-          productId: it.productId, 
-          quantity: Math.trunc(Number(it.quantity) || 0), 
-          unitPrice: parseFloat(it.unitPrice) || 0 
+        createdByUserName: userName,
+        items: selectedItems.map((it) => ({
+          productId: it.productId,
+          quantity: Math.trunc(Number(it.quantity) || 0),
+          unitPrice: parseFloat(it.unitPrice) || 0
         })),
       }
 
@@ -393,6 +422,7 @@ export function InputAssignmentsTab() {
     } catch (err) {
       const msg = (err as any)?.message || String(err)
       setSaveError(msg)
+      showError(msg)
       toast({ title: 'Error', description: msg, variant: 'destructive' })
     } finally {
       setIsReturnSaving(false)
@@ -811,12 +841,14 @@ export function InputAssignmentsTab() {
                           emptyMessage="No se encontró el producto"
                         />
                         <Input
-                          type="text"
-                          inputMode="decimal"
+                          type="number"
+                          inputMode="numeric"
+                          step="1"
+                          min="1"
                           value={it.quantity}
                           onChange={e => {
-                            const value = e.target.value
-                            if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            const value = e.target.value.replace(/\D/g, "")
+                            if (value === "" || /^\d+$/.test(value)) {
                               updateItem(it.id, { quantity: value })
                               checkItemStock({ ...it, quantity: value })
                             }
@@ -1145,6 +1177,21 @@ export function InputAssignmentsTab() {
         title="Imprimir asignación"
         description="Elige el formato para imprimir la asignación de insumos"
       />
+
+      {/* Modal de error */}
+      <AlertDialog open={errorModalOpen} onOpenChange={setErrorModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Error al guardar</AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-destructive font-medium mt-2">
+              {errorMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogAction onClick={() => setErrorModalOpen(false)}>
+            Entendido
+          </AlertDialogAction>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

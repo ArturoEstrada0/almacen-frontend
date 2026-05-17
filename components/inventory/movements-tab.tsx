@@ -448,57 +448,57 @@ export function MovementsTab({ warehouseId }: MovementsTabProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedMovements.map((movement, index) => (
-                    <motion.tr
-                      key={movement.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="group"
-                    >
-                      <TableCell className="font-medium">{formatDate(movement.createdAt)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={getMovementColor(movement.type)}>
-                          <span className="flex items-center gap-1">
-                            {getMovementIcon(movement.type)}
-                            {movement.type.charAt(0).toUpperCase() + movement.type.slice(1)}
+                  {paginatedMovements.flatMap((movement, index) =>
+                    (movement as any).items?.map((item: any, itemIndex: number) => (
+                      <motion.tr
+                        key={`${movement.id}-${itemIndex}`}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 + itemIndex * 0.02 }}
+                        className="group"
+                      >
+                        <TableCell className="font-medium">{formatDate(movement.createdAt)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={getMovementColor(movement.type)}>
+                            <span className="flex items-center gap-1">
+                              {getMovementIcon(movement.type)}
+                              {movement.type.charAt(0).toUpperCase() + movement.type.slice(1)}
+                            </span>
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{item?.product?.name}</TableCell>
+                        <TableCell className="text-right">
+                          {(() => {
+                            const unitPrice = item?.cost || item?.product?.price
+                            return unitPrice ? formatCurrency(unitPrice) : "-"
+                          })()}
+                        </TableCell>
+                        <TableCell>{movement.warehouse?.name}</TableCell>
+                        <TableCell className="text-sm">
+                          <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">
+                            {(movement as any).providerName || (movement as any).supplierName || "-"}
                           </span>
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{(movement as any).items?.[0]?.product?.name}</TableCell>
-                      <TableCell className="text-right">
-                        {(() => {
-                          const item = (movement as any).items?.[0]
-                          const unitPrice = item?.cost || item?.product?.price
-                          return unitPrice ? formatCurrency(unitPrice) : "-"
-                        })()}
-                      </TableCell>
-                      <TableCell>{movement.warehouse?.name}</TableCell>
-                      <TableCell className="text-sm">
-                        <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">
-                          {(movement as any).providerName || (movement as any).supplierName || "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {movement.type === "salida" ? "-" : "+"}
-                        {(movement as any).items?.[0]?.quantity}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">
-                          {movement.userName || "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {(() => {
-                          const item = (movement as any).items?.[0]
-                          const unitPrice = item?.cost || item?.product?.price
-                          const quantity = Number(item?.quantity) || 0
-                          const total = unitPrice ? unitPrice * quantity : 0
-                          return total > 0 ? formatCurrency(total) : "-"
-                        })()}
-                      </TableCell>
-                    </motion.tr>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {movement.type === "salida" ? "-" : "+"}
+                          {item?.quantity}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">
+                            {movement.userName || "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(() => {
+                            const unitPrice = item?.cost || item?.product?.price
+                            const quantity = Number(item?.quantity) || 0
+                            const total = unitPrice ? unitPrice * quantity : 0
+                            return total > 0 ? formatCurrency(total) : "-"
+                          })()}
+                        </TableCell>
+                      </motion.tr>
+                    )) || []
+                  )}
                 </TableBody>
               </Table>
 

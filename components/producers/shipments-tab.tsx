@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck, Loader2 } from "lucide-react"
+import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck, Loader2, X } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { getLocalDateInputValue } from "@/lib/date-utils"
 import { compressDocument } from "@/lib/document-compression"
@@ -37,6 +37,7 @@ import {
   updateShipmentWithDocuments,
   updateShipmentStatus as apiUpdateShipmentStatus,
   deleteShipment as apiDeleteShipment,
+  registerCarrierPayment,
 } from "@/lib/hooks/use-producers"
 import { useSuppliers } from "@/lib/hooks/use-suppliers"
 import { useCustomers } from "@/lib/hooks/use-customers"
@@ -44,6 +45,8 @@ import { mutate as globalMutate } from "swr"
 import { ProtectedCreate, ProtectedUpdate, ProtectedDelete } from "@/components/auth/protected-action"
 import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
+import { API_ENDPOINTS } from "@/lib/config/api"
+import { useToast } from "@/hooks/use-toast"
 
 const statusConfig: Record<
   ShipmentStatus,
@@ -57,6 +60,7 @@ const statusConfig: Record<
 
 export function ShipmentsTab() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [sortBy, setSortBy] = useState<"producer" | "code" | "date">("producer")
@@ -118,6 +122,18 @@ export function ShipmentsTab() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [shipmentToDelete, setShipmentToDelete] = useState<any | null>(null)
   const [isDeletingShipment, setIsDeletingShipment] = useState(false)
+
+  // For carrier payment dialog
+  const [isCarrierPaymentDialogOpen, setIsCarrierPaymentDialogOpen] = useState(false)
+  const [selectedShipmentForPayment, setSelectedShipmentForPayment] = useState<any | null>(null)
+  const [carrierPaymentAmount, setCarrierPaymentAmount] = useState("")
+  const [carrierPaymentMethod, setCarrierPaymentMethod] = useState("")
+  const [carrierPaymentReference, setCarrierPaymentReference] = useState("")
+  const [carrierPaymentNotes, setCarrierPaymentNotes] = useState("")
+  const [carrierPaymentFile, setCarrierPaymentFile] = useState<File | null>(null)
+  const [carrierPaymentFileUrl, setCarrierPaymentFileUrl] = useState<string | null>(null)
+  const [isUploadingCarrierPaymentFile, setIsUploadingCarrierPaymentFile] = useState(false)
+  const [isSubmittingCarrierPayment, setIsSubmittingCarrierPayment] = useState(false)
 
   const { fruitReceptions } = useFruitReceptions()
   const { shipments, mutate: mutateShipments, isLoading } = useShipments()
@@ -368,7 +384,11 @@ export function ShipmentsTab() {
         setIsUpdateDialogOpen(false)
       } catch (err) {
         console.warn("Failed updating shipment", err)
-        alert("Error al actualizar embarque: " + (err as any)?.message || err)
+        toast({
+          title: "Error al actualizar",
+          description: (err as any)?.message || "No se pudo actualizar el embarque",
+          variant: "destructive",
+        })
       }
     })()
   }
@@ -401,7 +421,11 @@ export function ShipmentsTab() {
 
   const handleDeleteShipment = async (shipment: any) => {
     if (shipment.status === "vendida") {
-      alert("No se puede eliminar un embarque que ya ha sido vendido")
+      toast({
+        title: "Operación no permitida",
+        description: "No se puede eliminar un embarque que ya ha sido vendido",
+        variant: "destructive",
+      })
       return
     }
 
@@ -421,9 +445,100 @@ export function ShipmentsTab() {
       setShipmentToDelete(null)
     } catch (err) {
       console.warn("Error deleting shipment:", err)
-      alert("Error al eliminar: " + (err as any)?.message || String(err))
+      toast({
+        title: "Error al eliminar",
+        description: (err as any)?.message || "No se pudo eliminar el embarque",
+        variant: "destructive",
+      })
     } finally {
       setIsDeletingShipment(false)
+    }
+  }
+
+  const openCarrierPaymentDialog = (shipment: any) => {
+    const totalAmount = Number(shipment.carrierInvoiceAmount || 0)
+    const paidAmount = 0 // En este contexto, asumimos que es el primer pago
+    setSelectedShipmentForPayment(shipment)
+    setCarrierPaymentAmount(String(Math.max(totalAmount - paidAmount, 0)))
+    setCarrierPaymentMethod("")
+    setCarrierPaymentReference("")
+    setCarrierPaymentNotes("")
+    setCarrierPaymentFile(null)
+    setCarrierPaymentFileUrl(null)
+    setIsCarrierPaymentDialogOpen(true)
+  }
+
+  const handleCarrierPaymentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setCarrierPaymentFile(file)
+    }
+  }
+
+  const handleSubmitCarrierPayment = async () => {
+    if (!selectedShipmentForPayment || !carrierPaymentFile || !carrierPaymentAmount || !selectedShipmentForPayment.carrierAccountingEntryId) {
+      toast({
+        title: "Campos requeridos",
+        description: "Por favor completa todos los campos requeridos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmittingCarrierPayment(true)
+    try {
+      // 1. Upload del comprobante
+      setIsUploadingCarrierPaymentFile(true)
+      const formData = new FormData()
+      formData.append("file", carrierPaymentFile)
+
+      const uploadResponse = await fetch(API_ENDPOINTS.producers.uploadFile(), {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({}))
+        throw new Error(errorData.message || "Error al subir el comprobante")
+      }
+
+      const uploadedData = await uploadResponse.json()
+      const documentUrl = uploadedData.url
+
+      setIsUploadingCarrierPaymentFile(false)
+
+      // 2. Registrar el pago
+      await registerCarrierPayment(selectedShipmentForPayment.carrierAccountingEntryId, {
+        amount: Number(carrierPaymentAmount),
+        documentUrl,
+        paymentMethod: carrierPaymentMethod || undefined,
+        reference: carrierPaymentReference || undefined,
+        notes: carrierPaymentNotes || undefined,
+        paidByUserId: user?.id,
+        paidByUserName: user?.name,
+      })
+
+      // 3. Refrescar tabla
+      await mutateShipments()
+      await globalMutate("accounts-payable")
+
+      // 4. Mostrar toast de éxito y cerrar dialog
+      toast({
+        title: "¡Éxito!",
+        description: "Pago registrado correctamente",
+      })
+
+      setIsCarrierPaymentDialogOpen(false)
+    } catch (err) {
+      console.error("Error registering carrier payment:", err)
+      toast({
+        title: "Error al registrar",
+        description: (err as any)?.message || "No se pudo registrar el pago",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmittingCarrierPayment(false)
+      setIsUploadingCarrierPaymentFile(false)
     }
   }
 
@@ -532,7 +647,11 @@ export function ShipmentsTab() {
       // Normalize and validate receptionIds
       payload.receptionIds = Array.isArray(payload.receptionIds) ? payload.receptionIds.map(String) : []
       if (!payload.receptionIds || payload.receptionIds.length === 0) {
-        alert("Seleccione al menos una recepción antes de actualizar el embarque")
+        toast({
+          title: "Selecciona recepciones",
+          description: "Selecciona al menos una recepción antes de actualizar el embarque",
+          variant: "destructive",
+        })
         return
       }
 
@@ -572,7 +691,11 @@ export function ShipmentsTab() {
       setEditingShipmentId(null)
     } catch (err) {
       console.error("Error updating shipment:", err)
-      alert("Error al actualizar: " + (err as any)?.message || String(err))
+      toast({
+        title: "Error al actualizar",
+        description: (err as any)?.message || "No se pudo actualizar el embarque",
+        variant: "destructive",
+      })
     }
   }
 
@@ -849,23 +972,6 @@ export function ShipmentsTab() {
 
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="invoiceAmount" className="text-sm font-semibold">Monto factura embarque</Label>
-                      <Input
-                        id="invoiceAmount"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0.00"
-                        value={invoiceAmount}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                            setInvoiceAmount(value)
-                          }
-                        }}
-                        className="h-10 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
                       <Label htmlFor="carrierInvoiceAmount" className="text-sm font-semibold">Monto factura transportista</Label>
                       <Input
                         id="carrierInvoiceAmount"
@@ -882,6 +988,23 @@ export function ShipmentsTab() {
                         className="h-10 text-sm"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="invoiceAmount" className="text-sm font-semibold">Monto factura embarque</Label>
+                      <Input
+                        id="invoiceAmount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={invoiceAmount}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            setInvoiceAmount(value)
+                          }
+                        }}
+                        className="h-10 text-sm"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -890,7 +1013,7 @@ export function ShipmentsTab() {
                       Se permiten 2 facturas: embarque (PDF/XML) y transportista (PDF/XML). También se puede adjuntar el complemento carta porte.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-3 rounded-lg border p-3">
+                      <div className="space-y-3 rounded-lg border p-3 bg-gray-50">
                         <div className="flex items-center gap-2 text-sm font-medium">
                           <Truck className="h-4 w-4" />
                           Documentación del transportista
@@ -929,7 +1052,7 @@ export function ShipmentsTab() {
                         </div>
                       </div>
 
-                      <div className="space-y-2 rounded-lg border p-3">
+                      <div className="space-y-2 rounded-lg border p-3 bg-gray-50">
                         <div className="flex items-center gap-2 text-sm font-medium">
                           <FileText className="h-4 w-4" />
                           Factura del embarque
@@ -1154,7 +1277,7 @@ export function ShipmentsTab() {
                       <Badge variant={config?.variant || "default"}>{config?.label || (shipment as any).status}</Badge>
                     </TableCell>
                     <TableCell>
-                      {(shipment as any).carrierPaymentStatus ? (
+                      {shipment.status === "vendida" && (shipment as any).carrierPaymentStatus ? (
                         <Badge
                           variant={
                             (shipment as any).carrierPaymentStatus === "pendiente" ? "secondary" :
@@ -1446,23 +1569,6 @@ export function ShipmentsTab() {
 
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="editInvoiceAmount" className="text-sm font-semibold">Monto factura embarque</Label>
-                      <Input
-                        id="editInvoiceAmount"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0.00"
-                        value={editInvoiceAmount}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                            setEditInvoiceAmount(value)
-                          }
-                        }}
-                        className="h-10 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-2">
                       <Label htmlFor="editCarrierInvoiceAmount" className="text-sm font-semibold">Monto factura transportista</Label>
                       <Input
                         id="editCarrierInvoiceAmount"
@@ -1479,6 +1585,23 @@ export function ShipmentsTab() {
                         className="h-10 text-sm"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="editInvoiceAmount" className="text-sm font-semibold">Monto factura embarque</Label>
+                      <Input
+                        id="editInvoiceAmount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={editInvoiceAmount}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            setEditInvoiceAmount(value)
+                          }
+                        }}
+                        className="h-10 text-sm"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -1487,7 +1610,7 @@ export function ShipmentsTab() {
                       Se permiten 2 facturas: embarque (PDF/XML) y transportista (PDF/XML). También se puede adjuntar el complemento carta porte.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-3 rounded-lg border p-3">
+                      <div className="space-y-3 rounded-lg border p-3 bg-gray-50">
                         <div className="flex items-center gap-2 text-sm font-medium">
                           <Truck className="h-4 w-4" />
                           Documentación del transportista
@@ -1566,7 +1689,7 @@ export function ShipmentsTab() {
                         </div>
                       </div>
 
-                      <div className="space-y-2 rounded-lg border p-3">
+                      <div className="space-y-2 rounded-lg border p-3 bg-gray-50">
                         <div className="flex items-center gap-2 text-sm font-medium">
                           <FileText className="h-4 w-4" />
                           Factura del embarque
@@ -2208,6 +2331,175 @@ export function ShipmentsTab() {
             <DialogFooter className="shrink-0 pt-2 border-t">
               <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
                 Cerrar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Carrier Payment Dialog */}
+        <Dialog open={isCarrierPaymentDialogOpen} onOpenChange={setIsCarrierPaymentDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader className="pb-3">
+              <DialogTitle className="text-lg">Registrar Pago de Transportista</DialogTitle>
+              <DialogDescription className="text-xs">
+                {selectedShipmentForPayment?.carrierName || "Transportista"} - {selectedShipmentForPayment?.code}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground block mb-1">Total</Label>
+                  <p className="font-semibold text-sm">
+                    {formatCurrency(Number(selectedShipmentForPayment?.carrierInvoiceAmount || 0))}
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="payment-amount" className="text-xs text-muted-foreground block mb-1">Pagar</Label>
+                  <Input
+                    id="payment-amount"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max={Number(selectedShipmentForPayment?.carrierInvoiceAmount || 0)}
+                    value={carrierPaymentAmount}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      const numVal = Number(val)
+                      const maxAmount = Number(selectedShipmentForPayment?.carrierInvoiceAmount || 0)
+
+                      if (val === "" || val === "-") {
+                        setCarrierPaymentAmount("")
+                      } else if (numVal < 0) {
+                        setCarrierPaymentAmount("0")
+                      } else if (numVal > maxAmount) {
+                        setCarrierPaymentAmount(String(maxAmount))
+                      } else {
+                        setCarrierPaymentAmount(String(Math.floor(numVal)))
+                      }
+                    }}
+                    placeholder="0"
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="payment-method" className="text-xs text-muted-foreground block mb-1">Método de Pago</Label>
+                <Select value={carrierPaymentMethod} onValueChange={setCarrierPaymentMethod}>
+                  <SelectTrigger id="payment-method" className="h-8 text-sm">
+                    <SelectValue placeholder="Selecciona método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="payment-reference" className="text-xs text-muted-foreground block mb-1">Referencia</Label>
+                <Input
+                  id="payment-reference"
+                  type="text"
+                  value={carrierPaymentReference}
+                  onChange={(e) => setCarrierPaymentReference(e.target.value)}
+                  placeholder="TRX-123456 o No. cheque"
+                  className="h-8 text-sm"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="payment-notes" className="text-xs text-muted-foreground block mb-1">Notas</Label>
+                <Textarea
+                  id="payment-notes"
+                  value={carrierPaymentNotes}
+                  onChange={(e) => setCarrierPaymentNotes(e.target.value)}
+                  placeholder="Notas (opcional)"
+                  className="resize-none text-sm min-h-[60px]"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">Comprobante de Pago *</Label>
+                <div className="min-h-[40px]">
+                  {carrierPaymentFile ? (
+                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded p-2.5 w-full min-w-0">
+                    <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                    <span className="text-xs font-medium truncate overflow-hidden max-w-[200px]">{carrierPaymentFile.name}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          const url = URL.createObjectURL(carrierPaymentFile)
+                          window.open(url, "_blank")
+                        }}
+                        className="p-1.5 hover:bg-blue-100 rounded transition-colors text-blue-600 hover:text-blue-700"
+                        title="Ver documento"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setCarrierPaymentFile(null)}
+                        className="p-1.5 hover:bg-red-100 rounded transition-colors text-red-600 hover:text-red-700"
+                        title="Eliminar archivo"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer flex items-center justify-center gap-2 border-2 border-dashed rounded p-2 hover:bg-muted/50 min-h-[32px]">
+                    <Upload className="h-3 w-3" />
+                    <span className="text-xs">Selecciona archivo</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={handleCarrierPaymentFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+                </div>
+              </div>
+
+              {isUploadingCarrierPaymentFile && (
+                <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground py-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Subiendo...
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCarrierPaymentDialogOpen(false)}
+                disabled={isSubmittingCarrierPayment || isUploadingCarrierPaymentFile}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSubmitCarrierPayment}
+                disabled={
+                  !carrierPaymentFile ||
+                  !carrierPaymentAmount ||
+                  Number(carrierPaymentAmount) <= 0 ||
+                  isSubmittingCarrierPayment ||
+                  isUploadingCarrierPaymentFile
+                }
+              >
+                {isSubmittingCarrierPayment ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Registrando...
+                  </>
+                ) : (
+                  "Registrar Pago"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
