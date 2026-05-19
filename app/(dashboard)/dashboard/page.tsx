@@ -24,7 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-
+//commit
 export default function DashboardPage() {
   const { kpis, isLoading: kpisLoading } = useDashboardKPIs()
   const { movements, isLoading: movementsLoading } = useMovements()
