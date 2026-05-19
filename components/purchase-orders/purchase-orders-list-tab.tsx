@@ -229,9 +229,18 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       await Promise.all(promises)
 
       toast.success("Recepción completada", {
+        description: "Actualizando catálogo...",
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      await mutate(undefined, { revalidate: true })
+
+      toast.dismiss()
+      toast.success("¡Catálogo actualizado!", {
         description: "Los productos han sido agregados al inventario",
       })
-      mutate()
+
       setReceiveDialogOpen(false)
       setSelectedOrder(null)
       setReceiveQuantities({})
