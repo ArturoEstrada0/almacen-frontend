@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Label } from "@/components/ui/label"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Plus, Search, Eye, Edit, DollarSign, Package, Trash2, ChevronsUpDown, ArrowUp, ArrowDown, Upload, FileText, Truck, Loader2, X } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { getLocalDateInputValue } from "@/lib/date-utils"
@@ -63,7 +64,7 @@ export function ShipmentsTab() {
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
-  const [sortBy, setSortBy] = useState<"producer" | "code" | "date">("producer")
+  const [sortBy, setSortBy] = useState<"producer" | "code" | "date">("date")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -221,8 +222,14 @@ export function ShipmentsTab() {
   })
 
   const filteredShipments = (sortedShipments || []).filter((shipment) => {
+    const searchLower = searchTerm.toLowerCase()
     const number = (shipment as any).shipmentNumber || (shipment as any).code || ""
-    return number.toLowerCase().includes(searchTerm.toLowerCase())
+    const shipmentReceptions = (shipment as any).shipmentReceptions || []
+    const folios = shipmentReceptions.map((r: any) => r.trackingFolio).filter(Boolean).join(" ")
+    return (
+      number.toLowerCase().includes(searchLower) ||
+      folios.toLowerCase().includes(searchLower)
+    )
   })
 
   // Pagination
@@ -360,24 +367,39 @@ export function ShipmentsTab() {
     }
   }, [isCreateDialogOpen, isEditDialogOpen, fetchCustomers])
 
+  // Poll for shipments updates every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      mutateShipments()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [mutateShipments])
+
   const handleUpdateShipment = () => {
     ;(async () => {
       try {
         if (!selectedShipment) throw new Error("No shipment selected")
         const salePriceNumber = updateStatus === "vendida" && salePrice ? Number(salePrice) : undefined
+        const extra: any = {
+          closedByUserId: user?.id,
+          closedByUserName: user?.user_metadata?.full_name || user?.email || undefined,
+        }
+
+        if (updateStatus === "recibida" && arrivalDate) {
+          extra.arrivalDate = arrivalDate
+        }
+
+        if (updateStatus === "vendida") {
+          extra.saleDate = saleDate
+          extra.invoiceDate = invoiceDate
+          extra.invoiceNumber = invoiceNumber?.trim() || (selectedShipmentData as any)?.code
+        }
+
         const updated = await apiUpdateShipmentStatus(
           selectedShipment,
           updateStatus,
           salePriceNumber,
-          updateStatus === "vendida"
-            ? {
-                saleDate,
-                invoiceDate,
-                invoiceNumber: invoiceNumber?.trim() || (selectedShipmentData as any)?.code,
-                closedByUserId: user?.id,
-                closedByUserName: user?.user_metadata?.full_name || user?.email || undefined,
-              }
-            : undefined,
+          extra,
         )
         await mutateShipments()
         await globalMutate("accounts-receivable")
@@ -1099,13 +1121,7 @@ export function ShipmentsTab() {
                     <Label htmlFor="shipmentDate" className="text-sm font-semibold">
                       Fecha de Embarque <span className="text-red-500">*</span>
                     </Label>
-                    <Input
-                      id="shipmentDate"
-                      type="date"
-                      value={shipmentDate}
-                      onChange={(e) => setShipmentDate(e.target.value)}
-                      className="h-10 text-sm"
-                    />
+                    <DatePicker value={shipmentDate} onChange={setShipmentDate} placeholder="Selecciona la fecha de embarque" />
                   </div>
 
                   <div className="space-y-2">
@@ -1258,7 +1274,7 @@ export function ShipmentsTab() {
                       {(shipment as any).carrierContact || "-"}
                     </TableCell>
                     <TableCell>{shipmentDate ? formatDate(shipmentDate) : "-"}</TableCell>
-                    <TableCell>{(shipment as any).arrivalDate ? formatDate((shipment as any).arrivalDate) : "-"}</TableCell>
+                    <TableCell>{((shipment as any).arrivalDate || (shipment as any).receivedAt) ? formatDate((shipment as any).arrivalDate || (shipment as any).receivedAt) : "-"}</TableCell>
                     <TableCell>
                       {(shipment as any).salePrice ? (
                         <div>
@@ -1758,13 +1774,7 @@ export function ShipmentsTab() {
                     <Label htmlFor="editShipmentDate" className="text-sm font-semibold">
                       Fecha de Embarque <span className="text-red-500">*</span>
                     </Label>
-                    <Input
-                      id="editShipmentDate"
-                      type="date"
-                      value={editShipmentDate}
-                      onChange={(e) => setEditShipmentDate(e.target.value)}
-                      className="h-10 text-sm"
-                    />
+                    <DatePicker value={editShipmentDate} onChange={setEditShipmentDate} placeholder="Selecciona la fecha de embarque" />
                   </div>
 
                   <div className="space-y-2">
@@ -1802,12 +1812,12 @@ export function ShipmentsTab() {
 
         {/* Update Shipment Dialog */}
         <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
-          <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto flex flex-col">
+            <DialogHeader className="sticky top-0 bg-white z-10 border-b pb-4">
               <DialogTitle>Actualizar Embarque</DialogTitle>
               <DialogDescription>Actualiza el estado y precio de venta del embarque</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 flex-1 overflow-y-auto">
               <div className="space-y-2">
                 <Label htmlFor="status">Estado *</Label>
                 <Select value={updateStatus} onValueChange={(value) => setUpdateStatus(value as ShipmentStatus)}>
@@ -1826,12 +1836,7 @@ export function ShipmentsTab() {
               {(updateStatus === "recibida" || updateStatus === "vendida") && (
                 <div className="space-y-2">
                   <Label htmlFor="arrivalDate">Fecha de Llegada</Label>
-                  <Input
-                    id="arrivalDate"
-                    type="date"
-                    value={arrivalDate}
-                    onChange={(e) => setArrivalDate(e.target.value)}
-                  />
+                  <DatePicker value={arrivalDate} onChange={setArrivalDate} placeholder="Selecciona la fecha de llegada" />
                 </div>
               )}
 
@@ -1839,12 +1844,7 @@ export function ShipmentsTab() {
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="saleDate">Fecha de Venta *</Label>
-                    <Input
-                      id="saleDate"
-                      type="date"
-                      value={saleDate}
-                      onChange={(e) => setSaleDate(e.target.value)}
-                    />
+                    <DatePicker value={saleDate} onChange={setSaleDate} placeholder="Selecciona la fecha de venta" />
                   </div>
 
                   <div className="space-y-2">
@@ -1859,12 +1859,7 @@ export function ShipmentsTab() {
 
                   <div className="space-y-2">
                     <Label htmlFor="invoiceDate">Fecha de Emisión de Factura *</Label>
-                    <Input
-                      id="invoiceDate"
-                      type="date"
-                      value={invoiceDate}
-                      onChange={(e) => setInvoiceDate(e.target.value)}
-                    />
+                    <DatePicker value={invoiceDate} onChange={setInvoiceDate} placeholder="Selecciona la fecha de emisión" />
                   </div>
 
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
@@ -2064,11 +2059,24 @@ export function ShipmentsTab() {
                           <p className="font-semibold text-base">{fecha}</p>
                         </div>
                       </div>
+
+                      {shipmentReceptions.some(r => r.trackingFolio) && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Folio(s) de Seguimiento</p>
+                          <div className="flex flex-wrap gap-2">
+                            {[...new Set(shipmentReceptions.map(r => r.trackingFolio).filter(Boolean))].map((folio) => (
+                              <span key={folio} className="font-mono text-sm bg-blue-50 text-blue-700 px-3 py-1 rounded border border-blue-200">
+                                {folio}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       
-                      {viewShipment.arrivalDate && (
+                      {(viewShipment.arrivalDate || (viewShipment as any).receivedAt) && (
                         <div>
                           <p className="text-sm text-muted-foreground mb-1">Fecha de Llegada</p>
-                          <p className="font-semibold text-base">{formatDate(viewShipment.arrivalDate)}</p>
+                          <p className="font-semibold text-base">{formatDate(viewShipment.arrivalDate || (viewShipment as any).receivedAt)}</p>
                         </div>
                       )}
 
@@ -2166,7 +2174,7 @@ export function ShipmentsTab() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-3 gap-6">
+                      <div className={`grid ${viewShipment.salePricePerBox ? 'grid-cols-4' : 'grid-cols-3'} gap-6`}>
                         <div className="text-center p-4 bg-white rounded-lg shadow-sm">
                           <p className="text-sm text-muted-foreground mb-2">Total de Cajas</p>
                           <p className="text-3xl font-bold text-blue-600">{boxesComputed}</p>
@@ -2181,6 +2189,12 @@ export function ShipmentsTab() {
                           <p className="text-3xl font-bold text-blue-600">{weightPerBox}</p>
                           <p className="text-xs text-muted-foreground mt-1">kg/caja</p>
                         </div>
+                        {viewShipment.salePricePerBox && (
+                          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                            <p className="text-sm text-muted-foreground mb-2">Precio por Caja</p>
+                            <p className="text-3xl font-bold text-green-600">{formatCurrency(viewShipment.salePricePerBox)}</p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -2258,6 +2272,8 @@ export function ShipmentsTab() {
                                 <TableHead>Producto</TableHead>
                                 <TableHead className="text-right">Cajas</TableHead>
                                 <TableHead className="text-right">Peso Total</TableHead>
+                                {viewShipment.salePricePerBox && <TableHead className="text-right">Precio por Caja</TableHead>}
+                                {viewShipment.salePricePerBox && <TableHead className="text-right">Subtotal</TableHead>}
                                 <TableHead>Fecha</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -2267,6 +2283,8 @@ export function ShipmentsTab() {
                                 const receptionNumber = reception.receptionNumber || reception.code || "-"
                                 const receptionDate = reception.receptionDate || reception.date || reception.createdAt
                                 const productName = reception.product?.name || reception.productName || "-"
+                                const pricePerBox = reception.pricePerBox || viewShipment.salePricePerBox
+                                const subtotal = pricePerBox ? (Number(reception.boxes || 0) * Number(pricePerBox)) : null
                                 return (
                                   <TableRow key={reception.id}>
                                     <TableCell>
@@ -2284,6 +2302,16 @@ export function ShipmentsTab() {
                                     <TableCell className="text-right font-semibold">
                                       {reception.totalWeight ? `${reception.totalWeight} kg` : "-"}
                                     </TableCell>
+                                    {viewShipment.salePricePerBox && (
+                                      <>
+                                        <TableCell className="text-right font-semibold text-green-600">
+                                          {pricePerBox ? formatCurrency(pricePerBox) : "-"}
+                                        </TableCell>
+                                        <TableCell className="text-right font-bold text-green-600">
+                                          {subtotal ? formatCurrency(subtotal) : "-"}
+                                        </TableCell>
+                                      </>
+                                    )}
                                     <TableCell className="whitespace-nowrap">{formatDate(receptionDate)}</TableCell>
                                   </TableRow>
                                 )

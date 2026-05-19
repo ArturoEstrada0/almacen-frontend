@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ComboBox } from "@/components/ui/combobox"
 import { ProductorComboBox } from "@/components/ui/productor-combobox"
 import { Label } from "@/components/ui/label"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Plus, Search, Eye, Printer, Edit, Trash2, Upload, ChevronsUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { apiGet, apiPost } from "@/lib/db/localApi"
 import { PrintFormatDialog, PrintFormat, openPrintWindow, getPrintStyles } from "@/components/ui/print-format-dialog"
@@ -110,9 +111,9 @@ export function FruitReceptionsTab() {
 
   useEffect(() => {
     let mounted = true
-    ;(async () => {
+
+    const loadData = async () => {
       try {
-        setLoading(true)
         const [pRes, wRes, prodRes, recRes] = await Promise.allSettled([
           apiGet("/api/producers"),
           apiGet("/api/warehouses"),
@@ -138,11 +139,19 @@ export function FruitReceptionsTab() {
       } catch (err) {
         console.error("Error loading receptions:", err)
       } finally {
-        setLoading(false)
+        if (mounted) setLoading(false)
       }
-    })()
+    }
+
+    // Load data immediately
+    loadData()
+
+    // Poll for updates every 5 seconds
+    const interval = setInterval(loadData, 5000)
+
     return () => {
       mounted = false
+      clearInterval(interval)
     }
   }, [])
 
@@ -372,8 +381,14 @@ export function FruitReceptionsTab() {
     switch (status) {
       case "pagada":
         return (
-          <Badge variant="default" className="bg-green-500 text-white">
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
             Pagada
+          </Badge>
+        )
+      case "parcial":
+        return (
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+            Parcial
           </Badge>
         )
       case "pendiente":
@@ -521,11 +536,11 @@ export function FruitReceptionsTab() {
                   Nueva Recepción
                 </Button>
               </ProtectedCreate>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+                <DialogHeader className="sticky top-0 bg-white z-10 border-b pb-4">
                   <DialogTitle>{isEditMode ? "Editar Recepción de Fruta" : "Nueva Recepción de Fruta"}</DialogTitle>
                 </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-4 flex-1 overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Productor *</Label>
@@ -561,7 +576,7 @@ export function FruitReceptionsTab() {
 
                 <div className="space-y-2">
                   <Label>Fecha de Recepción *</Label>
-                  <Input id="date" type="date" value={receptionDate} onChange={(e) => setReceptionDate(e.target.value)} />
+                  <DatePicker value={receptionDate} onChange={setReceptionDate} placeholder="Selecciona la fecha de recepción" />
                 </div>
 
                 <div className="space-y-2">
@@ -616,6 +631,18 @@ export function FruitReceptionsTab() {
                   
                   <div className="space-y-3">
                     {returnedItems.map((item) => {
+                      // Obtener los IDs de productos ya seleccionados en otros items
+                      const selectedProductIds = new Set(
+                        returnedItems
+                          .filter(i => i.id !== item.id && i.productId)
+                          .map(i => i.productId)
+                      )
+
+                      // Filtrar insumos para excluir los ya seleccionados
+                      const availableInsumos = insumoProducts.filter(
+                        p => !selectedProductIds.has(String(p.id))
+                      )
+
                       return (
                         <div key={item.id} className="grid grid-cols-12 gap-2 items-start p-3 bg-blue-50 rounded-lg border border-blue-200">
                           <div className="col-span-5">
@@ -623,14 +650,14 @@ export function FruitReceptionsTab() {
                             <ProductorComboBox
                               value={item.productId}
                               onChange={(v) => updateReturnedItem(item.id, { productId: v })}
-                              options={insumoProducts.map((p) => ({
+                              options={availableInsumos.map((p) => ({
                                 value: String(p.id),
                                 label: `${p.sku} - ${p.name}`,
                                 subtitle: p.sku
                               }))}
                               placeholder="Seleccionar"
                               searchPlaceholder="Buscar..."
-                              emptyMessage="No encontrado"
+                              emptyMessage={availableInsumos.length === 0 ? "Todos los insumos ya fueron seleccionados" : "No encontrado"}
                             />
                           </div>
                           <div className="col-span-2">

@@ -141,6 +141,7 @@ export async function updateShipmentStatus(
     invoiceNumber?: string
     closedByUserId?: string
     closedByUserName?: string
+    arrivalDate?: string
   },
 ) {
   return ApiClient.patch<Shipment>(API_ENDPOINTS.producers.shipments.updateStatus(id), {
@@ -151,6 +152,7 @@ export async function updateShipmentStatus(
     invoiceNumber: extra?.invoiceNumber,
     closedByUserId: extra?.closedByUserId,
     closedByUserName: extra?.closedByUserName,
+    arrivalDate: extra?.arrivalDate,
   })
 }
 

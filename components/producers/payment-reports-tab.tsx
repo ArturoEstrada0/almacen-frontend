@@ -104,6 +104,11 @@ export function PaymentReportsTab() {
       (sortedReports || []).filter((report) => {
         // Búsqueda por múltiples campos del reporte y productor
         const searchLower = searchTerm.toLowerCase()
+        const folios = (report.items || [])
+          .map((item: any) => item.fruitReception?.trackingFolio)
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
         const matchesSearch =
           (report.code || "").toLowerCase().includes(searchLower) ||
           (report.producer?.name || "").toLowerCase().includes(searchLower) ||
@@ -111,7 +116,8 @@ export function PaymentReportsTab() {
           (report.producer?.rfc || "").toLowerCase().includes(searchLower) ||
           (report.producer?.phone || "").toLowerCase().includes(searchLower) ||
           (report.producer?.email || "").toLowerCase().includes(searchLower) ||
-          (report.producer?.city || "").toLowerCase().includes(searchLower)
+          (report.producer?.city || "").toLowerCase().includes(searchLower) ||
+          folios.includes(searchLower)
 
         // Filtro de fecha
         const reportDate = report.date ? new Date(report.date) : null
@@ -396,6 +402,31 @@ export function PaymentReportsTab() {
                   </div>
                 </div>
               )}
+
+              {(() => {
+                const folios = viewReport.items
+                  ? [...new Set(
+                      viewReport.items
+                        .map((item: any) => item.fruitReception?.trackingFolio)
+                        .filter(Boolean)
+                    )]
+                  : []
+                return folios.length > 0 ? (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Folio(s) de Seguimiento</p>
+                    <div className="flex flex-wrap gap-2">
+                      {folios.map((folio) => (
+                        <span
+                          key={folio}
+                          className="font-mono text-sm bg-blue-50 text-blue-700 px-3 py-1 rounded border border-blue-200"
+                        >
+                          {folio}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null
+              })()}
 
               <DialogFooter className="sticky bottom-0 bg-white border-t px-6 py-4">
                 <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Cerrar</Button>
