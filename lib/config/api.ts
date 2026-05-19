@@ -106,6 +106,8 @@ export const API_ENDPOINTS = {
     registerInvoice: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/invoice`,
     pending: () => `${API_BASE_URL}/api/purchase-orders/pending`,
     payments: () => `${API_BASE_URL}/api/purchase-orders/payments`,
+    getReceipts: (id: string) => `${API_BASE_URL}/api/purchase-orders/${id}/receipts`,
+    registerReceiptPayment: (receiptId: string) => `${API_BASE_URL}/api/purchase-orders/receipts/${receiptId}/payment`,
   },
 
   accounting: {
@@ -153,6 +155,7 @@ export const API_ENDPOINTS = {
       updateStatus: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}/status`,
       delete: (id: string) => `${API_BASE_URL}/api/producers/payment-reports/${id}`,
     },
+    uploadFile: () => `${API_BASE_URL}/api/producers/upload-file`,
   },
 
   // Quotations

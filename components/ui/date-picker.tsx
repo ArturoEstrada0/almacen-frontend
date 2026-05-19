@@ -36,7 +36,7 @@ export function DatePicker({ value, onChange, placeholder = "Selecciona una fech
           <span className="text-sm truncate">{value ? format(selected as Date, "PPP", { locale: es }) : placeholder}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0">
+      <PopoverContent className="w-auto p-0 max-h-fit">
         <div className="p-2">
           <Calendar
             mode="single"
@@ -47,6 +47,14 @@ export function DatePicker({ value, onChange, placeholder = "Selecciona una fech
               setOpen(false)
             }}
             initialFocus
+            classNames={{
+              months: "w-full",
+              month: "w-full",
+              caption: "relative inline-block w-full px-0",
+              caption_label: "text-sm font-medium",
+              head_row: "",
+              row: "w-full",
+            }}
           />
         </div>
       </PopoverContent>

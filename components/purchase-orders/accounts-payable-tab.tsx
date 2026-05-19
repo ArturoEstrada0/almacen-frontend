@@ -45,6 +45,7 @@ type PayableRow = {
   documents?: Array<{ label: string; url: string }>
   invoiceDate?: string | Date | null
   invoiceNumber?: string | null
+  notes?: string | null
 }
 
 type AccountsPayableTabProps = {
@@ -112,11 +113,12 @@ export function AccountsPayableTab({ supplierId, onRegister, initialSelectedPaya
           orderDate: order.orderDate,
           dueDate: order.dueDate,
           creditDays: Number(order.creditDays || 0),
-          total: Number(order.total || 0),
+          total: Number((order as any).receivedTotal || order.total || 0),
           amountPaid: Number((order as any).amountPaid || 0),
           paymentStatus: (order.paymentStatus as any) || "pendiente",
           invoiceDate: order.invoiceDate || null,
           invoiceNumber: order.invoiceNumber || null,
+          notes: order.notes || null,
           documents: order.invoiceFileUrl ? [{ label: "Factura", url: order.invoiceFileUrl }] : [],
         }
       })
@@ -471,6 +473,13 @@ export function AccountsPayableTab({ supplierId, onRegister, initialSelectedPaya
               ) : (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20 p-4">
                   <p className="text-sm text-amber-800 dark:text-amber-200">No hay documentos disponibles para esta factura</p>
+                </div>
+              )}
+
+              {selectedInvoicePayable.notes && (
+                <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 p-4">
+                  <label className="text-xs text-muted-foreground font-semibold">Notas</label>
+                  <p className="text-sm text-foreground mt-2 whitespace-pre-wrap">{selectedInvoicePayable.notes}</p>
                 </div>
               )}
 

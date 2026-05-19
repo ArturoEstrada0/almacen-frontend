@@ -356,6 +356,8 @@ export interface Shipment {
   invoiceRegisteredAt?: Date
   carrierInvoiceRegisteredAt?: Date
   waybillRegisteredAt?: Date
+  carrierPaymentStatus?: 'pendiente' | 'parcial' | 'pagado'
+  carrierAccountingEntryId?: string
   userId: string
   userName: string
   createdAt: Date

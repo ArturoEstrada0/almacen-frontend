@@ -12,7 +12,7 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { useWarehouses } from "@/lib/hooks/use-warehouses"
 import { updatePurchaseOrder } from "@/lib/hooks/use-purchase-orders"
 import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
-import { Plus, Trash2, Save } from "lucide-react"
+import { Plus, Trash2, Save, Lock } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
@@ -146,6 +146,7 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
   }
 
   const supplier = suppliers.find((s) => s.id === supplierId)
+  const isFromQuotation = !!order?.quotationId
 
   return (
     <div className="space-y-6">
@@ -196,6 +197,19 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
         </CardContent>
       </Card>
 
+      {isFromQuotation && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Cotización vinculada</CardTitle>
+            <CardDescription>Referencia original utilizada para generar esta orden</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="font-medium">{order?.quotation?.code || "Cotización"}</p>
+            <p className="text-xs text-muted-foreground">Estado: {order?.quotation?.status || "-"}</p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -203,13 +217,22 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
               <CardTitle>Productos</CardTitle>
               <CardDescription>Modifica productos y cantidades</CardDescription>
             </div>
-            <Button onClick={addItem} size="sm">
+            <Button onClick={addItem} size="sm" disabled={isFromQuotation}>
               <Plus className="mr-2 h-4 w-4" />
               Agregar Producto
             </Button>
           </div>
         </CardHeader>
         <CardContent>
+          {isFromQuotation && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md flex items-start gap-2">
+              <Lock className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-blue-900">Orden basada en cotización</p>
+                <p className="text-xs text-blue-700 mt-1">La cantidad y precio unitario están bloqueados para mantener las condiciones de la cotización</p>
+              </div>
+            </div>
+          )}
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-sm text-muted-foreground">No hay productos agregados</p>
@@ -242,19 +265,20 @@ export default function EditPurchaseOrderDialog({ order, onClose, onUpdated }: P
                           onChange={(v) => updateItem(idx, "productId", v)}
                           placeholder="Selecciona un producto"
                           searchPlaceholder="Buscar producto..."
+                          disabled={isFromQuotation}
                         />
                         {product && <p className="text-xs text-muted-foreground mt-1">Stock: {product.minStock}</p>}
                       </TableCell>
                       <TableCell>
-                        <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number.parseInt(e.target.value || "0"))} className="w-24" />
+                        <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number.parseInt(e.target.value || "0"))} className="w-24" disabled={isFromQuotation} />
                       </TableCell>
                       <TableCell>
-                        <Input type="number" min={0} step={0.01} value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", Number.parseFloat(e.target.value || "0"))} className="w-32" placeholder="0.00" />
+                        <Input type="number" min={0} step={0.01} value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", Number.parseFloat(e.target.value || "0"))} className="w-32" placeholder="0.00" disabled={isFromQuotation} />
                       </TableCell>
                       <TableCell className="font-medium">{formatCurrencyWithDenomination(calculateItemTax(item), item.currency || orderCurrency)}</TableCell>
                       <TableCell className="font-medium">{formatCurrencyWithDenomination(item.quantity * item.unitPrice, item.currency || orderCurrency)}</TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(idx)}>
+                        <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={isFromQuotation}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </TableCell>

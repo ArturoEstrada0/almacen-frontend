@@ -37,6 +37,11 @@ export function useSuppliersWithFilters(filters?: { supplierType?: string; produ
 export function useSupplier(id: string) {
   const { data, error, isLoading, mutate } = useSWR<Supplier>(id ? `supplier-${id}` : null, () =>
     ApiClient.get<Supplier>(API_ENDPOINTS.suppliers.get(id)),
+    {
+      revalidateOnMount: true,
+      revalidateOnFocus: true,
+      dedupingInterval: 0,
+    }
   )
 
   return {

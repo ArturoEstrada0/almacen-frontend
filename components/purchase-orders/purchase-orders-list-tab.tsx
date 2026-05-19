@@ -15,7 +15,7 @@ import { useProducts } from "@/lib/hooks/use-products"
 import { useMovements } from "@/lib/hooks/use-inventory"
 import { formatCurrency, formatCurrencyWithDenomination } from "@/lib/utils/format"
 import { useCurrentUser } from "@/lib/hooks/use-users"
-import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { Plus, Search, FileText, Eye, Package, CheckCircle, Pencil, X, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -26,7 +26,7 @@ import { toast } from "sonner"
 import { ProtectedCreate, ProtectedUpdate } from "@/components/auth/protected-action"
 import Spinner2 from "@/components/ui/spinner2"
 import { TablePagination, usePagination } from "@/components/ui/table-pagination"
-import type { PurchaseOrder } from "@/lib/types"
+
 
 interface PurchaseOrdersListTabProps {
   onCreateNew: () => void
@@ -191,6 +191,10 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
     }
   }
 
+  const handleViewPayables = (order: any) => {
+    router.push(`/accounts/suppliers/${order.supplierId}`)
+  }
+
   const handleReceiveOrder = (orderId: string) => {
     const today = new Date()
     const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
@@ -322,6 +326,12 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
         </CardContent>
       </Card>
 
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
+          <Spinner2 />
+        </div>
+      )}
+
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -398,6 +408,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                   {pagedOrders.map((rowOrder) => {
                     const isFinalStatus = rowOrder.status === "completada" || rowOrder.status === "cancelada"
                     const editable = !isFinalStatus && (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) === 0)
+                    const isFullyReceived = (rowOrder.items || []).every((i: any) => Number(i.receivedQuantity || 0) >= Number(i.quantity || 0))
                     const supplier = suppliers.find((s) => s.id === rowOrder.supplierId)
                     const warehouse = warehouses.find((w) => w.id === rowOrder.warehouseId)
                     const dueDate = parseDateOnly(rowOrder.dueDate as any)
@@ -443,13 +454,27 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {rowOrder.status !== "completada" && rowOrder.status !== "cancelada" && (
+                            {!isFullyReceived && rowOrder.status !== "cancelada" && (
                               <ProtectedUpdate module="purchaseOrders">
-                                <Button variant="outline" size="sm" onClick={() => handleReceiveOrder(rowOrder.id)}>
-                                  <Package className="mr-2 h-4 w-4" />
-                                  Recibir
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleReceiveOrder(rowOrder.id)}
+                                  title="Recibir productos"
+                                >
+                                  <Package className="h-4 w-4" />
                                 </Button>
                               </ProtectedUpdate>
+                            )}
+                            {(rowOrder.items || []).some((item: any) => Number(item.receivedQuantity || 0) > 0) && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleViewPayables(rowOrder)}
+                                title="Ver cuentas por pagar"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
                             )}
                             <ProtectedUpdate module="purchaseOrders">
                               <Button
@@ -575,17 +600,46 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
 
               <div>
                 <Label htmlFor="receive-invoice-file">Archivo de Factura</Label>
-                <Input
-                  id="receive-invoice-file"
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.xml"
-                  onChange={(e) => setReceiveInvoiceFile(e.target.files?.[0] || null)}
-                  disabled={isReceivingLoading}
-                  className="cursor-pointer"
-                />
-                <p className="text-xs text-muted-foreground mt-1">Formatos acepta dos: PDF, JPG, PNG, XML</p>
-                {receiveInvoiceFile && (
-                  <p className="text-xs text-green-600 mt-1">Archivo seleccionado: {receiveInvoiceFile.name}</p>
+                {receiveInvoiceFile ? (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-md mt-2">
+                    <FileText className="h-4 w-4 text-green-600" />
+                    <span className="flex-1 text-sm font-medium text-green-900">{receiveInvoiceFile.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        const url = URL.createObjectURL(receiveInvoiceFile)
+                        window.open(url, "_blank")
+                      }}
+                      disabled={isReceivingLoading}
+                      title="Ver archivo"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setReceiveInvoiceFile(null)}
+                      disabled={isReceivingLoading}
+                      title="Eliminar archivo"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      id="receive-invoice-file"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.xml"
+                      onChange={(e) => setReceiveInvoiceFile(e.target.files?.[0] || null)}
+                      disabled={isReceivingLoading}
+                      className="cursor-pointer mt-2"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Formatos aceptados: PDF, JPG, PNG, XML</p>
+                  </>
                 )}
               </div>
 
@@ -646,6 +700,21 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                   <p className="font-medium">{formatDateSafely(detailsOrder.expectedDeliveryDate as any)}</p>
                 </div>
               </div>
+
+              {detailsOrder.quotationId && detailsOrder.quotation && (
+                <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-md border border-blue-200 dark:border-blue-800">
+                  <Label className="text-xs text-blue-900 dark:text-blue-100 font-semibold">Cotización Vinculada</Label>
+                  <p className="font-medium text-blue-900 dark:text-blue-100">{detailsOrder.quotation.code}</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">Estado: {detailsOrder.quotation.status}</p>
+                </div>
+              )}
+
+              {detailsOrder.notes && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 p-3 rounded-md border border-amber-200 dark:border-amber-800">
+                  <label className="text-xs text-amber-900 dark:text-amber-100 font-semibold">Notas</label>
+                  <p className="text-sm text-amber-900 dark:text-amber-100 mt-2 whitespace-pre-wrap">{detailsOrder.notes}</p>
+                </div>
+              )}
 
               <div>
                 <Label className="text-xs text-muted-foreground">Productos</Label>
