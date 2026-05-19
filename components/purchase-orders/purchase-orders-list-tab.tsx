@@ -229,9 +229,18 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       await Promise.all(promises)
 
       toast.success("Recepción completada", {
+        description: "Actualizando catálogo...",
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      await mutate(undefined, { revalidate: true })
+
+      toast.dismiss()
+      toast.success("¡Catálogo actualizado!", {
         description: "Los productos han sido agregados al inventario",
       })
-      mutate()
+
       setReceiveDialogOpen(false)
       setSelectedOrder(null)
       setReceiveQuantities({})
@@ -240,7 +249,10 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       setReceiveInvoiceNumber("")
       setReceiveInvoiceFile(null)
     } catch (e: any) {
-      toast.error(e?.message || "Error al registrar la recepción")
+      const errorMessage = e?.message || e?.errors?.[0]?.message || "Error al registrar la recepción"
+      toast.error("Error al procesar la recepción", {
+        description: errorMessage,
+      })
     } finally {
       setIsReceivingLoading(false)
     }
@@ -513,11 +525,12 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
       </Card>
 
       <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b pb-4 -mx-6 px-6 pt-6">
             <DialogTitle>Recibir Orden de Compra</DialogTitle>
             <DialogDescription>Registra la recepción de productos de la orden {order?.orderNumber}</DialogDescription>
           </DialogHeader>
+          <div className="overflow-y-auto flex-1 px-6">
           {order && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -648,7 +661,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
                 <Textarea placeholder="Observaciones sobre la recepción..." />
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 sticky bottom-0 bg-white dark:bg-slate-950 border-t py-4 -mx-6 px-6">
                 <Button variant="outline" onClick={() => setReceiveDialogOpen(false)} disabled={isReceivingLoading}>
                   Cancelar
                 </Button>
@@ -668,15 +681,17 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
             </div>
           )}
+          </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b pb-4 -mx-6 px-6 pt-6">
             <DialogTitle>Orden de Compra {detailsOrder?.orderNumber || ""}</DialogTitle>
             <DialogDescription>Detalles de la orden de compra</DialogDescription>
           </DialogHeader>
+          <div className="overflow-y-auto flex-1 px-6">
 
           {!detailsOrder ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Cargando detalle...</div>
@@ -836,6 +851,7 @@ export function PurchaseOrdersListTab({ onCreateNew }: PurchaseOrdersListTabProp
               </div>
             </div>
           )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
